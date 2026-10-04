@@ -80,7 +80,7 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
             if (state.errorMessage != null)
               Container(
                 padding: const EdgeInsets.all(8),
-                color: Colors.red.withOpacity(0.1),
+                color: Colors.red.withValues(alpha: 0.1),
                 child: Text(
                   state.errorMessage!,
                   style: const TextStyle(color: Colors.red),
@@ -108,7 +108,7 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
                 labelText: 'Primary Currency',
                 border: OutlineInputBorder(),
               ),
-              value: state.currency,
+              initialValue: state.currency,
               items: PrimaryCurrency.values.map((currency) {
                 return DropdownMenuItem(
                   value: currency,
