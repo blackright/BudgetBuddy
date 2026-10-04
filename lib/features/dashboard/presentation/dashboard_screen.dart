@@ -6,6 +6,7 @@ import '../../engine/providers/true_available_provider.dart';
 import '../../engine/providers/safe_to_spend_provider.dart';
 import '../../../core/providers/active_budget_provider.dart';
 import '../../../core/models/user_profile.dart';
+import '../../../core/models/monthly_budget.dart';
 import '../../../core/database/isar_helper.dart';
 
 class DashboardScreen extends ConsumerWidget {
