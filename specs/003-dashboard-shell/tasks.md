@@ -4,7 +4,7 @@
 
 **Purpose**: Project initialization and basic structure
 
-- [ ] T001 Add `go_router` dependency to `pubspec.yaml` (if not already present)
+- [x] T001 Add `go_router` dependency to `pubspec.yaml` (if not already present)
 
 ---
 
@@ -14,9 +14,9 @@
 
 **🚨 CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T002 Create `lib/shared/presentation/app_shell.dart` containing a `StatefulNavigationShell` and `BottomNavigationBar`
-- [ ] T003 Create `lib/core/routing/app_router.dart` defining the `go_router` instance and root `StatefulShellRoute`
-- [ ] T004 Create `lib/core/routing/router_providers.dart` defining the Riverpod provider for the router
+- [x] T002 Create `lib/shared/presentation/app_shell.dart` containing a `StatefulNavigationShell` and `BottomNavigationBar`
+- [x] T003 Create `lib/core/routing/app_router.dart` defining the `go_router` instance and root `StatefulShellRoute`
+- [x] T004 Create `lib/core/routing/router_providers.dart` defining the Riverpod provider for the router
 
 **Checkpoint**: Foundation ready - user story implementation can now begin in parallel
 
@@ -30,12 +30,12 @@
 
 ### Tests for User Story 1
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
-- [ ] T005 [P] [US1] Create widget test for initial routing in `test/core/routing/initial_routing_test.dart`
+- [x] T005 [P] [US1] Create widget test for initial routing in `test/core/routing/initial_routing_test.dart`
 
 ### Implementation for User Story 1
-- [ ] T006 [US1] Update `lib/main.dart` to use `routerConfig` instead of `home` parameter
-- [ ] T007 [US1] Modify `lib/features/budget_setup/presentation/budget_setup_screen.dart` to use `context.go('/dashboard')` upon completion instead of custom navigation logic
-- [ ] T008 [US1] Set initial location of `go_router` to check if a budget exists, and route to `/dashboard` or `/setup` accordingly
+- [x] T006 [US1] Update `lib/main.dart` to use `routerConfig` instead of `home` parameter
+- [x] T007 [US1] Modify `lib/features/budget_setup/presentation/budget_setup_screen.dart` to use `context.go('/dashboard')` upon completion instead of custom navigation logic
+- [x] T008 [US1] Set initial location of `go_router` to check if a budget exists, and route to `/dashboard` or `/setup` accordingly
 
 **Checkpoint**: At this point, User Story 1 should be fully functional and testable independently
 
@@ -48,12 +48,12 @@
 **Independent Test**: Can be fully tested by tapping all 5 tabs and verifying the content area updates while the bottom bar remains visible.
 
 ### Implementation for User Story 2
-- [ ] T009 [P] [US2] Create placeholder `lib/features/dashboard/presentation/dashboard_screen.dart`
-- [ ] T010 [P] [US2] Create placeholder `lib/features/expenses/presentation/expenses_screen.dart`
-- [ ] T011 [P] [US2] Create placeholder `lib/features/medical/presentation/medical_screen.dart`
-- [ ] T012 [P] [US2] Create placeholder `lib/features/analytics/presentation/analytics_screen.dart`
-- [ ] T013 [P] [US2] Create placeholder `lib/features/settings/presentation/settings_screen.dart`
-- [ ] T014 [US2] Add the 5 branches and their respective routes (`/dashboard`, `/expenses`, etc.) to the `StatefulShellRoute` in `app_router.dart`
+- [x] T009 [P] [US2] Create placeholder `lib/features/dashboard/presentation/dashboard_screen.dart`
+- [x] T010 [P] [US2] Create placeholder `lib/features/expenses/presentation/expenses_screen.dart`
+- [x] T011 [P] [US2] Create placeholder `lib/features/medical/presentation/medical_screen.dart`
+- [x] T012 [P] [US2] Create placeholder `lib/features/analytics/presentation/analytics_screen.dart`
+- [x] T013 [P] [US2] Create placeholder `lib/features/settings/presentation/settings_screen.dart`
+- [x] T014 [US2] Add the 5 branches and their respective routes (`/dashboard`, `/expenses`, etc.) to the `StatefulShellRoute` in `app_router.dart`
 
 **Checkpoint**: At this point, User Stories 1 AND 2 should both work independently
 
@@ -66,9 +66,9 @@
 **Independent Test**: Can be fully tested by pushing a nested route inside the Expenses tab, switching to the Dashboard, and switching back to Expenses.
 
 ### Implementation for User Story 3
-- [ ] T015 [P] [US3] Create a dummy nested screen `lib/features/expenses/presentation/add_expense_placeholder.dart`
-- [ ] T016 [US3] Add a sub-route `add` under the `/expenses` branch in `app_router.dart`
-- [ ] T017 [US3] Add a button in `ExpensesScreen` to `context.go('/expenses/add')` to verify state preservation
+- [x] T015 [P] [US3] Create a dummy nested screen `lib/features/expenses/presentation/add_expense_placeholder.dart`
+- [x] T016 [US3] Add a sub-route `add` under the `/expenses` branch in `app_router.dart`
+- [x] T017 [US3] Add a button in `ExpensesScreen` to `context.go('/expenses/add')` to verify state preservation
 
 **Checkpoint**: All user stories should now be independently functional
 
@@ -81,9 +81,9 @@
 **Independent Test**: Can be fully tested by injecting mock values into the Riverpod providers (`trueAvailable`, `safeToSpend`) and verifying the UI reflects them.
 
 ### Implementation for User Story 4
-- [ ] T018 [US4] Update `DashboardScreen` in `lib/features/dashboard/presentation/dashboard_screen.dart` to watch `trueAvailableProvider` and `safeToSpendProvider`
-- [ ] T019 [US4] Implement the Dashboard Hero section UI to clearly display the available and safe-to-spend amounts
-- [ ] T020 [US4] Add "Quick Actions" placeholder buttons to the Dashboard UI
+- [x] T018 [US4] Update `DashboardScreen` in `lib/features/dashboard/presentation/dashboard_screen.dart` to watch `trueAvailableProvider` and `safeToSpendProvider`
+- [x] T019 [US4] Implement the Dashboard Hero section UI to clearly display the available and safe-to-spend amounts
+- [x] T020 [US4] Add "Quick Actions" placeholder buttons to the Dashboard UI
 
 ---
 
@@ -91,9 +91,9 @@
 
 **Purpose**: Improvements that affect multiple user stories
 
-- [ ] T021 [P] Run `dart format` on all newly created files
-- [ ] T022 [P] Ensure no hardcoded strings are used in the navigation bar items (use translation keys if available)
-- [ ] T023 Run quickstart.md validation to ensure deep linking and tab switching behaves smoothly
+- [x] T021 [P] Run `dart format` on all newly created files
+- [x] T022 [P] Ensure no hardcoded strings are used in the navigation bar items (use translation keys if available)
+- [x] T023 Run quickstart.md validation to ensure deep linking and tab switching behaves smoothly
 
 ---
 

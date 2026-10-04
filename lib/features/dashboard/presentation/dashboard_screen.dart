@@ -25,23 +25,15 @@ class DashboardScreen extends ConsumerWidget {
                   child: Column(
                     children: [
                       const Text('Safe to Spend', style: TextStyle(fontSize: 16)),
-                      safeToSpendAsync.when(
-                        data: (value) => Text(
-                          '\$${value.toStringAsFixed(2)}',
-                          style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: Colors.green),
-                        ),
-                        loading: () => const CircularProgressIndicator(),
-                        error: (err, stack) => Text('Error: $err'),
+                      Text(
+                        '\$${safeToSpendAsync.toStringAsFixed(2)}',
+                        style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: Colors.green),
                       ),
                       const Divider(height: 32),
                       const Text('True Available', style: TextStyle(fontSize: 14, color: Colors.grey)),
-                      trueAvailableAsync.when(
-                        data: (value) => Text(
-                          '\$${value.toStringAsFixed(2)}',
-                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                        ),
-                        loading: () => const CircularProgressIndicator(),
-                        error: (err, stack) => Text('Error: $err'),
+                      Text(
+                        '\$${trueAvailableAsync.toStringAsFixed(2)}',
+                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),

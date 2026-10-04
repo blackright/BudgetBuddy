@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:isar/isar.dart';
 import '../database/isar_helper.dart';
 import '../../core/models/monthly_budget.dart';
 import '../../features/budget_setup/presentation/budget_setup_screen.dart';
