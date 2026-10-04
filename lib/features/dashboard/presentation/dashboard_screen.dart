@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import '../../engine/providers/true_available_provider.dart';
 import '../../engine/providers/safe_to_spend_provider.dart';
 import '../../../core/providers/active_budget_provider.dart';
@@ -41,7 +42,7 @@ class DashboardScreen extends ConsumerWidget {
                       const Text('Safe to Spend',
                           style: TextStyle(fontSize: 16)),
                       Text(
-                        '${currencySymbol}${safeToSpendAsync.toStringAsFixed(2)}',
+                        '$currencySymbol${NumberFormat('#,##0.00').format(safeToSpendAsync)}',
                         style: const TextStyle(
                             fontSize: 36,
                             fontWeight: FontWeight.bold,
@@ -51,7 +52,7 @@ class DashboardScreen extends ConsumerWidget {
                       const Text('True Available',
                           style: TextStyle(fontSize: 14, color: Colors.grey)),
                       Text(
-                        '${currencySymbol}${trueAvailableAsync.toStringAsFixed(2)}',
+                        '$currencySymbol${NumberFormat('#,##0.00').format(trueAvailableAsync)}',
                         style: const TextStyle(
                             fontSize: 20, fontWeight: FontWeight.bold),
                       ),

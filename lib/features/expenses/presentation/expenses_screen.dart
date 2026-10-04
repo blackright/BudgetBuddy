@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import '../../engine/providers/true_available_provider.dart';
 import '../../../core/models/expense.dart';
 import '../../../core/providers/active_budget_provider.dart';
@@ -50,7 +51,7 @@ class ExpensesScreen extends ConsumerWidget {
                   '${expense.status.name.toUpperCase()} • ${expense.guiltLevel.name}',
                 ),
                 trailing: Text(
-                  '$currencySymbol${expense.amount.toStringAsFixed(2)}',
+                  '$currencySymbol${NumberFormat('#,##0.00').format(expense.amount)}',
                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                 ),
               );
