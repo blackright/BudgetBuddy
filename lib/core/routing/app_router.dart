@@ -10,6 +10,8 @@ import '../../features/analytics/presentation/analytics_screen.dart';
 import '../../features/settings/presentation/settings_screen.dart';
 import '../../shared/presentation/app_shell.dart';
 import '../../features/expenses/presentation/add_expense_screen.dart';
+import '../../features/expenses/presentation/edit_expense_screen.dart';
+import '../models/expense.dart';
 
 final rootNavigatorKey = GlobalKey<NavigatorState>();
 final shellNavigatorDashboardKey =
@@ -40,6 +42,12 @@ final goRouter = GoRouter(
       path: '/add_expense',
       parentNavigatorKey: rootNavigatorKey,
       builder: (context, state) => const AddExpenseScreen(),
+    ),
+    GoRoute(
+      path: '/edit_expense',
+      parentNavigatorKey: rootNavigatorKey,
+      builder: (context, state) =>
+          EditExpenseScreen(expense: state.extra as Expense),
     ),
     StatefulShellRoute.indexedStack(
       builder: (context, state, navigationShell) {

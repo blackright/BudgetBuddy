@@ -63,35 +63,40 @@ const ExpenseSchema = CollectionSchema(
       name: r'notes',
       type: IsarType.string,
     ),
-    r'profileId': PropertySchema(
+    r'paidAt': PropertySchema(
       id: 9,
+      name: r'paidAt',
+      type: IsarType.dateTime,
+    ),
+    r'profileId': PropertySchema(
+      id: 10,
       name: r'profileId',
       type: IsarType.long,
     ),
     r'receiptPath': PropertySchema(
-      id: 10,
+      id: 11,
       name: r'receiptPath',
       type: IsarType.string,
     ),
     r'status': PropertySchema(
-      id: 11,
+      id: 12,
       name: r'status',
       type: IsarType.byte,
       enumMap: _ExpensestatusEnumValueMap,
     ),
     r'title': PropertySchema(
-      id: 12,
+      id: 13,
       name: r'title',
       type: IsarType.string,
     ),
     r'type': PropertySchema(
-      id: 13,
+      id: 14,
       name: r'type',
       type: IsarType.byte,
       enumMap: _ExpensetypeEnumValueMap,
     ),
     r'yearMonth': PropertySchema(
-      id: 14,
+      id: 15,
       name: r'yearMonth',
       type: IsarType.string,
     )
@@ -177,12 +182,13 @@ void _expenseSerialize(
   writer.writeByte(offsets[6], object.guiltLevel.index);
   writer.writeBool(offsets[7], object.isReimbursable);
   writer.writeString(offsets[8], object.notes);
-  writer.writeLong(offsets[9], object.profileId);
-  writer.writeString(offsets[10], object.receiptPath);
-  writer.writeByte(offsets[11], object.status.index);
-  writer.writeString(offsets[12], object.title);
-  writer.writeByte(offsets[13], object.type.index);
-  writer.writeString(offsets[14], object.yearMonth);
+  writer.writeDateTime(offsets[9], object.paidAt);
+  writer.writeLong(offsets[10], object.profileId);
+  writer.writeString(offsets[11], object.receiptPath);
+  writer.writeByte(offsets[12], object.status.index);
+  writer.writeString(offsets[13], object.title);
+  writer.writeByte(offsets[14], object.type.index);
+  writer.writeString(offsets[15], object.yearMonth);
 }
 
 Expense _expenseDeserialize(
@@ -204,14 +210,15 @@ Expense _expenseDeserialize(
     id: id,
     isReimbursable: reader.readBoolOrNull(offsets[7]) ?? false,
     notes: reader.readStringOrNull(offsets[8]),
-    profileId: reader.readLong(offsets[9]),
-    receiptPath: reader.readStringOrNull(offsets[10]),
-    status: _ExpensestatusValueEnumMap[reader.readByteOrNull(offsets[11])] ??
+    paidAt: reader.readDateTimeOrNull(offsets[9]),
+    profileId: reader.readLong(offsets[10]),
+    receiptPath: reader.readStringOrNull(offsets[11]),
+    status: _ExpensestatusValueEnumMap[reader.readByteOrNull(offsets[12])] ??
         ExpenseStatus.paid,
-    title: reader.readString(offsets[12]),
-    type: _ExpensetypeValueEnumMap[reader.readByteOrNull(offsets[13])] ??
+    title: reader.readString(offsets[13]),
+    type: _ExpensetypeValueEnumMap[reader.readByteOrNull(offsets[14])] ??
         ExpenseType.standard,
-    yearMonth: reader.readString(offsets[14]),
+    yearMonth: reader.readString(offsets[15]),
   );
   return object;
 }
@@ -243,18 +250,20 @@ P _expenseDeserializeProp<P>(
     case 8:
       return (reader.readStringOrNull(offset)) as P;
     case 9:
-      return (reader.readLong(offset)) as P;
+      return (reader.readDateTimeOrNull(offset)) as P;
     case 10:
-      return (reader.readStringOrNull(offset)) as P;
+      return (reader.readLong(offset)) as P;
     case 11:
+      return (reader.readStringOrNull(offset)) as P;
+    case 12:
       return (_ExpensestatusValueEnumMap[reader.readByteOrNull(offset)] ??
           ExpenseStatus.paid) as P;
-    case 12:
-      return (reader.readString(offset)) as P;
     case 13:
+      return (reader.readString(offset)) as P;
+    case 14:
       return (_ExpensetypeValueEnumMap[reader.readByteOrNull(offset)] ??
           ExpenseType.standard) as P;
-    case 14:
+    case 15:
       return (reader.readString(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -1277,6 +1286,75 @@ extension ExpenseQueryFilter
     });
   }
 
+  QueryBuilder<Expense, Expense, QAfterFilterCondition> paidAtIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'paidAt',
+      ));
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterFilterCondition> paidAtIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'paidAt',
+      ));
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterFilterCondition> paidAtEqualTo(
+      DateTime? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'paidAt',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterFilterCondition> paidAtGreaterThan(
+    DateTime? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'paidAt',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterFilterCondition> paidAtLessThan(
+    DateTime? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'paidAt',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterFilterCondition> paidAtBetween(
+    DateTime? lower,
+    DateTime? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'paidAt',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
   QueryBuilder<Expense, Expense, QAfterFilterCondition> profileIdEqualTo(
       int value) {
     return QueryBuilder.apply(this, (query) {
@@ -1960,6 +2038,18 @@ extension ExpenseQuerySortBy on QueryBuilder<Expense, Expense, QSortBy> {
     });
   }
 
+  QueryBuilder<Expense, Expense, QAfterSortBy> sortByPaidAt() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'paidAt', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterSortBy> sortByPaidAtDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'paidAt', Sort.desc);
+    });
+  }
+
   QueryBuilder<Expense, Expense, QAfterSortBy> sortByProfileId() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'profileId', Sort.asc);
@@ -2156,6 +2246,18 @@ extension ExpenseQuerySortThenBy
     });
   }
 
+  QueryBuilder<Expense, Expense, QAfterSortBy> thenByPaidAt() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'paidAt', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterSortBy> thenByPaidAtDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'paidAt', Sort.desc);
+    });
+  }
+
   QueryBuilder<Expense, Expense, QAfterSortBy> thenByProfileId() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'profileId', Sort.asc);
@@ -2288,6 +2390,12 @@ extension ExpenseQueryWhereDistinct
     });
   }
 
+  QueryBuilder<Expense, Expense, QDistinct> distinctByPaidAt() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'paidAt');
+    });
+  }
+
   QueryBuilder<Expense, Expense, QDistinct> distinctByProfileId() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'profileId');
@@ -2388,6 +2496,12 @@ extension ExpenseQueryProperty
   QueryBuilder<Expense, String?, QQueryOperations> notesProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'notes');
+    });
+  }
+
+  QueryBuilder<Expense, DateTime?, QQueryOperations> paidAtProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'paidAt');
     });
   }
 

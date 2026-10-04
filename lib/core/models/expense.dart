@@ -30,6 +30,10 @@ class Expense {
   String? notes;
   int budgetId;
 
+  /// When the money actually left the account. Set on Planned → Paid,
+  /// cleared on Paid → Planned.
+  DateTime? paidAt;
+
   Expense({
     this.id = Isar.autoIncrement,
     required this.profileId,
@@ -47,6 +51,7 @@ class Expense {
     this.receiptPath,
     this.notes,
     required this.budgetId,
+    this.paidAt,
   });
 }
 
