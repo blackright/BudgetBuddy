@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../providers/category_provider.dart';
 
 class CategoryListScreen extends ConsumerWidget {
-  const CategoryListScreen({Key? key}) : super(key: key);
+  const CategoryListScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -32,7 +32,7 @@ class CategoryListScreen extends ConsumerWidget {
                 },
                 child: Container(
                   decoration: BoxDecoration(
-                    color: Color(cat.colorValue).withOpacity(0.2),
+                    color: Color(cat.colorValue).withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: Color(cat.colorValue)),
                   ),

@@ -19,11 +19,18 @@ final filteredExpensesProvider = Provider<AsyncValue<List<Expense>>>((ref) {
   return expenses.whenData((list) {
     return list.where((e) {
       if (searchQuery.isNotEmpty &&
-          !e.title.toLowerCase().contains(searchQuery)) return false;
-      if (activeCategory != null && e.categoryId != activeCategory.categoryId)
+          !e.title.toLowerCase().contains(searchQuery)) {
         return false;
-      if (activeStatus != null && e.status != activeStatus) return false;
-      if (activeGuilt != null && e.guiltLevel != activeGuilt) return false;
+      }
+      if (activeCategory != null && e.categoryId != activeCategory.categoryId) {
+        return false;
+      }
+      if (activeStatus != null && e.status != activeStatus) {
+        return false;
+      }
+      if (activeGuilt != null && e.guiltLevel != activeGuilt) {
+        return false;
+      }
       return true;
     }).toList();
   });

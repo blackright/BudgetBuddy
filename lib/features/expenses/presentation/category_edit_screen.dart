@@ -8,7 +8,7 @@ import '../providers/category_provider.dart';
 class CategoryEditScreen extends ConsumerStatefulWidget {
   final Category? category;
 
-  const CategoryEditScreen({Key? key, this.category}) : super(key: key);
+  const CategoryEditScreen({super.key, this.category});
 
   @override
   ConsumerState<CategoryEditScreen> createState() => _CategoryEditScreenState();

@@ -11,8 +11,7 @@ import '../providers/expenses_provider.dart';
 class ExpenseDetailScreen extends ConsumerWidget {
   final Expense expense;
 
-  const ExpenseDetailScreen({Key? key, required this.expense})
-      : super(key: key);
+  const ExpenseDetailScreen({super.key, required this.expense});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -134,8 +133,8 @@ class _HeroSection extends ConsumerWidget {
         CircleAvatar(
           radius: 40,
           backgroundColor: category != null
-              ? Color(category.colorValue).withOpacity(0.2)
-              : Colors.grey.withOpacity(0.2),
+              ? Color(category.colorValue).withValues(alpha: 0.2)
+              : Colors.grey.withValues(alpha: 0.2),
           child: Text(
             category?.emoji ?? '❓',
             style: const TextStyle(fontSize: 40),

@@ -269,7 +269,7 @@ class _EditExpenseScreenState extends ConsumerState<EditExpenseScreen> {
               const SizedBox(height: 16),
               ref.watch(categoriesProvider).when(
                     data: (categories) => DropdownButtonFormField<String>(
-                      value: _categoryId,
+                      initialValue: _categoryId,
                       decoration: const InputDecoration(
                         labelText: 'Category',
                         border: OutlineInputBorder(),
@@ -377,7 +377,8 @@ class _OverspendWarning extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: scheme.errorContainer,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: scheme.error.withOpacity(0.4)),
+                    border:
+                        Border.all(color: scheme.error.withValues(alpha: 0.4)),
                   ),
                   child: Row(
                     children: [

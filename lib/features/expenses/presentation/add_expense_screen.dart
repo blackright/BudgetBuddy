@@ -104,8 +104,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                       ),
                       validator: (value) {
                         if (value == null || value.isEmpty) return 'Required';
-                        if (double.tryParse(value) == null)
+                        if (double.tryParse(value) == null) {
                           return 'Invalid amount';
+                        }
                         return null;
                       },
                     ),
@@ -132,7 +133,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               const SizedBox(height: 16),
               ref.watch(categoriesProvider).when(
                     data: (categories) => DropdownButtonFormField<String>(
-                      value: _categoryId,
+                      initialValue: _categoryId,
                       decoration: const InputDecoration(
                         labelText: 'Category',
                         border: OutlineInputBorder(),

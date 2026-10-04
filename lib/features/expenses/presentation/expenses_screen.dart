@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-import '../../engine/providers/true_available_provider.dart';
 import '../../../core/models/expense.dart';
 import '../../../core/providers/active_budget_provider.dart';
 import '../../../core/models/user_profile.dart';
@@ -264,8 +263,8 @@ class _ExpenseTile extends ConsumerWidget {
           child: CircleAvatar(
             key: ValueKey(expense.status),
             backgroundColor: isPaid
-                ? Colors.green.withOpacity(0.2)
-                : Colors.orange.withOpacity(0.2),
+                ? Colors.green.withValues(alpha: 0.2)
+                : Colors.orange.withValues(alpha: 0.2),
             child: Icon(
               isPaid ? Icons.check : Icons.schedule,
               color: isPaid ? Colors.green : Colors.orange,
