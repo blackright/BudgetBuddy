@@ -3,7 +3,8 @@ import 'package:path_provider/path_provider.dart';
 
 import '../models/user_profile.dart';
 import '../models/monthly_budget.dart';
-import '../../features/expenses/models/expense.dart';
+import '../../core/models/expense.dart';
+import '../../core/models/expense_template.dart';
 import '../../features/expenses/models/reimbursement.dart';
 import '../../features/vault/models/savings_vault.dart';
 
@@ -19,6 +20,7 @@ class IsarHelper {
         UserProfileSchema,
         MonthlyBudgetSchema,
         ExpenseSchema,
+        ExpenseTemplateSchema,
         ReimbursementSchema,
         SavingsVaultSchema,
       ],

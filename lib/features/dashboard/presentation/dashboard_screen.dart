@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../engine/providers/true_available_provider.dart';
 import '../../engine/providers/safe_to_spend_provider.dart';
+import '../../../core/providers/active_budget_provider.dart';
+import '../../../core/models/user_profile.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -10,6 +13,17 @@ class DashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final trueAvailableAsync = ref.watch(trueAvailableProvider);
     final safeToSpendAsync = ref.watch(safeToSpendProvider);
+    final activeBudget = ref.watch(activeBudgetProvider).value;
+
+    String currencySymbol = '\$';
+    if (activeBudget != null) {
+      switch (activeBudget.currency) {
+        case PrimaryCurrency.huf: currencySymbol = 'Ft'; break;
+        case PrimaryCurrency.usd: currencySymbol = '\$'; break;
+        case PrimaryCurrency.cad: currencySymbol = 'C\$'; break;
+        case PrimaryCurrency.eur: currencySymbol = '€'; break;
+      }
+    }
 
     return Scaffold(
       appBar: AppBar(title: const Text('Dashboard')),
@@ -27,7 +41,7 @@ class DashboardScreen extends ConsumerWidget {
                       const Text('Safe to Spend',
                           style: TextStyle(fontSize: 16)),
                       Text(
-                        '\$${safeToSpendAsync.toStringAsFixed(2)}',
+                        '${currencySymbol}${safeToSpendAsync.toStringAsFixed(2)}',
                         style: const TextStyle(
                             fontSize: 36,
                             fontWeight: FontWeight.bold,
@@ -37,7 +51,7 @@ class DashboardScreen extends ConsumerWidget {
                       const Text('True Available',
                           style: TextStyle(fontSize: 14, color: Colors.grey)),
                       Text(
-                        '\$${trueAvailableAsync.toStringAsFixed(2)}',
+                        '${currencySymbol}${trueAvailableAsync.toStringAsFixed(2)}',
                         style: const TextStyle(
                             fontSize: 20, fontWeight: FontWeight.bold),
                       ),
@@ -60,7 +74,10 @@ class DashboardScreen extends ConsumerWidget {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
-                      _buildActionButton(Icons.add, 'Add Expense'),
+                      InkWell(
+                        onTap: () => context.push('/add_expense'),
+                        child: _buildActionButton(Icons.add, 'Add Expense'),
+                      ),
                       _buildActionButton(Icons.medical_services, 'Medical'),
                       _buildActionButton(Icons.history, 'History'),
                     ],

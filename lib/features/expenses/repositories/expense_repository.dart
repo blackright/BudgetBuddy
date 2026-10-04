@@ -3,7 +3,7 @@ import 'package:isar/isar.dart';
 
 import '../../../core/database/isar_helper.dart';
 import '../../../core/network/exchange_rate_cache.dart';
-import '../models/expense.dart';
+import '../../../core/models/expense.dart';
 import '../models/reimbursement.dart';
 
 final expenseRepositoryProvider = Provider<ExpenseRepository>((ref) {

@@ -2,7 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../expenses/repositories/expense_repository.dart';
 import '../../../core/providers/active_budget_provider.dart';
 import '../../../core/providers/active_profile_provider.dart';
-import '../../expenses/models/expense.dart';
+import '../../../core/models/expense.dart';
 import '../../expenses/models/reimbursement.dart';
 
 final monthlyExpensesProvider = StreamProvider<List<Expense>>((ref) {

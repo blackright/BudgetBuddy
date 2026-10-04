@@ -9,7 +9,7 @@ import '../../features/medical/presentation/medical_screen.dart';
 import '../../features/analytics/presentation/analytics_screen.dart';
 import '../../features/settings/presentation/settings_screen.dart';
 import '../../shared/presentation/app_shell.dart';
-import '../../features/expenses/presentation/add_expense_placeholder.dart';
+import '../../features/expenses/presentation/add_expense_screen.dart';
 
 final rootNavigatorKey = GlobalKey<NavigatorState>();
 final shellNavigatorDashboardKey =
@@ -36,6 +36,11 @@ final goRouter = GoRouter(
       path: '/setup',
       builder: (context, state) => const BudgetSetupScreen(),
     ),
+    GoRoute(
+      path: '/add_expense',
+      parentNavigatorKey: rootNavigatorKey,
+      builder: (context, state) => const AddExpenseScreen(),
+    ),
     StatefulShellRoute.indexedStack(
       builder: (context, state, navigationShell) {
         return AppShell(navigationShell: navigationShell);
@@ -56,12 +61,6 @@ final goRouter = GoRouter(
             GoRoute(
               path: '/expenses',
               builder: (context, state) => const ExpensesScreen(),
-              routes: [
-                GoRoute(
-                  path: 'add',
-                  builder: (context, state) => const AddExpensePlaceholder(),
-                ),
-              ],
             ),
           ],
         ),

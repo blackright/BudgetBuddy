@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'true_available_provider.dart';
-import '../../expenses/models/expense.dart';
+import '../../../core/models/expense.dart';
 
 final safeToSpendProvider = Provider<double>((ref) {
   final trueAvailable = ref.watch(trueAvailableProvider);
