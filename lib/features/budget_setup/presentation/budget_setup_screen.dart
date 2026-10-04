@@ -15,6 +15,21 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
   final TextEditingController _amountController = TextEditingController();
   final TextEditingController _monthController = TextEditingController();
 
+  static const List<String> monthNames = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December'
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -29,7 +44,6 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
         try {
           final parts = state.yearMonth!.split('-');
           if (parts.length == 2) {
-            final monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
             final month = int.parse(parts[1]);
             _monthController.text = '${monthNames[month - 1]} ${parts[0]}';
           } else {
@@ -119,8 +133,8 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
               ),
               onTap: () async {
                 final now = DateTime.now();
-                final initialDate = state.yearMonth != null 
-                    ? DateTime.tryParse('${state.yearMonth}-01') ?? now 
+                final initialDate = state.yearMonth != null
+                    ? DateTime.tryParse('${state.yearMonth}-01') ?? now
                     : now;
                 final date = await showDatePicker(
                   context: context,
@@ -132,11 +146,11 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
                   final year = date.year.toString();
                   final month = date.month.toString().padLeft(2, '0');
                   final yearMonth = '$year-$month';
-                  
+
                   notifier.setYearMonth(yearMonth);
-                  
-                  final monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-                  _monthController.text = '${monthNames[date.month - 1]} ${date.year}';
+
+                  _monthController.text =
+                      '${monthNames[date.month - 1]} ${date.year}';
                 }
               },
             ),
