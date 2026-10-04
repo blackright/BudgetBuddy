@@ -24,16 +24,22 @@ class DashboardScreen extends ConsumerWidget {
                   padding: const EdgeInsets.all(24.0),
                   child: Column(
                     children: [
-                      const Text('Safe to Spend', style: TextStyle(fontSize: 16)),
+                      const Text('Safe to Spend',
+                          style: TextStyle(fontSize: 16)),
                       Text(
                         '\$${safeToSpendAsync.toStringAsFixed(2)}',
-                        style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: Colors.green),
+                        style: const TextStyle(
+                            fontSize: 36,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.green),
                       ),
                       const Divider(height: 32),
-                      const Text('True Available', style: TextStyle(fontSize: 14, color: Colors.grey)),
+                      const Text('True Available',
+                          style: TextStyle(fontSize: 14, color: Colors.grey)),
                       Text(
                         '\$${trueAvailableAsync.toStringAsFixed(2)}',
-                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                        style: const TextStyle(
+                            fontSize: 20, fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),
@@ -47,7 +53,9 @@ class DashboardScreen extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Quick Actions', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                  const Text('Quick Actions',
+                      style:
+                          TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 16),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,

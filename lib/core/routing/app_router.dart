@@ -12,11 +12,16 @@ import '../../shared/presentation/app_shell.dart';
 import '../../features/expenses/presentation/add_expense_placeholder.dart';
 
 final rootNavigatorKey = GlobalKey<NavigatorState>();
-final shellNavigatorDashboardKey = GlobalKey<NavigatorState>(debugLabel: 'dashboardShell');
-final shellNavigatorExpensesKey = GlobalKey<NavigatorState>(debugLabel: 'expensesShell');
-final shellNavigatorMedicalKey = GlobalKey<NavigatorState>(debugLabel: 'medicalShell');
-final shellNavigatorAnalyticsKey = GlobalKey<NavigatorState>(debugLabel: 'analyticsShell');
-final shellNavigatorSettingsKey = GlobalKey<NavigatorState>(debugLabel: 'settingsShell');
+final shellNavigatorDashboardKey =
+    GlobalKey<NavigatorState>(debugLabel: 'dashboardShell');
+final shellNavigatorExpensesKey =
+    GlobalKey<NavigatorState>(debugLabel: 'expensesShell');
+final shellNavigatorMedicalKey =
+    GlobalKey<NavigatorState>(debugLabel: 'medicalShell');
+final shellNavigatorAnalyticsKey =
+    GlobalKey<NavigatorState>(debugLabel: 'analyticsShell');
+final shellNavigatorSettingsKey =
+    GlobalKey<NavigatorState>(debugLabel: 'settingsShell');
 
 String _getInitialLocation() {
   final hasBudget = IsarHelper.instance.monthlyBudgets.countSync() > 0;
