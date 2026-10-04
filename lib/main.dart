@@ -4,13 +4,20 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/database/isar_helper.dart';
 import 'features/budget_setup/presentation/budget_setup_screen.dart';
 
+import 'features/engine/providers/sweep_provider.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await IsarHelper.init();
 
+  final container = ProviderContainer();
+  // Execute end of month sweep check on startup
+  await container.read(sweepServiceProvider).executeSweepCheck();
+
   runApp(
-    const ProviderScope(
-      child: MyApp(),
+    UncontrolledProviderScope(
+      container: container,
+      child: const MyApp(),
     ),
   );
 }
