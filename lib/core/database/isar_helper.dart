@@ -7,6 +7,7 @@ import '../../core/models/expense.dart';
 import '../../core/models/expense_template.dart';
 import '../../features/expenses/models/reimbursement.dart';
 import '../../features/vault/models/savings_vault.dart';
+import '../models/category.dart';
 
 class IsarHelper {
   static late Isar _isar;
@@ -23,6 +24,7 @@ class IsarHelper {
         ExpenseTemplateSchema,
         ReimbursementSchema,
         SavingsVaultSchema,
+        CategorySchema,
       ],
       directory: dir.path,
     );
