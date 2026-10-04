@@ -5,7 +5,9 @@ import '../../core/models/monthly_budget.dart';
 import '../../features/budget_setup/presentation/budget_setup_screen.dart';
 import '../../features/dashboard/presentation/dashboard_screen.dart';
 import '../../features/expenses/presentation/expenses_screen.dart';
-import '../../features/medical/presentation/medical_screen.dart';
+import '../../features/medical/presentation/medical_dashboard.dart';
+import '../../features/medical/presentation/medical_bill_form.dart';
+import '../../features/medical/presentation/medical_detail_screen.dart';
 import '../../features/analytics/presentation/analytics_screen.dart';
 import '../../features/settings/presentation/settings_screen.dart';
 import '../../shared/presentation/app_shell.dart';
@@ -34,93 +36,113 @@ String _getInitialLocation() {
   return hasBudget ? '/dashboard' : '/setup';
 }
 
-final goRouter = GoRouter(
-  navigatorKey: rootNavigatorKey,
-  initialLocation: _getInitialLocation(),
-  routes: [
-    GoRoute(
-      path: '/setup',
-      builder: (context, state) => const BudgetSetupScreen(),
-    ),
-    GoRoute(
-      path: '/add_expense',
-      parentNavigatorKey: rootNavigatorKey,
-      builder: (context, state) => const AddExpenseScreen(),
-    ),
-    GoRoute(
-      path: '/expense_detail',
-      parentNavigatorKey: rootNavigatorKey,
-      builder: (context, state) =>
-          ExpenseDetailScreen(expense: state.extra as Expense),
-    ),
-    GoRoute(
-      path: '/edit_expense',
-      parentNavigatorKey: rootNavigatorKey,
-      builder: (context, state) =>
-          EditExpenseScreen(expense: state.extra as Expense),
-    ),
-    GoRoute(
-      path: '/categories',
-      parentNavigatorKey: rootNavigatorKey,
-      builder: (context, state) => const CategoryListScreen(),
-    ),
-    GoRoute(
-      path: '/categories/edit',
-      parentNavigatorKey: rootNavigatorKey,
-      builder: (context, state) =>
-          CategoryEditScreen(category: state.extra as Category?),
-    ),
-    StatefulShellRoute.indexedStack(
-      builder: (context, state, navigationShell) {
-        return AppShell(navigationShell: navigationShell);
-      },
-      branches: [
-        StatefulShellBranch(
-          navigatorKey: shellNavigatorDashboardKey,
-          routes: [
-            GoRoute(
-              path: '/dashboard',
-              builder: (context, state) => const DashboardScreen(),
-            ),
-          ],
+GoRouter createAppRouter({String? initialLocation}) => GoRouter(
+      navigatorKey: rootNavigatorKey,
+      initialLocation: initialLocation ?? _getInitialLocation(),
+      routes: [
+        GoRoute(
+          path: '/setup',
+          builder: (context, state) => const BudgetSetupScreen(),
         ),
-        StatefulShellBranch(
-          navigatorKey: shellNavigatorExpensesKey,
-          routes: [
-            GoRoute(
-              path: '/expenses',
-              builder: (context, state) => const ExpensesScreen(),
-            ),
-          ],
+        GoRoute(
+          path: '/add_expense',
+          parentNavigatorKey: rootNavigatorKey,
+          builder: (context, state) => const AddExpenseScreen(),
         ),
-        StatefulShellBranch(
-          navigatorKey: shellNavigatorMedicalKey,
-          routes: [
-            GoRoute(
-              path: '/medical',
-              builder: (context, state) => const MedicalScreen(),
-            ),
-          ],
+        GoRoute(
+          path: '/expense_detail',
+          parentNavigatorKey: rootNavigatorKey,
+          builder: (context, state) =>
+              ExpenseDetailScreen(expense: state.extra as Expense),
         ),
-        StatefulShellBranch(
-          navigatorKey: shellNavigatorAnalyticsKey,
-          routes: [
-            GoRoute(
-              path: '/analytics',
-              builder: (context, state) => const AnalyticsScreen(),
-            ),
-          ],
+        GoRoute(
+          path: '/edit_expense',
+          parentNavigatorKey: rootNavigatorKey,
+          builder: (context, state) =>
+              EditExpenseScreen(expense: state.extra as Expense),
         ),
-        StatefulShellBranch(
-          navigatorKey: shellNavigatorSettingsKey,
-          routes: [
-            GoRoute(
-              path: '/settings',
-              builder: (context, state) => const SettingsScreen(),
+        GoRoute(
+          path: '/categories',
+          parentNavigatorKey: rootNavigatorKey,
+          builder: (context, state) => const CategoryListScreen(),
+        ),
+        GoRoute(
+          path: '/categories/edit',
+          parentNavigatorKey: rootNavigatorKey,
+          builder: (context, state) =>
+              CategoryEditScreen(category: state.extra as Category?),
+        ),
+        GoRoute(
+          path: '/medical_detail',
+          parentNavigatorKey: rootNavigatorKey,
+          builder: (context, state) =>
+              MedicalDetailScreen(billId: state.extra as int),
+        ),
+        GoRoute(
+          path: '/medical_bill_form',
+          parentNavigatorKey: rootNavigatorKey,
+          builder: (context, state) =>
+              MedicalBillFormRoute(billId: state.extra as int?),
+        ),
+        GoRoute(
+          path: '/edit_medical_bill',
+          parentNavigatorKey: rootNavigatorKey,
+          builder: (context, state) =>
+              MedicalBillFormRoute(billId: state.extra as int),
+        ),
+        StatefulShellRoute.indexedStack(
+          builder: (context, state, navigationShell) {
+            return AppShell(navigationShell: navigationShell);
+          },
+          branches: [
+            StatefulShellBranch(
+              navigatorKey: shellNavigatorDashboardKey,
+              routes: [
+                GoRoute(
+                  path: '/dashboard',
+                  builder: (context, state) => const DashboardScreen(),
+                ),
+              ],
+            ),
+            StatefulShellBranch(
+              navigatorKey: shellNavigatorExpensesKey,
+              routes: [
+                GoRoute(
+                  path: '/expenses',
+                  builder: (context, state) => const ExpensesScreen(),
+                ),
+              ],
+            ),
+            StatefulShellBranch(
+              navigatorKey: shellNavigatorMedicalKey,
+              routes: [
+                GoRoute(
+                  path: '/medical',
+                  builder: (context, state) => const MedicalDashboard(),
+                ),
+              ],
+            ),
+            StatefulShellBranch(
+              navigatorKey: shellNavigatorAnalyticsKey,
+              routes: [
+                GoRoute(
+                  path: '/analytics',
+                  builder: (context, state) => const AnalyticsScreen(),
+                ),
+              ],
+            ),
+            StatefulShellBranch(
+              navigatorKey: shellNavigatorSettingsKey,
+              routes: [
+                GoRoute(
+                  path: '/settings',
+                  builder: (context, state) => const SettingsScreen(),
+                ),
+              ],
             ),
           ],
         ),
       ],
-    ),
-  ],
-);
+    );
+
+final goRouter = createAppRouter();

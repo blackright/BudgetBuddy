@@ -124,7 +124,11 @@ class DashboardScreen extends ConsumerWidget {
                         onTap: () => context.push('/add_expense'),
                         child: _buildActionButton(Icons.add, 'Add Expense'),
                       ),
-                      _buildActionButton(Icons.medical_services, 'Medical'),
+                      InkWell(
+                        onTap: () => context.go('/medical'),
+                        child: _buildActionButton(
+                            Icons.medical_services, 'Medical'),
+                      ),
                       _buildActionButton(Icons.history, 'History'),
                     ],
                   ),

@@ -1,0 +1,171 @@
+import 'dart:io';
+
+import 'package:budget_buddy/core/models/category.dart';
+import 'package:budget_buddy/core/models/expense.dart';
+import 'package:budget_buddy/core/models/insurance_profile.dart';
+import 'package:budget_buddy/core/models/medical_bill.dart';
+import 'package:budget_buddy/core/models/monthly_budget.dart';
+import 'package:budget_buddy/core/models/user_profile.dart';
+import 'package:budget_buddy/features/expenses/models/reimbursement.dart';
+import 'package:budget_buddy/features/medical/repositories/medical_repository.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:isar/isar.dart';
+
+/// Shared Isar harness for the medical tests.
+///
+/// The engine math that FR-003/004/005 depend on only exists once real rows sit
+/// in a real collection, so these tests drive an actual Isar instance rather
+/// than stubbing the repository.
+class MedicalTestHarness {
+  MedicalTestHarness._(this.isar, this.directory)
+      : repository = MedicalRepository(isar);
+
+  static bool _coreReady = false;
+
+  final Isar isar;
+  final Directory directory;
+  final MedicalRepository repository;
+
+  int profileId = 0;
+  int budgetId = 0;
+  double baseAvailable = 0;
+
+  static Future<MedicalTestHarness> create() async {
+    if (!_coreReady) {
+      await Isar.initializeIsarCore(download: true);
+      _coreReady = true;
+    }
+    final directory =
+        Directory.systemTemp.createTempSync('budget_buddy_medical_');
+    final isar = await Isar.open(
+      [
+        UserProfileSchema,
+        MonthlyBudgetSchema,
+        ExpenseSchema,
+        ReimbursementSchema,
+        CategorySchema,
+        MedicalBillSchema,
+        InsuranceProfileSchema,
+        FamilyMemberSchema,
+        MedicalProviderSchema,
+      ],
+      directory: directory.path,
+    );
+    return MedicalTestHarness._(isar, directory);
+  }
+
+  /// Seeds the profile + budget every medical bill needs, and returns the
+  /// budget context the repository expects.
+  Future<MedicalBillContext> seedBudget({
+    double available = 5000,
+    double individualDeductible = 2000,
+    double familyDeductible = 0,
+    double defaultCoveragePercent = 80,
+    String yearMonth = '2026-01',
+    int year = 2026,
+  }) async {
+    final profile = UserProfile()
+      ..name = 'Test'
+      ..primaryCurrency = PrimaryCurrency.usd
+      ..monthlyAvailableAmount = available
+      ..createdAt = DateTime(year)
+      ..updatedAt = DateTime(year);
+
+    final budget = MonthlyBudget()
+      ..yearMonth = yearMonth
+      ..baseAvailableAmount = available
+      ..currency = PrimaryCurrency.usd
+      ..createdAt = DateTime(year)
+      ..updatedAt = DateTime(year);
+
+    late int seededProfileId;
+    late int seededBudgetId;
+
+    await isar.writeTxn(() async {
+      seededProfileId = await isar.userProfiles.put(profile);
+      seededBudgetId = await isar.monthlyBudgets.put(budget);
+      // Keep the first seeded pair as the harness "primary" profile so tests
+      // can add extra profiles without losing their own handles.
+      if (profileId == 0) profileId = seededProfileId;
+      if (budgetId == 0) budgetId = seededBudgetId;
+      if (baseAvailable == 0) baseAvailable = available;
+      if (await isar.categorys.count() == 0) {
+        await isar.categorys.put(
+          Category(
+            categoryId: MedicalRepository.medicalCategoryId,
+            name: 'Health & Medical',
+            emoji: 'H',
+            colorValue: 0xFFF44336,
+            isDefault: true,
+          ),
+        );
+      }
+    });
+
+    await repository.saveInsuranceProfile(
+      InsuranceProfile()
+        ..profileId = seededProfileId
+        ..individualDeductible = individualDeductible
+        ..familyDeductible = familyDeductible
+        ..defaultCoveragePercent = defaultCoveragePercent
+        ..year = year,
+    );
+
+    return MedicalBillContext(
+      profileId: seededProfileId,
+      budgetId: seededBudgetId,
+      yearMonth: yearMonth,
+      primaryCurrency: 'USD',
+    );
+  }
+
+  /// Mirrors `trueAvailableProvider`:
+  /// base - sum(paid expenses) + sum(reimbursements).
+  Future<double> trueAvailable(
+      {required int profileId, required String yearMonth}) async {
+    final expenses = await isar.expenses
+        .filter()
+        .profileIdEqualTo(profileId)
+        .yearMonthEqualTo(yearMonth)
+        .findAll();
+    final byId = {for (final e in expenses) e.id: e};
+
+    var totalPaid = 0.0;
+    for (final expense in expenses) {
+      if (expense.status == ExpenseStatus.paid) {
+        totalPaid += expense.amount * expense.exchangeRateToPrimary;
+      }
+    }
+
+    var totalReimbursements = 0.0;
+    for (final reimbursement in await isar.reimbursements.where().findAll()) {
+      final expense = byId[reimbursement.expenseId];
+      if (expense != null) {
+        totalReimbursements +=
+            reimbursement.amount * expense.exchangeRateToPrimary;
+      }
+    }
+
+    return baseAvailable - totalPaid + totalReimbursements;
+  }
+
+  Future<Expense?> expenseFor(MedicalBill bill) async {
+    final id = bill.linkedExpenseId;
+    return id == null ? null : isar.expenses.get(id);
+  }
+
+  Future<List<Expense>> allExpenses() => isar.expenses.where().findAll();
+
+  Future<List<Reimbursement>> allReimbursements() =>
+      isar.reimbursements.where().findAll();
+
+  Future<List<MedicalBill>> allBills() => isar.medicalBills.where().findAll();
+
+  Future<List<MedicalProvider>> allProviders() =>
+      isar.medicalProviders.where().findAll();
+
+  Future<void> close() async {
+    await isar.close(deleteFromDisk: true);
+    if (directory.existsSync()) directory.deleteSync(recursive: true);
+  }
+}
