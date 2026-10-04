@@ -1,10 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../engine/providers.dart'; // To get the ISAR instance
+import '../../../core/database/isar_helper.dart'; // To get the ISAR instance
 import '../repositories/category_repository.dart';
 import '../../../core/models/category.dart';
 
 final categoryRepositoryProvider = Provider<CategoryRepository>((ref) {
-  final isar = ref.watch(isarProvider);
+  final isar = IsarHelper.instance;
   return CategoryRepository(isar);
 });
 

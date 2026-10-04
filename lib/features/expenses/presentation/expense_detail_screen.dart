@@ -131,7 +131,7 @@ class _HeroSection extends ConsumerWidget {
         ),
         const SizedBox(height: 8),
         Text(
-          '${expense.currency.name.toUpperCase()} ${NumberFormat('#,##0.00').format(expense.amount)}',
+          '${expense.currency.toUpperCase()} ${NumberFormat('#,##0.00').format(expense.amount)}',
           style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
           textAlign: TextAlign.center,
         ),
@@ -146,7 +146,7 @@ class _ImpactCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final safeToSpendAsync = ref.watch(safeToSpendProvider);
+    final safeToSpend = ref.watch(safeToSpendProvider);
     
     // Impact is approximate based on current safe to spend + expense amount (if we were to revert it)
     return Card(
@@ -157,8 +157,8 @@ class _ImpactCard extends ConsumerWidget {
           children: [
             const Text('Budget Impact', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
-            safeToSpendAsync.when(
-              data: (safeToSpend) {
+            Builder(
+              builder: (context) {
                 // Approximate total before this expense
                 final amountInPrimary = expense.amount * expense.exchangeRateToPrimary;
                 final totalBefore = safeToSpend + amountInPrimary;
@@ -176,9 +176,7 @@ class _ImpactCard extends ConsumerWidget {
                     Text('${percent.toStringAsFixed(1)}% of your available funds used'),
                   ],
                 );
-              },
-              loading: () => const CircularProgressIndicator(),
-              error: (_, __) => const Text('Unable to load impact'),
+              }
             ),
           ],
         ),
@@ -203,22 +201,15 @@ class _VisualTimeline extends StatelessWidget {
             const SizedBox(height: 16),
             _TimelineStep(
               title: 'Created',
-              date: expense.createdAt,
+              date: expense.date,
               isCompleted: true,
             ),
             _TimelineStep(
               title: 'Paid',
               date: expense.paidAt,
-              isCompleted: expense.status == ExpenseStatus.paid || expense.status == ExpenseStatus.reimbursed,
-              isLast: expense.status != ExpenseStatus.reimbursed,
+              isCompleted: expense.status == ExpenseStatus.paid,
+              isLast: true,
             ),
-            if (expense.status == ExpenseStatus.reimbursed)
-              _TimelineStep(
-                title: 'Reimbursed',
-                date: expense.reimbursedAt,
-                isCompleted: true,
-                isLast: true,
-              ),
           ],
         ),
       ),

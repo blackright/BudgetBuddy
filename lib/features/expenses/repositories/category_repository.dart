@@ -1,5 +1,6 @@
 import 'package:isar/isar.dart';
 import '../../../core/models/category.dart';
+import '../../../core/models/expense.dart';
 
 class CategoryRepository {
   final Isar isar;
