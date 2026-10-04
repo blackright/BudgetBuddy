@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/database/isar_helper.dart';
-import 'features/budget_setup/presentation/budget_setup_screen.dart';
-
+import 'core/routing/router_providers.dart';
 import 'features/engine/providers/sweep_provider.dart';
 
 void main() async {
@@ -22,18 +21,20 @@ void main() async {
   );
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends ConsumerWidget {
   const MyApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
+  Widget build(BuildContext context, WidgetRef ref) {
+    final router = ref.watch(routerProvider);
+    
+    return MaterialApp.router(
       title: 'BudgetBuddy',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
-      home: const BudgetSetupScreen(),
+      routerConfig: router,
     );
   }
 }

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
+import 'package:go_router/go_router.dart';
 import '../../../core/models/user_profile.dart';
 import '../providers/budget_setup_provider.dart';
 
@@ -165,7 +165,7 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
                           const SnackBar(
                               content: Text('Budget saved successfully')),
                         );
-                        // Navigate to home screen or next onboarding step
+                        context.go('/dashboard');
                       }
                     },
               child: state.isSaving
