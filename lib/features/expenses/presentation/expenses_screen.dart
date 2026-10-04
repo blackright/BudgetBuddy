@@ -8,14 +8,17 @@ import '../../../core/models/expense.dart';
 import '../../../core/providers/active_budget_provider.dart';
 import '../../../core/models/user_profile.dart';
 import '../providers/expenses_provider.dart';
+import '../providers/expense_filter_provider.dart';
+import '../providers/category_provider.dart';
 
 class ExpensesScreen extends ConsumerWidget {
   const ExpensesScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final expensesAsync = ref.watch(monthlyExpensesProvider);
+    final expensesAsync = ref.watch(filteredExpensesProvider);
     final activeBudget = ref.watch(activeBudgetProvider).value;
+    final categoriesAsync = ref.watch(categoriesProvider);
 
     String currencySymbol = '\$';
     if (activeBudget != null) {
@@ -28,11 +31,71 @@ class ExpensesScreen extends ConsumerWidget {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Expenses')),
+      appBar: AppBar(
+        title: const Text('Expenses'),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(110),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                child: TextField(
+                  decoration: InputDecoration(
+                    hintText: 'Search expenses...',
+                    prefixIcon: const Icon(Icons.search),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(30)),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                  ),
+                  onChanged: (value) => ref.read(searchQueryProvider.notifier).state = value,
+                ),
+              ),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+                child: Row(
+                  children: [
+                    // Status Filter
+                    DropdownButton<ExpenseStatus?>(
+                      value: ref.watch(activeStatusFilterProvider),
+                      hint: const Text('Status'),
+                      items: [
+                        const DropdownMenuItem(value: null, child: Text('All Statuses')),
+                        ...ExpenseStatus.values.map((s) => DropdownMenuItem(value: s, child: Text(s.name))),
+                      ],
+                      onChanged: (val) => ref.read(activeStatusFilterProvider.notifier).state = val,
+                    ),
+                    const SizedBox(width: 16),
+                    // Category Filter
+                    categoriesAsync.when(
+                      data: (cats) => DropdownButton<String?>(
+                        value: ref.watch(activeCategoryFilterProvider)?.categoryId,
+                        hint: const Text('Category'),
+                        items: [
+                          const DropdownMenuItem(value: null, child: Text('All Categories')),
+                          ...cats.map((c) => DropdownMenuItem(value: c.categoryId, child: Text('${c.emoji} ${c.name}'))),
+                        ],
+                        onChanged: (val) {
+                          if (val == null) {
+                            ref.read(activeCategoryFilterProvider.notifier).state = null;
+                          } else {
+                            ref.read(activeCategoryFilterProvider.notifier).state = cats.firstWhere((c) => c.categoryId == val);
+                          }
+                        },
+                      ),
+                      loading: () => const SizedBox.shrink(),
+                      error: (_, __) => const SizedBox.shrink(),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
       body: expensesAsync.when(
         data: (expenses) {
           if (expenses.isEmpty) {
-            return const Center(child: Text('No expenses yet. Tap + to add one!'));
+            return const Center(child: Text('No expenses found.'));
           }
           return SlidableAutoCloseBehavior(
             child: ListView.builder(
@@ -75,6 +138,9 @@ class _ExpenseTile extends ConsumerWidget {
 
   void _openEdit(BuildContext context) =>
       context.push('/edit_expense', extra: expense);
+
+  void _openDetail(BuildContext context) =>
+      context.push('/expense_detail', extra: expense);
 
   Future<void> _toggle(BuildContext context, WidgetRef ref) async {
     final messenger = ScaffoldMessenger.of(context);
@@ -165,7 +231,7 @@ class _ExpenseTile extends ConsumerWidget {
         ],
       ),
       child: ListTile(
-        onTap: () => _openEdit(context), // T007
+        onTap: () => _openDetail(context), // T017
         leading: AnimatedSwitcher(
           duration: const Duration(milliseconds: 250),
           transitionBuilder: (child, anim) =>

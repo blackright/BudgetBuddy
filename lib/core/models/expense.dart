@@ -5,6 +5,9 @@ part 'expense.g.dart';
 @collection
 class Expense {
   Id id = Isar.autoIncrement;
+
+  static const String defaultCategoryId = 'general';
+
   @Index()
   late int profileId;
 

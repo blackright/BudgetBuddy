@@ -11,7 +11,11 @@ import '../../features/settings/presentation/settings_screen.dart';
 import '../../shared/presentation/app_shell.dart';
 import '../../features/expenses/presentation/add_expense_screen.dart';
 import '../../features/expenses/presentation/edit_expense_screen.dart';
+import '../../features/expenses/presentation/category_list_screen.dart';
+import '../../features/expenses/presentation/category_edit_screen.dart';
+import '../../features/expenses/presentation/expense_detail_screen.dart';
 import '../models/expense.dart';
+import '../models/category.dart';
 
 final rootNavigatorKey = GlobalKey<NavigatorState>();
 final shellNavigatorDashboardKey =
@@ -44,10 +48,26 @@ final goRouter = GoRouter(
       builder: (context, state) => const AddExpenseScreen(),
     ),
     GoRoute(
+      path: '/expense_detail',
+      parentNavigatorKey: rootNavigatorKey,
+      builder: (context, state) =>
+          ExpenseDetailScreen(expense: state.extra as Expense),
+    ),
+    GoRoute(
       path: '/edit_expense',
       parentNavigatorKey: rootNavigatorKey,
       builder: (context, state) =>
           EditExpenseScreen(expense: state.extra as Expense),
+    ),
+    GoRoute(
+      path: '/categories',
+      parentNavigatorKey: rootNavigatorKey,
+      builder: (context, state) => const CategoryListScreen(),
+    ),
+    GoRoute(
+      path: '/categories/edit',
+      parentNavigatorKey: rootNavigatorKey,
+      builder: (context, state) => CategoryEditScreen(category: state.extra as Category?),
     ),
     StatefulShellRoute.indexedStack(
       builder: (context, state, navigationShell) {
