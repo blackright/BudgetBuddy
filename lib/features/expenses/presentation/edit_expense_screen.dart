@@ -9,6 +9,7 @@ import '../../../core/providers/active_budget_provider.dart';
 import '../../engine/expense_delta.dart';
 import '../../engine/providers/safe_to_spend_provider.dart';
 import '../providers/expenses_provider.dart';
+import '../providers/category_provider.dart';
 import 'widgets/emotion_selector.dart';
 
 /// Full edit form for an existing [Expense]. Reuses the AddExpense field set,
@@ -35,6 +36,7 @@ class _EditExpenseScreenState extends ConsumerState<EditExpenseScreen> {
   late ExpenseStatus _status;
   late bool _isReimbursable;
   late GuiltLevel _guiltLevel;
+  late String _categoryId;
 
   /// Rate for the currently selected currency → primary. Starts as the
   /// expense's locked-in rate and is refreshed if the currency changes.
@@ -54,6 +56,7 @@ class _EditExpenseScreenState extends ConsumerState<EditExpenseScreen> {
         e.status == ExpenseStatus.cancelled ? ExpenseStatus.planned : e.status;
     _isReimbursable = e.isReimbursable;
     _guiltLevel = e.guiltLevel;
+    _categoryId = e.categoryId;
     _rate = e.exchangeRateToPrimary;
   }
 
@@ -121,6 +124,7 @@ class _EditExpenseScreenState extends ConsumerState<EditExpenseScreen> {
       ..title = _titleController.text.trim()
       ..amount = _parseAmount(_amountController.text)!
       ..currency = _currency
+      ..categoryId = _categoryId
       ..status = _status
       ..isReimbursable = _isReimbursable
       ..guiltLevel = _guiltLevel;
@@ -158,7 +162,7 @@ class _EditExpenseScreenState extends ConsumerState<EditExpenseScreen> {
       title: _titleController.text.trim(),
       amount: _parseAmount(_amountController.text)!,
       currency: _currency,
-      categoryId: src.categoryId,
+      categoryId: _categoryId,
       status: _status,
       isReimbursable: _isReimbursable,
       guiltLevel: _guiltLevel,
@@ -261,6 +265,25 @@ class _EditExpenseScreenState extends ConsumerState<EditExpenseScreen> {
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 16),
+              ref.watch(categoriesProvider).when(
+                data: (categories) => DropdownButtonFormField<String>(
+                  value: _categoryId,
+                  decoration: const InputDecoration(
+                    labelText: 'Category',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: categories.map((c) => DropdownMenuItem(
+                    value: c.categoryId,
+                    child: Text('${c.emoji} ${c.name}'),
+                  )).toList(),
+                  onChanged: (val) {
+                    if (val != null) setState(() => _categoryId = val);
+                  },
+                ),
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (_, __) => const Text('Error loading categories'),
               ),
               const SizedBox(height: 16),
               SegmentedButton<ExpenseStatus>(

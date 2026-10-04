@@ -5,6 +5,7 @@ import '../../../../core/models/expense.dart';
 import '../../../../core/providers/active_budget_provider.dart';
 import '../../../../core/providers/active_profile_provider.dart';
 import '../providers/expenses_provider.dart';
+import '../providers/category_provider.dart';
 import 'widgets/emotion_selector.dart';
 
 class AddExpenseScreen extends ConsumerStatefulWidget {
@@ -20,7 +21,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   final _amountController = TextEditingController();
   
   String _currency = 'USD';
-  final String _categoryId = 'general';
+  String _categoryId = Expense.defaultCategoryId;
   ExpenseStatus _status = ExpenseStatus.paid;
   bool _isReimbursable = false;
   GuiltLevel _guiltLevel = GuiltLevel.essential;
@@ -123,6 +124,25 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 16),
+              ref.watch(categoriesProvider).when(
+                data: (categories) => DropdownButtonFormField<String>(
+                  value: _categoryId,
+                  decoration: const InputDecoration(
+                    labelText: 'Category',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: categories.map((c) => DropdownMenuItem(
+                    value: c.categoryId,
+                    child: Text('${c.emoji} ${c.name}'),
+                  )).toList(),
+                  onChanged: (val) {
+                    if (val != null) setState(() => _categoryId = val);
+                  },
+                ),
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (_, __) => const Text('Error loading categories'),
               ),
               const SizedBox(height: 16),
               SegmentedButton<ExpenseStatus>(
