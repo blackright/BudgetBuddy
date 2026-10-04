@@ -11,7 +11,8 @@ import '../providers/expenses_provider.dart';
 class ExpenseDetailScreen extends ConsumerWidget {
   final Expense expense;
 
-  const ExpenseDetailScreen({Key? key, required this.expense}) : super(key: key);
+  const ExpenseDetailScreen({Key? key, required this.expense})
+      : super(key: key);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -60,9 +61,12 @@ class _ActionBar extends ConsumerWidget {
             await ref.read(expensesProvider.notifier).toggleStatus(expense);
             if (context.mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(isPaid ? 'Marked as Planned' : 'Marked as Paid')),
+                SnackBar(
+                    content:
+                        Text(isPaid ? 'Marked as Planned' : 'Marked as Paid')),
               );
-              context.pop(); // Pop back to see updated list, or stay? We pop for simplicity.
+              context
+                  .pop(); // Pop back to see updated list, or stay? We pop for simplicity.
             }
           },
           icon: Icon(isPaid ? Icons.schedule : Icons.check_circle),
@@ -77,9 +81,12 @@ class _ActionBar extends ConsumerWidget {
               context: context,
               builder: (ctx) => AlertDialog(
                 title: const Text('Delete Expense?'),
-                content: const Text('Are you sure you want to delete this expense?'),
+                content:
+                    const Text('Are you sure you want to delete this expense?'),
                 actions: [
-                  TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                  TextButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      child: const Text('Cancel')),
                   FilledButton(
                     onPressed: () => Navigator.pop(ctx, true),
                     style: FilledButton.styleFrom(backgroundColor: Colors.red),
@@ -89,10 +96,13 @@ class _ActionBar extends ConsumerWidget {
               ),
             );
             if (confirmed == true && context.mounted) {
-              await ref.read(expensesProvider.notifier).deleteExpense(expense.id);
+              await ref
+                  .read(expensesProvider.notifier)
+                  .deleteExpense(expense.id);
               if (context.mounted) {
                 context.pop();
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Expense deleted')));
+                ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Expense deleted')));
               }
             }
           },
@@ -111,13 +121,21 @@ class _HeroSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final categoriesAsync = ref.watch(categoriesProvider);
-    final category = categoriesAsync.value?.firstWhere((c) => c.categoryId == expense.categoryId, orElse: () => Category(categoryId: 'default', name: 'Unknown', emoji: '❓', colorValue: 0xFF9E9E9E));
+    final category = categoriesAsync.value?.firstWhere(
+        (c) => c.categoryId == expense.categoryId,
+        orElse: () => Category(
+            categoryId: 'default',
+            name: 'Unknown',
+            emoji: '❓',
+            colorValue: 0xFF9E9E9E));
 
     return Column(
       children: [
         CircleAvatar(
           radius: 40,
-          backgroundColor: category != null ? Color(category.colorValue).withOpacity(0.2) : Colors.grey.withOpacity(0.2),
+          backgroundColor: category != null
+              ? Color(category.colorValue).withOpacity(0.2)
+              : Colors.grey.withOpacity(0.2),
           child: Text(
             category?.emoji ?? '❓',
             style: const TextStyle(fontSize: 40),
@@ -132,7 +150,10 @@ class _HeroSection extends ConsumerWidget {
         const SizedBox(height: 8),
         Text(
           '${expense.currency.toUpperCase()} ${NumberFormat('#,##0.00').format(expense.amount)}',
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+          style: Theme.of(context)
+              .textTheme
+              .headlineSmall
+              ?.copyWith(fontWeight: FontWeight.bold),
           textAlign: TextAlign.center,
         ),
       ],
@@ -147,7 +168,7 @@ class _ImpactCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final safeToSpend = ref.watch(safeToSpendProvider);
-    
+
     // Impact is approximate based on current safe to spend + expense amount (if we were to revert it)
     return Card(
       child: Padding(
@@ -155,29 +176,32 @@ class _ImpactCard extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Budget Impact', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const Text('Budget Impact',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
-            Builder(
-              builder: (context) {
-                // Approximate total before this expense
-                final amountInPrimary = expense.amount * expense.exchangeRateToPrimary;
-                final totalBefore = safeToSpend + amountInPrimary;
-                final percent = totalBefore > 0 ? (amountInPrimary / totalBefore * 100).clamp(0, 100) : 0;
-                
-                return Column(
-                  children: [
-                    LinearProgressIndicator(
-                      value: percent / 100,
-                      backgroundColor: Colors.grey.shade300,
-                      color: Colors.redAccent,
-                      minHeight: 12,
-                    ),
-                    const SizedBox(height: 8),
-                    Text('${percent.toStringAsFixed(1)}% of your available funds used'),
-                  ],
-                );
-              }
-            ),
+            Builder(builder: (context) {
+              // Approximate total before this expense
+              final amountInPrimary =
+                  expense.amount * expense.exchangeRateToPrimary;
+              final totalBefore = safeToSpend + amountInPrimary;
+              final percent = totalBefore > 0
+                  ? (amountInPrimary / totalBefore * 100).clamp(0, 100)
+                  : 0;
+
+              return Column(
+                children: [
+                  LinearProgressIndicator(
+                    value: percent / 100,
+                    backgroundColor: Colors.grey.shade300,
+                    color: Colors.redAccent,
+                    minHeight: 12,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                      '${percent.toStringAsFixed(1)}% of your available funds used'),
+                ],
+              );
+            }),
           ],
         ),
       ),
@@ -197,7 +221,8 @@ class _VisualTimeline extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Timeline', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const Text('Timeline',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
             _TimelineStep(
               title: 'Created',
@@ -253,7 +278,10 @@ class _TimelineStep extends StatelessWidget {
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title, style: TextStyle(fontWeight: isCompleted ? FontWeight.bold : FontWeight.normal)),
+            Text(title,
+                style: TextStyle(
+                    fontWeight:
+                        isCompleted ? FontWeight.bold : FontWeight.normal)),
             if (date != null)
               Text(
                 DateFormat('MMM dd, yyyy - hh:mm a').format(date!),

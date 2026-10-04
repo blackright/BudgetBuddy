@@ -13,7 +13,7 @@ class ExpenseTemplate {
   @enumerated
   GuiltLevel guiltLevel;
   bool isReimbursable;
-  
+
   // Custom metadata
   String? icon;
   int? color;

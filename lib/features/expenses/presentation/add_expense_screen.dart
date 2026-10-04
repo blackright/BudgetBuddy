@@ -19,7 +19,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _amountController = TextEditingController();
-  
+
   String _currency = 'USD';
   String _categoryId = Expense.defaultCategoryId;
   ExpenseStatus _status = ExpenseStatus.paid;
@@ -38,9 +38,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       final amount = double.tryParse(_amountController.text) ?? 0.0;
       final profile = ref.read(activeProfileProvider).value;
       final budget = ref.read(activeBudgetProvider).value;
-      
+
       if (profile == null || budget == null) return;
-      
+
       final expense = Expense(
         profileId: profile.id,
         yearMonth: budget.yearMonth,
@@ -85,8 +85,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                   labelText: 'What did you buy?',
                   border: OutlineInputBorder(),
                 ),
-                validator: (value) =>
-                    value == null || value.isEmpty ? 'Please enter a title' : null,
+                validator: (value) => value == null || value.isEmpty
+                    ? 'Please enter a title'
+                    : null,
               ),
               const SizedBox(height: 16),
               Row(
@@ -95,14 +96,16 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                     flex: 2,
                     child: TextFormField(
                       controller: _amountController,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
                       decoration: const InputDecoration(
                         labelText: 'Amount',
                         border: OutlineInputBorder(),
                       ),
                       validator: (value) {
                         if (value == null || value.isEmpty) return 'Required';
-                        if (double.tryParse(value) == null) return 'Invalid amount';
+                        if (double.tryParse(value) == null)
+                          return 'Invalid amount';
                         return null;
                       },
                     ),
@@ -116,7 +119,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                         border: OutlineInputBorder(),
                       ),
                       items: ['USD', 'EUR', 'GBP', 'HUF', 'CAD']
-                          .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                          .map(
+                              (c) => DropdownMenuItem(value: c, child: Text(c)))
                           .toList(),
                       onChanged: (val) {
                         if (val != null) setState(() => _currency = val);
@@ -127,28 +131,32 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
               ),
               const SizedBox(height: 16),
               ref.watch(categoriesProvider).when(
-                data: (categories) => DropdownButtonFormField<String>(
-                  value: _categoryId,
-                  decoration: const InputDecoration(
-                    labelText: 'Category',
-                    border: OutlineInputBorder(),
+                    data: (categories) => DropdownButtonFormField<String>(
+                      value: _categoryId,
+                      decoration: const InputDecoration(
+                        labelText: 'Category',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: categories
+                          .map((c) => DropdownMenuItem(
+                                value: c.categoryId,
+                                child: Text('${c.emoji} ${c.name}'),
+                              ))
+                          .toList(),
+                      onChanged: (val) {
+                        if (val != null) setState(() => _categoryId = val);
+                      },
+                    ),
+                    loading: () =>
+                        const Center(child: CircularProgressIndicator()),
+                    error: (_, __) => const Text('Error loading categories'),
                   ),
-                  items: categories.map((c) => DropdownMenuItem(
-                    value: c.categoryId,
-                    child: Text('${c.emoji} ${c.name}'),
-                  )).toList(),
-                  onChanged: (val) {
-                    if (val != null) setState(() => _categoryId = val);
-                  },
-                ),
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (_, __) => const Text('Error loading categories'),
-              ),
               const SizedBox(height: 16),
               SegmentedButton<ExpenseStatus>(
                 segments: const [
                   ButtonSegment(value: ExpenseStatus.paid, label: Text('Paid')),
-                  ButtonSegment(value: ExpenseStatus.planned, label: Text('Planned')),
+                  ButtonSegment(
+                      value: ExpenseStatus.planned, label: Text('Planned')),
                 ],
                 selected: {_status},
                 onSelectionChanged: (Set<ExpenseStatus> newSelection) {
@@ -164,7 +172,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                 onChanged: (val) => setState(() => _isReimbursable = val),
               ),
               const SizedBox(height: 16),
-              const Text('How did you feel about this?', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              const Text('How did you feel about this?',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               EmotionSelector(
                 selectedLevel: _guiltLevel,

@@ -6,10 +6,11 @@ import '../../../core/network/exchange_rate_cache.dart';
 import '../../../core/providers/active_budget_provider.dart';
 import '../../engine/expense_delta.dart';
 
-final expensesProvider = StateNotifierProvider<ExpensesNotifier, AsyncValue<List<Expense>>>((ref) {
+final expensesProvider =
+    StateNotifierProvider<ExpensesNotifier, AsyncValue<List<Expense>>>((ref) {
   final activeBudgetAsync = ref.watch(activeBudgetProvider);
   final rateCache = ref.read(exchangeRateCacheProvider);
-  
+
   return activeBudgetAsync.when(
     data: (budget) {
       if (budget == null) {
@@ -70,17 +71,17 @@ class ExpensesNotifier extends StateNotifier<AsyncValue<List<Expense>>> {
 
   Future<void> addExpense(Expense expense) async {
     if (budgetId == null) return;
-    
+
     try {
       expense.budgetId = budgetId!;
       if (expense.status == ExpenseStatus.paid) {
         expense.paidAt ??= DateTime.now();
       }
-      
+
       await _isar.writeTxn(() async {
         await _isar.expenses.put(expense);
       });
-      
+
       await _loadExpenses();
     } catch (e, st) {
       state = AsyncValue.error(e, st);
@@ -168,7 +169,7 @@ class ExpensesNotifier extends StateNotifier<AsyncValue<List<Expense>>> {
       await _isar.writeTxn(() async {
         await _isar.expenses.delete(id);
       });
-      
+
       await _loadExpenses();
       return ExpenseDelta.between(before: before);
     } catch (e, st) {

@@ -52,7 +52,9 @@ class EmotionSelector extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: isSelected ? color.withValues(alpha: 0.2) : Colors.grey.withValues(alpha: 0.1),
+              color: isSelected
+                  ? color.withValues(alpha: 0.2)
+                  : Colors.grey.withValues(alpha: 0.1),
               shape: BoxShape.circle,
               border: Border.all(
                 color: isSelected ? color : Colors.transparent,

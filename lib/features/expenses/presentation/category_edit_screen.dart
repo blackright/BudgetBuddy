@@ -34,7 +34,8 @@ class _CategoryEditScreenState extends ConsumerState<CategoryEditScreen> {
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.category?.name ?? '');
-    _emojiController = TextEditingController(text: widget.category?.emoji ?? '🛒');
+    _emojiController =
+        TextEditingController(text: widget.category?.emoji ?? '🛒');
     if (widget.category != null) {
       _selectedColor = widget.category!.colorValue;
     }
@@ -50,12 +51,13 @@ class _CategoryEditScreenState extends ConsumerState<CategoryEditScreen> {
   void _saveCategory() async {
     if (_formKey.currentState!.validate()) {
       final repository = ref.read(categoryRepositoryProvider);
-      final newCat = widget.category ?? Category(
-        categoryId: const Uuid().v4(),
-        name: _nameController.text,
-        emoji: _emojiController.text,
-        colorValue: _selectedColor,
-      );
+      final newCat = widget.category ??
+          Category(
+            categoryId: const Uuid().v4(),
+            name: _nameController.text,
+            emoji: _emojiController.text,
+            colorValue: _selectedColor,
+          );
 
       if (widget.category != null) {
         newCat.name = _nameController.text;
@@ -87,13 +89,15 @@ class _CategoryEditScreenState extends ConsumerState<CategoryEditScreen> {
               decoration: const InputDecoration(labelText: 'Emoji'),
               style: const TextStyle(fontSize: 32),
               textAlign: TextAlign.center,
-              validator: (val) => val == null || val.isEmpty ? 'Required' : null,
+              validator: (val) =>
+                  val == null || val.isEmpty ? 'Required' : null,
             ),
             const SizedBox(height: 16),
             TextFormField(
               controller: _nameController,
               decoration: const InputDecoration(labelText: 'Category Name'),
-              validator: (val) => val == null || val.isEmpty ? 'Required' : null,
+              validator: (val) =>
+                  val == null || val.isEmpty ? 'Required' : null,
             ),
             const SizedBox(height: 24),
             const Text('Color', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -110,7 +114,9 @@ class _CategoryEditScreenState extends ConsumerState<CategoryEditScreen> {
                       color: Color(color),
                       shape: BoxShape.circle,
                       border: Border.all(
-                        color: _selectedColor == color ? Colors.black : Colors.transparent,
+                        color: _selectedColor == color
+                            ? Colors.black
+                            : Colors.transparent,
                         width: 3,
                       ),
                     ),

@@ -256,8 +256,8 @@ class _EditExpenseScreenState extends ConsumerState<EditExpenseScreen> {
                         border: OutlineInputBorder(),
                       ),
                       items: _currencies
-                          .map((c) =>
-                              DropdownMenuItem(value: c, child: Text(c)))
+                          .map(
+                              (c) => DropdownMenuItem(value: c, child: Text(c)))
                           .toList(),
                       onChanged: (val) {
                         if (val != null) _onCurrencyChanged(val);
@@ -268,23 +268,26 @@ class _EditExpenseScreenState extends ConsumerState<EditExpenseScreen> {
               ),
               const SizedBox(height: 16),
               ref.watch(categoriesProvider).when(
-                data: (categories) => DropdownButtonFormField<String>(
-                  value: _categoryId,
-                  decoration: const InputDecoration(
-                    labelText: 'Category',
-                    border: OutlineInputBorder(),
+                    data: (categories) => DropdownButtonFormField<String>(
+                      value: _categoryId,
+                      decoration: const InputDecoration(
+                        labelText: 'Category',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: categories
+                          .map((c) => DropdownMenuItem(
+                                value: c.categoryId,
+                                child: Text('${c.emoji} ${c.name}'),
+                              ))
+                          .toList(),
+                      onChanged: (val) {
+                        if (val != null) setState(() => _categoryId = val);
+                      },
+                    ),
+                    loading: () =>
+                        const Center(child: CircularProgressIndicator()),
+                    error: (_, __) => const Text('Error loading categories'),
                   ),
-                  items: categories.map((c) => DropdownMenuItem(
-                    value: c.categoryId,
-                    child: Text('${c.emoji} ${c.name}'),
-                  )).toList(),
-                  onChanged: (val) {
-                    if (val != null) setState(() => _categoryId = val);
-                  },
-                ),
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (_, __) => const Text('Error loading categories'),
-              ),
               const SizedBox(height: 16),
               SegmentedButton<ExpenseStatus>(
                 segments: const [

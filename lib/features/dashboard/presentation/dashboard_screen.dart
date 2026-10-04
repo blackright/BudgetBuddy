@@ -21,10 +21,18 @@ class DashboardScreen extends ConsumerWidget {
     String currencySymbol = '\$';
     if (activeBudget != null) {
       switch (activeBudget.currency) {
-        case PrimaryCurrency.huf: currencySymbol = 'Ft'; break;
-        case PrimaryCurrency.usd: currencySymbol = '\$'; break;
-        case PrimaryCurrency.cad: currencySymbol = 'C\$'; break;
-        case PrimaryCurrency.eur: currencySymbol = '€'; break;
+        case PrimaryCurrency.huf:
+          currencySymbol = 'Ft';
+          break;
+        case PrimaryCurrency.usd:
+          currencySymbol = '\$';
+          break;
+        case PrimaryCurrency.cad:
+          currencySymbol = 'C\$';
+          break;
+        case PrimaryCurrency.eur:
+          currencySymbol = '€';
+          break;
       }
     }
 

@@ -8,7 +8,8 @@ import 'package:budget_buddy/core/models/user_profile.dart';
 import 'package:budget_buddy/core/models/monthly_budget.dart';
 
 void main() {
-  testWidgets('AddExpenseScreen basic render test', (WidgetTester tester) async {
+  testWidgets('AddExpenseScreen basic render test',
+      (WidgetTester tester) async {
     final profile = UserProfile()
       ..id = 1
       ..name = 'Test Profile'

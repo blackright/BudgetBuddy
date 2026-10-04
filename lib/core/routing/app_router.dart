@@ -67,7 +67,8 @@ final goRouter = GoRouter(
     GoRoute(
       path: '/categories/edit',
       parentNavigatorKey: rootNavigatorKey,
-      builder: (context, state) => CategoryEditScreen(category: state.extra as Category?),
+      builder: (context, state) =>
+          CategoryEditScreen(category: state.extra as Category?),
     ),
     StatefulShellRoute.indexedStack(
       builder: (context, state, navigationShell) {

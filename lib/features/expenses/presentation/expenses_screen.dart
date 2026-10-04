@@ -23,10 +23,18 @@ class ExpensesScreen extends ConsumerWidget {
     String currencySymbol = '\$';
     if (activeBudget != null) {
       switch (activeBudget.currency) {
-        case PrimaryCurrency.huf: currencySymbol = 'Ft'; break;
-        case PrimaryCurrency.usd: currencySymbol = '\$'; break;
-        case PrimaryCurrency.cad: currencySymbol = 'C\$'; break;
-        case PrimaryCurrency.eur: currencySymbol = '€'; break;
+        case PrimaryCurrency.huf:
+          currencySymbol = 'Ft';
+          break;
+        case PrimaryCurrency.usd:
+          currencySymbol = '\$';
+          break;
+        case PrimaryCurrency.cad:
+          currencySymbol = 'C\$';
+          break;
+        case PrimaryCurrency.eur:
+          currencySymbol = '€';
+          break;
       }
     }
 
@@ -38,20 +46,24 @@ class ExpensesScreen extends ConsumerWidget {
           child: Column(
             children: [
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
                 child: TextField(
                   decoration: InputDecoration(
                     hintText: 'Search expenses...',
                     prefixIcon: const Icon(Icons.search),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(30)),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(30)),
                     contentPadding: const EdgeInsets.symmetric(vertical: 0),
                   ),
-                  onChanged: (value) => ref.read(searchQueryProvider.notifier).state = value,
+                  onChanged: (value) =>
+                      ref.read(searchQueryProvider.notifier).state = value,
                 ),
               ),
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
                 child: Row(
                   children: [
                     // Status Filter
@@ -59,26 +71,39 @@ class ExpensesScreen extends ConsumerWidget {
                       value: ref.watch(activeStatusFilterProvider),
                       hint: const Text('Status'),
                       items: [
-                        const DropdownMenuItem(value: null, child: Text('All Statuses')),
-                        ...ExpenseStatus.values.map((s) => DropdownMenuItem(value: s, child: Text(s.name))),
+                        const DropdownMenuItem(
+                            value: null, child: Text('All Statuses')),
+                        ...ExpenseStatus.values.map((s) =>
+                            DropdownMenuItem(value: s, child: Text(s.name))),
                       ],
-                      onChanged: (val) => ref.read(activeStatusFilterProvider.notifier).state = val,
+                      onChanged: (val) => ref
+                          .read(activeStatusFilterProvider.notifier)
+                          .state = val,
                     ),
                     const SizedBox(width: 16),
                     // Category Filter
                     categoriesAsync.when(
                       data: (cats) => DropdownButton<String?>(
-                        value: ref.watch(activeCategoryFilterProvider)?.categoryId,
+                        value:
+                            ref.watch(activeCategoryFilterProvider)?.categoryId,
                         hint: const Text('Category'),
                         items: [
-                          const DropdownMenuItem(value: null, child: Text('All Categories')),
-                          ...cats.map((c) => DropdownMenuItem(value: c.categoryId, child: Text('${c.emoji} ${c.name}'))),
+                          const DropdownMenuItem(
+                              value: null, child: Text('All Categories')),
+                          ...cats.map((c) => DropdownMenuItem(
+                              value: c.categoryId,
+                              child: Text('${c.emoji} ${c.name}'))),
                         ],
                         onChanged: (val) {
                           if (val == null) {
-                            ref.read(activeCategoryFilterProvider.notifier).state = null;
+                            ref
+                                .read(activeCategoryFilterProvider.notifier)
+                                .state = null;
                           } else {
-                            ref.read(activeCategoryFilterProvider.notifier).state = cats.firstWhere((c) => c.categoryId == val);
+                            ref
+                                    .read(activeCategoryFilterProvider.notifier)
+                                    .state =
+                                cats.firstWhere((c) => c.categoryId == val);
                           }
                         },
                       ),

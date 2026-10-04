@@ -3,7 +3,8 @@ import 'package:budget_buddy/features/engine/expense_delta.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 ExpenseSnapshot snap(double amount, ExpenseStatus status, {double rate = 1}) =>
-    ExpenseSnapshot(amount: amount, exchangeRateToPrimary: rate, status: status);
+    ExpenseSnapshot(
+        amount: amount, exchangeRateToPrimary: rate, status: status);
 
 void main() {
   group('ExpenseDelta', () {
