@@ -51,7 +51,7 @@ class ExpensesScreen extends ConsumerWidget {
                   '${expense.status.name.toUpperCase()} • ${expense.guiltLevel.name}',
                 ),
                 trailing: Text(
-                  '$currencySymbol${NumberFormat('#,##0.00').format(expense.amount)}',
+                  '$currencySymbol ${NumberFormat('#,##0.00').format(expense.amount)}',
                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                 ),
               );

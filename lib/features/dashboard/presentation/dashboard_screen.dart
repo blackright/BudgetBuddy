@@ -6,6 +6,7 @@ import '../../engine/providers/true_available_provider.dart';
 import '../../engine/providers/safe_to_spend_provider.dart';
 import '../../../core/providers/active_budget_provider.dart';
 import '../../../core/models/user_profile.dart';
+import '../../../core/database/isar_helper.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -27,7 +28,42 @@ class DashboardScreen extends ConsumerWidget {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Dashboard')),
+      appBar: AppBar(
+        title: const Text('Dashboard'),
+        actions: [
+          if (activeBudget != null)
+            PopupMenuButton<PrimaryCurrency>(
+              initialValue: activeBudget.currency,
+              icon: const Icon(Icons.currency_exchange),
+              tooltip: 'Change Currency',
+              onSelected: (currency) async {
+                final isar = IsarHelper.instance;
+                await isar.writeTxn(() async {
+                  activeBudget.currency = currency;
+                  await isar.monthlyBudgets.put(activeBudget);
+                });
+              },
+              itemBuilder: (context) => const [
+                PopupMenuItem(
+                  value: PrimaryCurrency.usd,
+                  child: Text('USD (\$)'),
+                ),
+                PopupMenuItem(
+                  value: PrimaryCurrency.eur,
+                  child: Text('EUR (€)'),
+                ),
+                PopupMenuItem(
+                  value: PrimaryCurrency.cad,
+                  child: Text('CAD (C\$)'),
+                ),
+                PopupMenuItem(
+                  value: PrimaryCurrency.huf,
+                  child: Text('HUF (Ft)'),
+                ),
+              ],
+            ),
+        ],
+      ),
       body: CustomScrollView(
         slivers: [
           SliverToBoxAdapter(
@@ -42,7 +78,7 @@ class DashboardScreen extends ConsumerWidget {
                       const Text('Safe to Spend',
                           style: TextStyle(fontSize: 16)),
                       Text(
-                        '$currencySymbol${NumberFormat('#,##0.00').format(safeToSpendAsync)}',
+                        '$currencySymbol ${NumberFormat('#,##0.00').format(safeToSpendAsync)}',
                         style: const TextStyle(
                             fontSize: 36,
                             fontWeight: FontWeight.bold,
@@ -52,7 +88,7 @@ class DashboardScreen extends ConsumerWidget {
                       const Text('True Available',
                           style: TextStyle(fontSize: 14, color: Colors.grey)),
                       Text(
-                        '$currencySymbol${NumberFormat('#,##0.00').format(trueAvailableAsync)}',
+                        '$currencySymbol ${NumberFormat('#,##0.00').format(trueAvailableAsync)}',
                         style: const TextStyle(
                             fontSize: 20, fontWeight: FontWeight.bold),
                       ),
