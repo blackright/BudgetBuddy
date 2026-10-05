@@ -3,10 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
-import '../../../core/models/expense.dart';
 import '../../../core/models/insurance_profile.dart';
 import '../../../core/models/medical_bill.dart';
 import '../../../core/providers/active_profile_provider.dart';
+import '../../../core/providers/selected_month_provider.dart';
 import '../providers/medical_providers.dart';
 import 'medical_theme.dart';
 
@@ -25,8 +25,9 @@ class MedicalDashboard extends ConsumerWidget {
         elevation: 0,
         actions: [
           IconButton(
-            tooltip: 'Insurance settings',
-            icon: const Icon(Icons.settings_outlined),
+            key: const Key('billDefaultsButton'),
+            tooltip: 'Bill defaults',
+            icon: const Icon(Icons.tune),
             onPressed: () => _editInsuranceProfile(context, ref),
           ),
           IconButton(
@@ -51,24 +52,44 @@ class MedicalDashboard extends ConsumerWidget {
                   onSetup: () => _editInsuranceProfile(context, ref)),
             ),
             const SliverToBoxAdapter(child: _BudgetImpactCard()),
-            const SliverToBoxAdapter(child: _DeductibleCard()),
-            const SliverToBoxAdapter(
+            const SliverToBoxAdapter(child: _PatientShareCard()),
+            SliverToBoxAdapter(
               child: Padding(
-                padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
-                child: Text(
-                  'Medical Bills',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+                child: Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Medical Bills',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    ElevatedButton.icon(
+                      key: const Key('addBillButton'),
+                      onPressed: () => context.push('/medical_bill_form'),
+                      icon: const Icon(Icons.add, size: 20),
+                      label: const Text('Add', style: TextStyle(fontWeight: FontWeight.bold)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blueAccent,
+                        foregroundColor: Colors.white,
+                        elevation: 4,
+                        shadowColor: Colors.blueAccent.withAlpha(100),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(24),
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
             const _BillsSliver(),
           ],
         ),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.push('/medical_bill_form'),
-        icon: const Icon(Icons.add),
-        label: const Text('Add Bill'),
       ),
     );
   }
@@ -80,7 +101,7 @@ class MedicalDashboard extends ConsumerWidget {
         ? ref.read(insuranceProfileProvider).value
         : await ref
             .read(medicalRepositoryProvider)
-            .getInsuranceProfile(profileId, DateTime.now().year);
+            .getInsuranceProfile(profileId);
 
     if (!context.mounted) return;
     final result = await showModalBottomSheet<InsuranceProfile>(
@@ -120,17 +141,67 @@ class _InsuranceSection extends ConsumerWidget {
         if (profile == null || !_isConfigured(profile)) {
           return _SetupPrompt(onSetup: onSetup);
         }
-        return const SizedBox.shrink();
+        // The gear used to be the only entry point to this setting, so its
+        // effect was invisible once configured. One line makes it discoverable
+        // without opening anything.
+        return _DefaultsSummary(
+          percent: profile.defaultPatientPercent,
+          plan: profile.planSummary,
+          onEdit: onSetup,
+        );
       },
       loading: () => const SizedBox(height: 8),
       error: (_, __) => _SetupPrompt(onSetup: onSetup),
     );
   }
 
-  static bool _isConfigured(InsuranceProfile p) =>
-      p.individualDeductible > 0 ||
-      p.familyDeductible > 0 ||
-      p.defaultCoveragePercent > 0;
+  /// FR-035: there is no deductible to configure any more, so a profile counts
+  /// as configured once it carries a usable default patient share.
+  static bool _isConfigured(InsuranceProfile p) => p.defaultPatientPercent > 0;
+}
+
+/// The configured state: shows the current default so the setting has a visible
+/// representation on the screen, not just an icon in the app bar.
+class _DefaultsSummary extends StatelessWidget {
+  const _DefaultsSummary({
+    required this.percent,
+    required this.onEdit,
+    this.plan,
+  });
+
+  final double percent;
+
+  /// Already joined by `InsuranceProfile.planSummary`, so it is null when
+  /// neither part was recorded.
+  final String? plan;
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      child: Card(
+        color: Colors.blueAccent.withValues(alpha: 0.12),
+        child: ListTile(
+          key: const Key('billDefaultsSummary'),
+          leading: const Icon(Icons.tune, color: Colors.blueAccent),
+          title: Text('Usually pay ${percent.toStringAsFixed(0)}%'),
+          // Two separate lines rather than one '\n' string: the plan is a
+          // distinct fact, not part of the explanation.
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (plan != null) Text(plan!),
+              const Text('Pre-filled on every new bill. Tap to change.'),
+            ],
+          ),
+          isThreeLine: plan != null,
+          trailing: const Icon(Icons.chevron_right),
+          onTap: onEdit,
+        ),
+      ),
+    );
+  }
 }
 
 class _SetupPrompt extends StatelessWidget {
@@ -146,10 +217,9 @@ class _SetupPrompt extends StatelessWidget {
         color: Colors.blueAccent.withValues(alpha: 0.12),
         child: ListTile(
           leading: const Icon(Icons.shield_outlined, color: Colors.blueAccent),
-          title: const Text('Set up your insurance'),
+          title: const Text('Set your usual share'),
           subtitle: const Text(
-            'Add your annual deductible and default coverage so we can track '
-            'what you have paid toward it.',
+            'The share you normally pay, so new bills pre-fill it for you.',
           ),
           trailing: const Icon(Icons.chevron_right),
           onTap: onSetup,
@@ -170,34 +240,26 @@ class _InsuranceProfileSheet extends StatefulWidget {
 
 class _InsuranceProfileSheetState extends State<_InsuranceProfileSheet> {
   final _formKey = GlobalKey<FormState>();
-  late final TextEditingController _individual;
-  late final TextEditingController _family;
-  late final TextEditingController _coverage;
+  late final TextEditingController _patientShare;
+  late final TextEditingController _insurer;
+  late final TextEditingController _plan;
 
   @override
   void initState() {
     super.initState();
     final p = widget.initial;
-    _individual = TextEditingController(
-      text: p == null || p.individualDeductible == 0
-          ? ''
-          : p.individualDeductible.toStringAsFixed(0),
+    _patientShare = TextEditingController(
+      text: (p?.defaultPatientPercent ?? 20).toStringAsFixed(0),
     );
-    _family = TextEditingController(
-      text: p == null || p.familyDeductible == 0
-          ? ''
-          : p.familyDeductible.toStringAsFixed(0),
-    );
-    _coverage = TextEditingController(
-      text: (p?.defaultCoveragePercent ?? 80).toStringAsFixed(0),
-    );
+    _insurer = TextEditingController(text: p?.insurerName ?? '');
+    _plan = TextEditingController(text: p?.planName ?? '');
   }
 
   @override
   void dispose() {
-    _individual.dispose();
-    _family.dispose();
-    _coverage.dispose();
+    _patientShare.dispose();
+    _insurer.dispose();
+    _plan.dispose();
     super.dispose();
   }
 
@@ -208,70 +270,90 @@ class _InsuranceProfileSheetState extends State<_InsuranceProfileSheet> {
         left: 16,
         right: 16,
         top: 16,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+        bottom: MediaQuery.viewInsetsOf(context).bottom + 16,
       ),
       child: Form(
         key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              'Insurance Profile',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Applies to ${DateTime.now().year}. Deductibles reset each year.',
-              style: TextStyle(color: MedicalTheme.subtleText(context)),
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _individual,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(
-                labelText: 'Annual deductible (per person)',
-                border: OutlineInputBorder(),
+        // The inset padding above lifts the sheet clear of the keyboard, but the
+        // content can still be taller than the space that leaves. Scrolling it
+        // means a tall sheet shrinks into the remaining room instead of
+        // overflowing (FR: no RenderFlex overflow under a soft keyboard).
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Bill Defaults',
+                style: Theme.of(context).textTheme.titleLarge,
               ),
-              validator: (v) => _validateNumber(v, allowEmpty: true),
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _family,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(
-                labelText: 'Annual family deductible',
-                border: OutlineInputBorder(),
+              const SizedBox(height: 4),
+              Text(
+                'Pre-fills every new bill. You can still change it per bill.',
+                style: TextStyle(color: MedicalTheme.subtleText(context)),
               ),
-              validator: (v) => _validateNumber(v, allowEmpty: true),
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _coverage,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(
-                labelText: 'Default coverage (%)',
-                border: OutlineInputBorder(),
+              const SizedBox(height: 16),
+              TextFormField(
+                key: const Key('defaultPatientShareField'),
+                controller: _patientShare,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(
+                  labelText: 'Usual patient share (%)',
+                  helperText: 'The share you normally pay, not the insurer\'s. '
+                      'A 20% share means a 1000 bill costs you 200.',
+                  border: OutlineInputBorder(),
+                ),
+                validator: (v) {
+                  final error = _validateNumber(v);
+                  if (error != null) return error;
+                  final parsed = double.parse(v!);
+                  if (parsed < 0 || parsed > 100) {
+                    return 'Must be between 0 and 100';
+                  }
+                  return null;
+                },
               ),
-              validator: (v) {
-                final error = _validateNumber(v);
-                if (error != null) return error;
-                final parsed = double.parse(v!);
-                if (parsed < 0 || parsed > 100) {
-                  return 'Must be between 0 and 100';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: _submit,
-              child: const Text('Save Profile'),
-            ),
-          ],
+              const SizedBox(height: 24),
+              Text(
+                'Your plan',
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Optional. Useful when a statement arrives and you need to tell '
+                'which plan covered it.',
+                style: TextStyle(color: MedicalTheme.subtleText(context)),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                key: const Key('insurerNameField'),
+                controller: _insurer,
+                textCapitalization: TextCapitalization.words,
+                decoration: const InputDecoration(
+                  labelText: 'Insurer (optional)',
+                  hintText: 'e.g. Blue Cross',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                key: const Key('planNameField'),
+                controller: _plan,
+                textCapitalization: TextCapitalization.words,
+                decoration: const InputDecoration(
+                  labelText: 'Plan name (optional)',
+                  hintText: 'e.g. PPO 500',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: _submit,
+                child: const Text('Save'),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -290,33 +372,39 @@ class _InsuranceProfileSheetState extends State<_InsuranceProfileSheet> {
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
     final profile = widget.initial ?? InsuranceProfile();
-    profile
-      ..individualDeductible = double.tryParse(_individual.text.trim()) ?? 0
-      ..familyDeductible = double.tryParse(_family.text.trim()) ?? 0
-      ..defaultCoveragePercent = double.parse(_coverage.text.trim())
-      ..year = DateTime.now().year;
+    profile.defaultPatientPercent = double.parse(_patientShare.text.trim());
+    profile.setPlanDetails(
+      insurerName: _insurer.text,
+      planName: _plan.text,
+    );
     Navigator.of(context).pop(profile);
   }
 }
 
 // -----------------------------------------------------------------------------
-// Deductible + budget impact
+// Patient share + budget impact
 // -----------------------------------------------------------------------------
 
-class _DeductibleCard extends ConsumerWidget {
-  const _DeductibleCard();
+/// Month-scoped split of who paid what.
+///
+/// Replaces the old deductible progress card (FR-037): with deductibles gone
+/// there is no limit or progress to show, only the totals for the selected month
+/// (T049).
+class _PatientShareCard extends ConsumerWidget {
+  const _PatientShareCard();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final progress = ref.watch(deductibleProgressProvider);
+    final totals = ref.watch(patientShareTotalsProvider);
     final symbol = ref.watch(medicalCurrencySymbolProvider);
-    final year = ref.watch(currentMedicalYearProvider);
+    final month = ref.watch(selectedYearMonthProvider);
 
-    if (!progress.hasInsuranceProfile) {
+    if (totals.isEmpty) {
       return const SizedBox.shrink();
     }
 
     return Card(
+      key: const Key('patientShareCard'),
       margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
       color: MedicalTheme.surface(context),
       child: Padding(
@@ -324,32 +412,48 @@ class _DeductibleCard extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              '$year Deductible',
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            const Text(
+              'Patient share',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 4),
             Text(
-              '${progress.billCount} bill'
-              '${progress.billCount == 1 ? '' : 's'} logged this year',
+              '${totals.billCount} bill'
+              '${totals.billCount == 1 ? '' : 's'} in $month',
               style: TextStyle(color: MedicalTheme.subtleText(context)),
             ),
             const SizedBox(height: 16),
-            _ProgressRow(
-              label: 'Individual',
-              met: progress.individualOutOfPocket,
-              limit: progress.individualLimit,
-              fraction: progress.fractionOf(),
+            _SplitRow(
+              label: 'Billed',
+              value: totals.billedTotal,
               currencySymbol: symbol,
+              color: MedicalTheme.subtleText(context),
             ),
-            if (progress.hasFamilyLimit) ...[
-              const SizedBox(height: 16),
-              _ProgressRow(
-                label: 'Family',
-                met: progress.familyMet,
-                limit: progress.familyLimit,
-                fraction: progress.familyFraction(),
+            _SplitRow(
+              label: 'Insurer paid',
+              value: totals.insurerPaidTotal,
+              currencySymbol: symbol,
+              color: Colors.green,
+            ),
+            _SplitRow(
+              label: 'You paid',
+              value: totals.patientShareTotal,
+              currencySymbol: symbol,
+              color: Colors.orange,
+            ),
+            if (totals.reimbursedTotal > 0) ...[
+              _SplitRow(
+                label: 'Reimbursed to you',
+                value: totals.reimbursedTotal,
                 currencySymbol: symbol,
+                color: Colors.teal,
+              ),
+              _SplitRow(
+                label: 'Net out of pocket',
+                value: totals.netPatientCost,
+                currencySymbol: symbol,
+                color: Colors.red,
+                bold: true,
               ),
             ],
           ],
@@ -359,58 +463,42 @@ class _DeductibleCard extends ConsumerWidget {
   }
 }
 
-class _ProgressRow extends StatelessWidget {
-  const _ProgressRow({
+class _SplitRow extends StatelessWidget {
+  const _SplitRow({
     required this.label,
-    required this.met,
-    required this.limit,
-    required this.fraction,
+    required this.value,
     required this.currencySymbol,
+    required this.color,
+    this.bold = false,
   });
 
   final String label;
-  final double met;
-  final double limit;
-  final double fraction;
+  final double value;
   final String currencySymbol;
+  final Color color;
+  final bool bold;
 
   @override
   Widget build(BuildContext context) {
-    final remaining = (limit - met).clamp(0.0, double.infinity);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
-            Text(
-              '${MedicalTheme.money(currencySymbol, met)} of '
-              '${MedicalTheme.money(currencySymbol, limit)}',
-              style: TextStyle(color: MedicalTheme.subtleText(context)),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        LinearProgressIndicator(
-          value: fraction,
-          minHeight: 12,
-          borderRadius: BorderRadius.circular(6),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          remaining <= 0
-              ? 'Deductible met 🎉 insurance should cover more from here.'
-              : '${MedicalTheme.money(currencySymbol, remaining)} left before '
-                  'insurance starts covering the full cost.',
-          style: TextStyle(
-            fontSize: 12,
-            color: remaining <= 0
-                ? Colors.green
-                : MedicalTheme.subtleText(context),
+    final base = Theme.of(context).textTheme.bodyMedium;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: bold ? base?.copyWith(fontWeight: FontWeight.bold) : base,
           ),
-        ),
-      ],
+          Text(
+            MedicalTheme.money(currencySymbol, value),
+            style: base?.copyWith(
+              fontWeight: bold ? FontWeight.bold : FontWeight.w600,
+              color: color,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -587,7 +675,7 @@ class _EmptyState extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            'Log a bill to start tracking your deductible.',
+            'Log a bill to see what it costs you and what comes back.',
             textAlign: TextAlign.center,
             style: TextStyle(color: MedicalTheme.subtleText(context)),
           ),
@@ -606,21 +694,20 @@ class _BillTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final directory = ref.watch(medicalDirectoryProvider);
-    final statuses = ref.watch(medicalExpenseStatusesProvider).value ??
-        const <int, ExpenseStatus>{};
     final provider = directory.providerName(bill.providerId);
     final patient = directory.memberName(bill.familyMemberId);
-    final paid = isPaidToProvider(bill, statuses);
-    final statusColor =
-        MedicalTheme.claimStatusColor(context, bill.claimStatus);
+
+    // FR-042: the state is the single source of truth for both the chip colour
+    // and the wording, so it replaces the old claim-status + paid/planned pair.
+    final stateColor = MedicalTheme.billStateColor(context, bill.state);
 
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       leading: CircleAvatar(
-        backgroundColor: statusColor.withValues(alpha: 0.2),
+        backgroundColor: stateColor.withValues(alpha: 0.2),
         child: Icon(
-          MedicalTheme.claimStatusIcon(bill.claimStatus),
-          color: statusColor,
+          MedicalTheme.billStateIcon(bill.state),
+          color: stateColor,
         ),
       ),
       title: Text(provider ?? 'Medical Bill'),
@@ -630,11 +717,11 @@ class _BillTile extends ConsumerWidget {
           Text(
             <String>[
               if (patient != null) patient,
-              bill.claimStatus.label,
-              if (paid) 'Paid' else 'Planned',
+              bill.state.label,
+              bill.paymentMethod.label,
             ].join(' • '),
           ),
-          if (bill.followUpDate != null && bill.claimStatus.isPending)
+          if (bill.followUpDate != null && bill.state.isPending)
             Text(
               'Follow up ${DateFormat('MMM d').format(bill.followUpDate!)}',
               style: const TextStyle(fontSize: 12, color: Colors.orange),
@@ -649,13 +736,16 @@ class _BillTile extends ConsumerWidget {
             MedicalTheme.money(currencySymbol, bill.billedAmount),
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
           ),
-          Text(
-            '${MedicalTheme.money(currencySymbol, bill.patientShare)} you',
-            style: TextStyle(
-              fontSize: 12,
-              color: MedicalTheme.subtleText(context),
+          // FR-042: only an insurer-paid bill splits the charge; a self-paid one
+          // is entirely the user's, so a share line would be misleading.
+          if (bill.paymentMethod == MedicalPaymentMethod.insurerPaid)
+            Text(
+              '${MedicalTheme.money(currencySymbol, bill.patientShareAmount)} you',
+              style: TextStyle(
+                fontSize: 12,
+                color: MedicalTheme.subtleText(context),
+              ),
             ),
-          ),
         ],
       ),
       onTap: () => context.push('/medical_detail', extra: bill.id),
@@ -677,79 +767,94 @@ class _DirectorySheet extends ConsumerWidget {
 
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Providers & Family',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: () => Navigator.of(context).pop(),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Flexible(
-              child: ListView(
-                shrinkWrap: true,
+        // The keyboard covers the lower half of the sheet, so the list needs the
+        // inset as real space and a bounded parent to scroll within.
+        padding: EdgeInsets.fromLTRB(
+          16,
+          16,
+          16,
+          MediaQuery.viewInsetsOf(context).bottom + 16,
+        ),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(context).height * 0.8,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _DirectorySectionHeader(
-                    title: 'Medical providers',
-                    onAdd: () => _editProvider(context, ref),
+                  Text(
+                    'Providers & Family',
+                    style: Theme.of(context).textTheme.titleLarge,
                   ),
-                  if (providers.isEmpty)
-                    const _DirectoryEmpty('No providers saved yet.'),
-                  for (final provider in providers)
-                    ListTile(
-                      dense: true,
-                      leading: const Icon(Icons.local_hospital_outlined),
-                      title: Text(provider.name),
-                      subtitle: provider.specialty == null
-                          ? null
-                          : Text(provider.specialty!),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.delete_outline),
-                        tooltip: 'Remove provider',
-                        onPressed: () => ref
-                            .read(medicalRepositoryProvider)
-                            .deleteProvider(provider.id),
-                      ),
-                      onTap: () =>
-                          _editProvider(context, ref, existing: provider),
-                    ),
-                  const Divider(height: 32),
-                  _DirectorySectionHeader(
-                    title: 'Family members',
-                    onAdd: () => _editFamilyMember(context, ref),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.of(context).pop(),
                   ),
-                  if (members.isEmpty)
-                    const _DirectoryEmpty('No family members yet.'),
-                  for (final member in members)
-                    ListTile(
-                      dense: true,
-                      leading: const Icon(Icons.person_outline),
-                      title: Text(member.name),
-                      subtitle: Text(member.relation),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.delete_outline),
-                        tooltip: 'Remove member',
-                        onPressed: () => ref
-                            .read(medicalRepositoryProvider)
-                            .deleteFamilyMember(member.id),
-                      ),
-                    ),
                 ],
               ),
-            ),
-            const SizedBox(height: 16),
-          ],
+              const SizedBox(height: 8),
+              Flexible(
+                child: ListView(
+                  // Compact when the list is short, scrollable when it is long:
+                  // the ConstrainedBox above gives this a bounded height to
+                  // shrink-wrap against instead of the full screen.
+                  shrinkWrap: true,
+                  children: [
+                    _DirectorySectionHeader(
+                      title: 'Medical providers',
+                      onAdd: () => _editProvider(context, ref),
+                    ),
+                    if (providers.isEmpty)
+                      const _DirectoryEmpty('No providers saved yet.'),
+                    for (final provider in providers)
+                      ListTile(
+                        dense: true,
+                        leading: const Icon(Icons.local_hospital_outlined),
+                        title: Text(provider.name),
+                        subtitle: provider.specialty == null
+                            ? null
+                            : Text(provider.specialty!),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.delete_outline),
+                          tooltip: 'Remove provider',
+                          onPressed: () => ref
+                              .read(medicalRepositoryProvider)
+                              .deleteProvider(provider.id),
+                        ),
+                        onTap: () =>
+                            _editProvider(context, ref, existing: provider),
+                      ),
+                    const Divider(height: 32),
+                    _DirectorySectionHeader(
+                      title: 'Family members',
+                      onAdd: () => _editFamilyMember(context, ref),
+                    ),
+                    if (members.isEmpty)
+                      const _DirectoryEmpty('No family members yet.'),
+                    for (final member in members)
+                      ListTile(
+                        dense: true,
+                        leading: const Icon(Icons.person_outline),
+                        title: Text(member.name),
+                        subtitle: Text(member.relation),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.delete_outline),
+                          tooltip: 'Remove member',
+                          onPressed: () => ref
+                              .read(medicalRepositoryProvider)
+                              .deleteFamilyMember(member.id),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
         ),
       ),
     );
@@ -882,51 +987,55 @@ class _ProviderFormSheetState extends State<_ProviderFormSheet> {
         left: 16,
         right: 16,
         top: 16,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+        bottom: MediaQuery.viewInsetsOf(context).bottom + 16,
       ),
       child: Form(
         key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              widget.existing == null ? 'Add Provider' : 'Edit Provider',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _name,
-              decoration: const InputDecoration(
-                labelText: 'Name',
-                border: OutlineInputBorder(),
+        // See _InsuranceProfileSheetState: scroll the content so a soft keyboard
+        // cannot turn this into a RenderFlex overflow.
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                widget.existing == null ? 'Add Provider' : 'Edit Provider',
+                style: Theme.of(context).textTheme.titleMedium,
               ),
-              validator: (v) =>
-                  (v == null || v.trim().isEmpty) ? 'Required' : null,
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _specialty,
-              decoration: const InputDecoration(
-                labelText: 'Specialty (optional)',
-                border: OutlineInputBorder(),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _name,
+                decoration: const InputDecoration(
+                  labelText: 'Name',
+                  border: OutlineInputBorder(),
+                ),
+                validator: (v) =>
+                    (v == null || v.trim().isEmpty) ? 'Required' : null,
               ),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: () {
-                if (!_formKey.currentState!.validate()) return;
-                final specialty = _specialty.text.trim();
-                Navigator.of(context).pop(
-                  _ProviderDraft(
-                    name: _name.text.trim(),
-                    specialty: specialty.isEmpty ? null : specialty,
-                  ),
-                );
-              },
-              child: const Text('Save'),
-            ),
-          ],
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _specialty,
+                decoration: const InputDecoration(
+                  labelText: 'Specialty (optional)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: () {
+                  if (!_formKey.currentState!.validate()) return;
+                  final specialty = _specialty.text.trim();
+                  Navigator.of(context).pop(
+                    _ProviderDraft(
+                      name: _name.text.trim(),
+                      specialty: specialty.isEmpty ? null : specialty,
+                    ),
+                  );
+                },
+                child: const Text('Save'),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -985,55 +1094,59 @@ class _FamilyMemberFormSheetState extends State<_FamilyMemberFormSheet> {
         left: 16,
         right: 16,
         top: 16,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+        bottom: MediaQuery.viewInsetsOf(context).bottom + 16,
       ),
       child: Form(
         key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              widget.existing == null ? 'Add Family Member' : 'Edit Member',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _name,
-              decoration: const InputDecoration(
-                labelText: 'Name',
-                border: OutlineInputBorder(),
+        // See _InsuranceProfileSheetState: scroll the content so a soft keyboard
+        // cannot turn this into a RenderFlex overflow.
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                widget.existing == null ? 'Add Family Member' : 'Edit Member',
+                style: Theme.of(context).textTheme.titleMedium,
               ),
-              validator: (v) =>
-                  (v == null || v.trim().isEmpty) ? 'Required' : null,
-            ),
-            const SizedBox(height: 16),
-            DropdownButtonFormField<String>(
-              initialValue: _relation,
-              decoration: const InputDecoration(
-                labelText: 'Relation',
-                border: OutlineInputBorder(),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _name,
+                decoration: const InputDecoration(
+                  labelText: 'Name',
+                  border: OutlineInputBorder(),
+                ),
+                validator: (v) =>
+                    (v == null || v.trim().isEmpty) ? 'Required' : null,
               ),
-              items: _relations
-                  .map((r) => DropdownMenuItem(value: r, child: Text(r)))
-                  .toList(),
-              onChanged: (v) =>
-                  setState(() => _relation = v ?? _relations.first),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: () {
-                if (!_formKey.currentState!.validate()) return;
-                Navigator.of(context).pop(
-                  _FamilyMemberDraft(
-                    name: _name.text.trim(),
-                    relation: _relation,
-                  ),
-                );
-              },
-              child: const Text('Save'),
-            ),
-          ],
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                initialValue: _relation,
+                decoration: const InputDecoration(
+                  labelText: 'Relation',
+                  border: OutlineInputBorder(),
+                ),
+                items: _relations
+                    .map((r) => DropdownMenuItem(value: r, child: Text(r)))
+                    .toList(),
+                onChanged: (v) =>
+                    setState(() => _relation = v ?? _relations.first),
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: () {
+                  if (!_formKey.currentState!.validate()) return;
+                  Navigator.of(context).pop(
+                    _FamilyMemberDraft(
+                      name: _name.text.trim(),
+                      relation: _relation,
+                    ),
+                  );
+                },
+                child: const Text('Save'),
+              ),
+            ],
+          ),
         ),
       ),
     );

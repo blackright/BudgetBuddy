@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../finance/presentation/net_salary_section.dart';
+import 'font_setting_section.dart';
+
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
@@ -7,7 +10,14 @@ class SettingsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
-      body: const Center(child: Text('Settings Placeholder')),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: const [
+          NetSalarySection(),
+          SizedBox(height: 16),
+          FontSettingSection(),
+        ],
+      ),
     );
   }
 }

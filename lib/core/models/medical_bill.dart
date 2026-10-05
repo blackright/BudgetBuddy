@@ -2,12 +2,12 @@ import 'package:isar/isar.dart';
 
 part 'medical_bill.g.dart';
 
-/// A medical service the user paid for (or plans to pay for), with the
-/// insurance claim lifecycle tracked separately from the linked [Expense].
+/// A medical service the user paid for (or plans to pay for).
 ///
-/// The two lifecycles are intentionally independent:
-/// - `Expense.status` (planned / paid / cancelled) tracks money leaving the account.
-/// - [claimStatus] tracks what the insurer is doing about the bill.
+/// The bill's own [state] is the single authority for both its insurance meaning
+/// and its effect on the budget. There is no separate claim workflow: asking
+/// whether a bill counts as paid and asking whether the insurer has answered are
+/// the same question, so they cannot disagree.
 @collection
 class MedicalBill {
   Id id = Isar.autoIncrement;
@@ -15,11 +15,13 @@ class MedicalBill {
   @Index()
   int? profileId;
 
-  /// 1:1 link to `Expense.id`. `null` only for bills saved without a budget.
+  /// 1:1 link to `Expense.id`. The two are always written together, so their
+  /// amounts and owning months can never drift apart (FR-056).
   @Index()
   int? linkedExpenseId;
 
-  /// Links to `FamilyMember.id`.
+  /// Links to `FamilyMember.id`. Dependents are out of scope, but the key
+  /// already exists and must not be orphaned by this rewrite.
   @Index()
   int? familyMemberId;
 
@@ -27,65 +29,137 @@ class MedicalBill {
   @Index()
   int? providerId;
 
-  /// Local file paths for receipts / EOBs (FR-007).
-  List<String> attachmentPaths = [];
+  /// Links to `MedicalServiceType.id`.
+  @Index()
+  int? serviceTypeId;
+
+  /// Which of the two payment methods applied (FR-041).
+  @enumerated
+  @Index()
+  MedicalPaymentMethod paymentMethod = MedicalPaymentMethod.selfPaid;
+
+  /// Percentage **the user** is responsible for (FR-048). Inverted from the
+  /// retired `insuranceCoveragePercent`: 20 means the user pays a fifth.
+  double patientSharePercent = 20.0;
+
+  @enumerated
+  MedicalBillState state = MedicalBillState.waiting;
+
+  /// Owning month (`YYYY-MM`), derived from [serviceDate] unless the user
+  /// overrides it, and mirrored onto the linked expense (FR-055).
+  @Index()
+  String yearMonth = '';
+
+  @Index()
+  DateTime? serviceDate;
+
+  /// Full charge.
+  double billedAmount = 0.0;
+
+  /// The bill itself. Optional for either payment method (FR-047).
+  String? billPhotoPath;
+
+  /// The insurer's reply. Self-paid bills only — an insurer-paid bill never has
+  /// a payout to claim, so attaching one is invalid (FR-047).
+  String? insurerReplyPath;
 
   /// Reminder date to chase a pending claim (FR-009).
   DateTime? followUpDate;
 
-  double billedAmount = 0.0;
-  double insuranceCoveragePercent = 0.0;
-
-  @enumerated
-  ClaimStatus claimStatus = ClaimStatus.unclaimed;
-
-  DateTime? serviceDate;
-
-  /// Actual amount the insurer paid back. Drives the budget injection (FR-005).
+  /// Denormalised copy of the linked reimbursement; `0` when none.
   double reimbursedAmount = 0.0;
 
+  /// What the user owes the hospital before any reimbursement (FR-048).
   @ignore
-  double get insuranceCoveredAmount =>
-      billedAmount * (insuranceCoveragePercent / 100);
+  double get patientShareAmount => billedAmount * patientSharePercent / 100;
 
-  /// Coverage-based estimate of the patient's share, used for the deductible.
+  /// The insurer's portion of the charge.
   @ignore
-  double get estimatedOutPocket => billedAmount - insuranceCoveredAmount;
+  double get insurerPaidAmount => billedAmount - patientShareAmount;
 
-  /// What the user actually ended up paying: the amount handed to the provider
-  /// minus whatever the insurer paid back. Never negative.
+  /// How much this bill removes from available funds.
   ///
-  /// This is deliberately derived from the full [billedAmount] rather than from
-  /// [estimatedOutPocket], because the linked expense leaves the budget at the
-  /// full billed amount and only a logged reimbursement gives money back.
+  /// This *is* the money-impact table in `contracts/medical-bill-lifecycle.md`
+  /// §4, collapsed into three branches because the ten rows agree:
+  ///
+  /// - `planned` — nothing has moved, so nothing leaves.
+  /// - `rejected` — the insurer declined, so the user owes the whole charge
+  ///   whatever the payment method was.
+  /// - everything else — the patient share for insurer-paid bills, the full
+  ///   charge for self-paid ones.
+  ///
+  /// `Expense.amount` is always set from this, so the bill and the budget can
+  /// never disagree about what a bill cost (R07).
   @ignore
-  double get netOutOfPocket =>
-      (billedAmount - reimbursedAmount).clamp(0.0, double.infinity);
+  double get fundsImpact {
+    if (state == MedicalBillState.planned) return 0.0;
+    if (state == MedicalBillState.rejected) return billedAmount;
+    return switch (paymentMethod) {
+      MedicalPaymentMethod.insurerPaid => patientShareAmount,
+      MedicalPaymentMethod.selfPaid => billedAmount,
+    };
+  }
 
-  /// What the user is responsible for right now: the coverage estimate until an
-  /// insurer payout lands, then the real net cost.
+  /// Whether the bill counts against payments rather than the planned pool.
   @ignore
-  double get patientShare =>
-      reimbursedAmount > 0 ? netOutOfPocket : estimatedOutPocket;
-}
+  bool get countsAsPaid => state != MedicalBillState.planned;
 
-/// Where a medical bill sits in the insurance claim lifecycle.
-enum ClaimStatus {
-  unclaimed,
-  processing,
-  reimbursed,
-  denied,
-}
-
-extension ClaimStatusLabel on ClaimStatus {
-  String get label => switch (this) {
-        ClaimStatus.unclaimed => 'Unclaimed',
-        ClaimStatus.processing => 'Processing',
-        ClaimStatus.reimbursed => 'Reimbursed',
-        ClaimStatus.denied => 'Denied',
+  /// Net cost to the user once reimbursements are counted.
+  ///
+  /// An insurer-paid bill only ever cost the user their share, so it ignores the
+  /// billed amount; a self-paid bill started at the full charge and is reduced
+  /// by what came back. Never negative.
+  @ignore
+  double get netOutOfPocket => switch (paymentMethod) {
+        MedicalPaymentMethod.insurerPaid => patientShareAmount,
+        MedicalPaymentMethod.selfPaid =>
+          (billedAmount - reimbursedAmount).clamp(0.0, double.infinity),
       };
 
-  /// Claims still awaiting an insurer decision, i.e. ones worth following up on.
-  bool get isPending =>
-      this == ClaimStatus.unclaimed || this == ClaimStatus.processing;
+  /// A self-paid bill is the only kind that can be reimbursed (FR-044).
+  @ignore
+  bool get canBeReimbursed => paymentMethod == MedicalPaymentMethod.selfPaid;
+}
+
+/// Who paid the hospital.
+enum MedicalPaymentMethod {
+  /// The insurer bills the hospital directly; the user pays only their share.
+  insurerPaid,
+
+  /// The user paid in full and claims the insurer's share back.
+  selfPaid,
+}
+
+extension MedicalPaymentMethodLabel on MedicalPaymentMethod {
+  String get label => switch (this) {
+        MedicalPaymentMethod.insurerPaid => 'Insurer paid',
+        MedicalPaymentMethod.selfPaid => 'Self-paid',
+      };
+}
+
+/// Where a bill sits. Doubles as its insurance meaning and its budget effect
+/// (FR-053).
+enum MedicalBillState {
+  planned,
+  waiting,
+  paid,
+  finished,
+  rejected,
+}
+
+extension MedicalBillStateLabel on MedicalBillState {
+  String get label => switch (this) {
+        MedicalBillState.planned => 'Planned',
+        MedicalBillState.waiting => 'Waiting',
+        MedicalBillState.paid => 'Paid',
+        MedicalBillState.finished => 'Finished',
+        MedicalBillState.rejected => 'Rejected',
+      };
+
+  /// States still awaiting an insurer decision, i.e. ones worth following up on.
+  bool get isPending => this == MedicalBillState.waiting;
+
+  /// States that count against available funds.
+  bool get isSettled =>
+      this != MedicalBillState.planned && this != MedicalBillState.waiting;
 }

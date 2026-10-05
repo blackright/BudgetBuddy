@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../vault/repositories/vault_repository.dart';
 import '../../vault/models/savings_vault.dart';
-import '../../../core/providers/active_budget_provider.dart';
+import '../../../core/providers/selected_month_provider.dart';
 import '../../../core/providers/active_profile_provider.dart';
 
 final sweepServiceProvider = Provider<SweepService>((ref) {
@@ -17,7 +17,7 @@ class SweepService {
     final profile = await _ref.read(activeProfileProvider.future);
     if (profile == null) return;
 
-    final currentMonthStr = _ref.read(currentYearMonthProvider);
+    final currentMonthStr = _ref.read(selectedYearMonthProvider);
 
     final vaultRepo = _ref.read(vaultRepositoryProvider);
     var vault = await vaultRepo.getVault(profile.id);

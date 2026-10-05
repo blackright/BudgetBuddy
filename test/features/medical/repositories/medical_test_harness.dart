@@ -1,9 +1,11 @@
 import 'dart:io';
 
+import 'package:budget_buddy/core/database/schema_migrations.dart';
 import 'package:budget_buddy/core/models/category.dart';
 import 'package:budget_buddy/core/models/expense.dart';
 import 'package:budget_buddy/core/models/insurance_profile.dart';
 import 'package:budget_buddy/core/models/medical_bill.dart';
+import 'package:budget_buddy/core/models/medical_service_type.dart';
 import 'package:budget_buddy/core/models/monthly_budget.dart';
 import 'package:budget_buddy/core/models/user_profile.dart';
 import 'package:budget_buddy/features/expenses/models/reimbursement.dart';
@@ -22,6 +24,11 @@ class MedicalTestHarness {
 
   static bool _coreReady = false;
 
+  /// Isar 3 keys open instances by name within a process and refuses to open the
+  /// same one twice, so every harness gets a distinct name. Without this a test
+  /// that opens a second harness alongside the `setUp` one fails to open.
+  static int _nextInstance = 0;
+
   final Isar isar;
   final Directory directory;
   final MedicalRepository repository;
@@ -30,7 +37,21 @@ class MedicalTestHarness {
   int budgetId = 0;
   double baseAvailable = 0;
 
-  static Future<MedicalTestHarness> create() async {
+  /// Opens a harness whose database looks like one written by an older build:
+  /// the migration stamp is absent, so [runMigrations] will execute every step.
+  ///
+  /// Fields added by newer schemas read back as their declared defaults, which
+  /// is exactly how a real pre-migration database presents itself after Isar
+  /// upgrades the schema.
+  static Future<MedicalTestHarness> createPreMigration() =>
+      createWithSchemas(writeMigrationStamp: false);
+
+  static Future<MedicalTestHarness> create() =>
+      createWithSchemas(writeMigrationStamp: true);
+
+  static Future<MedicalTestHarness> createWithSchemas({
+    bool writeMigrationStamp = true,
+  }) async {
     if (!_coreReady) {
       await Isar.initializeIsarCore(download: true);
       _coreReady = true;
@@ -48,9 +69,17 @@ class MedicalTestHarness {
         InsuranceProfileSchema,
         FamilyMemberSchema,
         MedicalProviderSchema,
+        MedicalServiceTypeSchema,
+        SchemaMigrationStampSchema,
       ],
       directory: directory.path,
+      name: 'medical_${_nextInstance++}',
     );
+
+    if (writeMigrationStamp) {
+      await writeSchemaVersion(isar, schemaVersion);
+    }
+
     return MedicalTestHarness._(isar, directory);
   }
 
@@ -58,9 +87,7 @@ class MedicalTestHarness {
   /// budget context the repository expects.
   Future<MedicalBillContext> seedBudget({
     double available = 5000,
-    double individualDeductible = 2000,
-    double familyDeductible = 0,
-    double defaultCoveragePercent = 80,
+    double defaultPatientPercent = 20,
     String yearMonth = '2026-01',
     int year = 2026,
   }) async {
@@ -105,10 +132,7 @@ class MedicalTestHarness {
     await repository.saveInsuranceProfile(
       InsuranceProfile()
         ..profileId = seededProfileId
-        ..individualDeductible = individualDeductible
-        ..familyDeductible = familyDeductible
-        ..defaultCoveragePercent = defaultCoveragePercent
-        ..year = year,
+        ..defaultPatientPercent = defaultPatientPercent,
     );
 
     return MedicalBillContext(
@@ -163,6 +187,42 @@ class MedicalTestHarness {
 
   Future<List<MedicalProvider>> allProviders() =>
       isar.medicalProviders.where().findAll();
+
+  Future<List<MedicalServiceType>> serviceTypes() =>
+      isar.medicalServiceTypes.where().findAll();
+
+  Future<List<SchemaMigrationStamp>> schemaStamps() =>
+      isar.schemaMigrationStamps.where().findAll();
+
+  Future<MonthlyBudget?> budgetFor(String yearMonth) =>
+      isar.monthlyBudgets.filter().yearMonthEqualTo(yearMonth).findFirst();
+
+  Future<int> budgetCount() => isar.monthlyBudgets.count();
+
+  Future<List<MonthlyBudget>> allBudgets() =>
+      isar.monthlyBudgets.filter().yearMonthIsNotEmpty().findAll();
+
+  /// Seeds a `MonthlyBudget` the way an older build would have written it: an
+  /// opening balance recorded by the user, but no `openingBalanceConfirmed`
+  /// flag, because the field did not exist yet.
+  Future<MonthlyBudget> seedLegacyMonth(
+    String yearMonth, {
+    double openingBalance = 1200,
+  }) async {
+    final budget = MonthlyBudget()
+      ..yearMonth = yearMonth
+      ..baseAvailableAmount = openingBalance
+      ..currency = PrimaryCurrency.usd
+      ..createdAt = DateTime(2026)
+      ..updatedAt = DateTime(2026);
+    await isar.writeTxn(() async {
+      budget.id = await isar.monthlyBudgets.put(budget);
+    });
+    return budget;
+  }
+
+  /// Applies the pending schema migrations, exactly as app startup does.
+  Future<void> runMigrations() => runSchemaMigrations(isar);
 
   Future<void> close() async {
     await isar.close(deleteFromDisk: true);

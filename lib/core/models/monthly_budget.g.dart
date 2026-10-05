@@ -33,13 +33,23 @@ const MonthlyBudgetSchema = CollectionSchema(
       type: IsarType.byte,
       enumMap: _MonthlyBudgetcurrencyEnumValueMap,
     ),
-    r'updatedAt': PropertySchema(
+    r'netSalaryOverride': PropertySchema(
       id: 3,
+      name: r'netSalaryOverride',
+      type: IsarType.double,
+    ),
+    r'openingBalanceConfirmed': PropertySchema(
+      id: 4,
+      name: r'openingBalanceConfirmed',
+      type: IsarType.bool,
+    ),
+    r'updatedAt': PropertySchema(
+      id: 5,
       name: r'updatedAt',
       type: IsarType.dateTime,
     ),
     r'yearMonth': PropertySchema(
-      id: 4,
+      id: 6,
       name: r'yearMonth',
       type: IsarType.string,
     )
@@ -77,8 +87,10 @@ void _monthlyBudgetSerialize(
   writer.writeDouble(offsets[0], object.baseAvailableAmount);
   writer.writeDateTime(offsets[1], object.createdAt);
   writer.writeByte(offsets[2], object.currency.index);
-  writer.writeDateTime(offsets[3], object.updatedAt);
-  writer.writeString(offsets[4], object.yearMonth);
+  writer.writeDouble(offsets[3], object.netSalaryOverride);
+  writer.writeBool(offsets[4], object.openingBalanceConfirmed);
+  writer.writeDateTime(offsets[5], object.updatedAt);
+  writer.writeString(offsets[6], object.yearMonth);
 }
 
 MonthlyBudget _monthlyBudgetDeserialize(
@@ -94,8 +106,10 @@ MonthlyBudget _monthlyBudgetDeserialize(
       _MonthlyBudgetcurrencyValueEnumMap[reader.readByteOrNull(offsets[2])] ??
           PrimaryCurrency.huf;
   object.id = id;
-  object.updatedAt = reader.readDateTime(offsets[3]);
-  object.yearMonth = reader.readString(offsets[4]);
+  object.netSalaryOverride = reader.readDoubleOrNull(offsets[3]);
+  object.openingBalanceConfirmed = reader.readBool(offsets[4]);
+  object.updatedAt = reader.readDateTime(offsets[5]);
+  object.yearMonth = reader.readString(offsets[6]);
   return object;
 }
 
@@ -115,8 +129,12 @@ P _monthlyBudgetDeserializeProp<P>(
               reader.readByteOrNull(offset)] ??
           PrimaryCurrency.huf) as P;
     case 3:
-      return (reader.readDateTime(offset)) as P;
+      return (reader.readDoubleOrNull(offset)) as P;
     case 4:
+      return (reader.readBool(offset)) as P;
+    case 5:
+      return (reader.readDateTime(offset)) as P;
+    case 6:
       return (reader.readString(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -465,6 +483,100 @@ extension MonthlyBudgetQueryFilter
   }
 
   QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterFilterCondition>
+      netSalaryOverrideIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'netSalaryOverride',
+      ));
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterFilterCondition>
+      netSalaryOverrideIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'netSalaryOverride',
+      ));
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterFilterCondition>
+      netSalaryOverrideEqualTo(
+    double? value, {
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'netSalaryOverride',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterFilterCondition>
+      netSalaryOverrideGreaterThan(
+    double? value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'netSalaryOverride',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterFilterCondition>
+      netSalaryOverrideLessThan(
+    double? value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'netSalaryOverride',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterFilterCondition>
+      netSalaryOverrideBetween(
+    double? lower,
+    double? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'netSalaryOverride',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterFilterCondition>
+      openingBalanceConfirmedEqualTo(bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'openingBalanceConfirmed',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterFilterCondition>
       updatedAtEqualTo(DateTime value) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
@@ -705,6 +817,34 @@ extension MonthlyBudgetQuerySortBy
     });
   }
 
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterSortBy>
+      sortByNetSalaryOverride() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'netSalaryOverride', Sort.asc);
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterSortBy>
+      sortByNetSalaryOverrideDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'netSalaryOverride', Sort.desc);
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterSortBy>
+      sortByOpeningBalanceConfirmed() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'openingBalanceConfirmed', Sort.asc);
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterSortBy>
+      sortByOpeningBalanceConfirmedDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'openingBalanceConfirmed', Sort.desc);
+    });
+  }
+
   QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterSortBy> sortByUpdatedAt() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'updatedAt', Sort.asc);
@@ -786,6 +926,34 @@ extension MonthlyBudgetQuerySortThenBy
     });
   }
 
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterSortBy>
+      thenByNetSalaryOverride() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'netSalaryOverride', Sort.asc);
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterSortBy>
+      thenByNetSalaryOverrideDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'netSalaryOverride', Sort.desc);
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterSortBy>
+      thenByOpeningBalanceConfirmed() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'openingBalanceConfirmed', Sort.asc);
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterSortBy>
+      thenByOpeningBalanceConfirmedDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'openingBalanceConfirmed', Sort.desc);
+    });
+  }
+
   QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterSortBy> thenByUpdatedAt() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'updatedAt', Sort.asc);
@@ -834,6 +1002,20 @@ extension MonthlyBudgetQueryWhereDistinct
     });
   }
 
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QDistinct>
+      distinctByNetSalaryOverride() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'netSalaryOverride');
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QDistinct>
+      distinctByOpeningBalanceConfirmed() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'openingBalanceConfirmed');
+    });
+  }
+
   QueryBuilder<MonthlyBudget, MonthlyBudget, QDistinct> distinctByUpdatedAt() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'updatedAt');
@@ -873,6 +1055,20 @@ extension MonthlyBudgetQueryProperty
       currencyProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'currency');
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, double?, QQueryOperations>
+      netSalaryOverrideProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'netSalaryOverride');
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, bool, QQueryOperations>
+      openingBalanceConfirmedProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'openingBalanceConfirmed');
     });
   }
 

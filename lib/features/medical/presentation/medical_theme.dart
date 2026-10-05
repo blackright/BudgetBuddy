@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../../../core/models/medical_bill.dart';
 
@@ -42,35 +43,75 @@ class MedicalTheme {
   static Color subtleText(BuildContext context) =>
       isDark(context) ? Colors.white70 : Colors.black54;
 
-  /// Accent colour for a claim status chip / icon.
-  static Color claimStatusColor(BuildContext context, ClaimStatus status) {
-    switch (status) {
-      case ClaimStatus.unclaimed:
+  // ---------------------------------------------------------------------------
+  // Semantic money tokens (FR-019, FR-020)
+  //
+  // Colour carries meaning here, so these are the only sanctioned literals for
+  // the four money roles. Screens must reference these rather than picking a
+  // green/red/orange of their own, which is what stops two screens from
+  // disagreeing about what a figure means.
+  // ---------------------------------------------------------------------------
+
+  /// Money coming in: income, and money returned to the user.
+  static const Color moneyIn = Color(0xFF2E7D32);
+
+  /// Money going out: amounts that have actually left the account.
+  static const Color moneyOut = Color(0xFFC62828);
+
+  /// Money committed to but not yet spent.
+  static const Color planned = Color(0xFFEF6C00);
+
+  /// Money in the bank — deliberately neutral. It is a position, not a
+  /// movement, so it must not read as a gain or a loss.
+  static const Color bank = Color(0xFF546E7A);
+
+  /// Money-role colour resolved against the active theme.
+  ///
+  /// Dark mode lifts the tones so they keep contrast against dark surfaces.
+  static Color semantic(BuildContext context, Color token) {
+    if (!isDark(context)) return token;
+    final hsl = HSLColor.fromColor(token);
+    return hsl.withLightness((hsl.lightness + 0.18).clamp(0.0, 1.0)).toColor();
+  }
+
+  /// Accent colour for a bill-state chip / icon (SC-007).
+  ///
+  /// `planned` is neutral because it is a commitment rather than an event, and
+  /// `finished` shares the positive tone with a settled payer.
+  static Color billStateColor(BuildContext context, MedicalBillState state) {
+    switch (state) {
+      case MedicalBillState.planned:
+        return Colors.blueGrey;
+      case MedicalBillState.waiting:
         return Colors.orange;
-      case ClaimStatus.processing:
+      case MedicalBillState.paid:
         return Colors.blue;
-      case ClaimStatus.reimbursed:
+      case MedicalBillState.finished:
         return Colors.green;
-      case ClaimStatus.denied:
+      case MedicalBillState.rejected:
         return Colors.red;
     }
   }
 
-  static IconData claimStatusIcon(ClaimStatus status) {
-    switch (status) {
-      case ClaimStatus.unclaimed:
+  static IconData billStateIcon(MedicalBillState state) {
+    switch (state) {
+      case MedicalBillState.planned:
+        return Icons.event_note_outlined;
+      case MedicalBillState.waiting:
         return Icons.help_outline;
-      case ClaimStatus.processing:
+      case MedicalBillState.paid:
         return Icons.autorenew;
-      case ClaimStatus.reimbursed:
+      case MedicalBillState.finished:
         return Icons.verified_outlined;
-      case ClaimStatus.denied:
+      case MedicalBillState.rejected:
         return Icons.cancel_outlined;
     }
   }
 
   /// Money rendered the way the rest of the app does it. [currencySymbol]
   /// comes from the active budget so amounts follow the primary currency.
-  static String money(String currencySymbol, double amount) =>
-      '$currencySymbol${amount.toStringAsFixed(2)}';
+  static String money(String currencySymbol, double amount) {
+    final formatter = NumberFormat('#,##0.00', 'en_US');
+    return '$currencySymbol ${formatter.format(amount)}';
+  }
 }

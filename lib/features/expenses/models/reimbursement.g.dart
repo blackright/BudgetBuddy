@@ -31,6 +31,16 @@ const ReimbursementSchema = CollectionSchema(
       id: 2,
       name: r'expenseId',
       type: IsarType.long,
+    ),
+    r'originYearMonth': PropertySchema(
+      id: 3,
+      name: r'originYearMonth',
+      type: IsarType.string,
+    ),
+    r'orphaned': PropertySchema(
+      id: 4,
+      name: r'orphaned',
+      type: IsarType.bool,
     )
   },
   estimateSize: _reimbursementEstimateSize,
@@ -51,6 +61,32 @@ const ReimbursementSchema = CollectionSchema(
           caseSensitive: false,
         )
       ],
+    ),
+    r'originYearMonth': IndexSchema(
+      id: 5724684252273102723,
+      name: r'originYearMonth',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'originYearMonth',
+          type: IndexType.hash,
+          caseSensitive: true,
+        )
+      ],
+    ),
+    r'orphaned': IndexSchema(
+      id: 6907391274945051414,
+      name: r'orphaned',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'orphaned',
+          type: IndexType.value,
+          caseSensitive: false,
+        )
+      ],
     )
   },
   links: {},
@@ -67,6 +103,7 @@ int _reimbursementEstimateSize(
   Map<Type, List<int>> allOffsets,
 ) {
   var bytesCount = offsets.last;
+  bytesCount += 3 + object.originYearMonth.length * 3;
   return bytesCount;
 }
 
@@ -79,6 +116,8 @@ void _reimbursementSerialize(
   writer.writeDouble(offsets[0], object.amount);
   writer.writeDateTime(offsets[1], object.date);
   writer.writeLong(offsets[2], object.expenseId);
+  writer.writeString(offsets[3], object.originYearMonth);
+  writer.writeBool(offsets[4], object.orphaned);
 }
 
 Reimbursement _reimbursementDeserialize(
@@ -90,8 +129,10 @@ Reimbursement _reimbursementDeserialize(
   final object = Reimbursement();
   object.amount = reader.readDouble(offsets[0]);
   object.date = reader.readDateTime(offsets[1]);
-  object.expenseId = reader.readLong(offsets[2]);
+  object.expenseId = reader.readLongOrNull(offsets[2]);
   object.id = id;
+  object.originYearMonth = reader.readString(offsets[3]);
+  object.orphaned = reader.readBool(offsets[4]);
   return object;
 }
 
@@ -107,7 +148,11 @@ P _reimbursementDeserializeProp<P>(
     case 1:
       return (reader.readDateTime(offset)) as P;
     case 2:
-      return (reader.readLong(offset)) as P;
+      return (reader.readLongOrNull(offset)) as P;
+    case 3:
+      return (reader.readString(offset)) as P;
+    case 4:
+      return (reader.readBool(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
   }
@@ -138,6 +183,14 @@ extension ReimbursementQueryWhereSort
     return QueryBuilder.apply(this, (query) {
       return query.addWhereClause(
         const IndexWhereClause.any(indexName: r'expenseId'),
+      );
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterWhere> anyOrphaned() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        const IndexWhereClause.any(indexName: r'orphaned'),
       );
     });
   }
@@ -215,7 +268,29 @@ extension ReimbursementQueryWhere
   }
 
   QueryBuilder<Reimbursement, Reimbursement, QAfterWhereClause>
-      expenseIdEqualTo(int expenseId) {
+      expenseIdIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'expenseId',
+        value: [null],
+      ));
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterWhereClause>
+      expenseIdIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'expenseId',
+        lower: [null],
+        includeLower: false,
+        upper: [],
+      ));
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterWhereClause>
+      expenseIdEqualTo(int? expenseId) {
     return QueryBuilder.apply(this, (query) {
       return query.addWhereClause(IndexWhereClause.equalTo(
         indexName: r'expenseId',
@@ -225,7 +300,7 @@ extension ReimbursementQueryWhere
   }
 
   QueryBuilder<Reimbursement, Reimbursement, QAfterWhereClause>
-      expenseIdNotEqualTo(int expenseId) {
+      expenseIdNotEqualTo(int? expenseId) {
     return QueryBuilder.apply(this, (query) {
       if (query.whereSort == Sort.asc) {
         return query
@@ -261,7 +336,7 @@ extension ReimbursementQueryWhere
 
   QueryBuilder<Reimbursement, Reimbursement, QAfterWhereClause>
       expenseIdGreaterThan(
-    int expenseId, {
+    int? expenseId, {
     bool include = false,
   }) {
     return QueryBuilder.apply(this, (query) {
@@ -276,7 +351,7 @@ extension ReimbursementQueryWhere
 
   QueryBuilder<Reimbursement, Reimbursement, QAfterWhereClause>
       expenseIdLessThan(
-    int expenseId, {
+    int? expenseId, {
     bool include = false,
   }) {
     return QueryBuilder.apply(this, (query) {
@@ -291,8 +366,8 @@ extension ReimbursementQueryWhere
 
   QueryBuilder<Reimbursement, Reimbursement, QAfterWhereClause>
       expenseIdBetween(
-    int lowerExpenseId,
-    int upperExpenseId, {
+    int? lowerExpenseId,
+    int? upperExpenseId, {
     bool includeLower = true,
     bool includeUpper = true,
   }) {
@@ -304,6 +379,96 @@ extension ReimbursementQueryWhere
         upper: [upperExpenseId],
         includeUpper: includeUpper,
       ));
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterWhereClause>
+      originYearMonthEqualTo(String originYearMonth) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'originYearMonth',
+        value: [originYearMonth],
+      ));
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterWhereClause>
+      originYearMonthNotEqualTo(String originYearMonth) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'originYearMonth',
+              lower: [],
+              upper: [originYearMonth],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'originYearMonth',
+              lower: [originYearMonth],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'originYearMonth',
+              lower: [originYearMonth],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'originYearMonth',
+              lower: [],
+              upper: [originYearMonth],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterWhereClause> orphanedEqualTo(
+      bool orphaned) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'orphaned',
+        value: [orphaned],
+      ));
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterWhereClause>
+      orphanedNotEqualTo(bool orphaned) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'orphaned',
+              lower: [],
+              upper: [orphaned],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'orphaned',
+              lower: [orphaned],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'orphaned',
+              lower: [orphaned],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'orphaned',
+              lower: [],
+              upper: [orphaned],
+              includeUpper: false,
+            ));
+      }
     });
   }
 }
@@ -432,7 +597,25 @@ extension ReimbursementQueryFilter
   }
 
   QueryBuilder<Reimbursement, Reimbursement, QAfterFilterCondition>
-      expenseIdEqualTo(int value) {
+      expenseIdIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'expenseId',
+      ));
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterFilterCondition>
+      expenseIdIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'expenseId',
+      ));
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterFilterCondition>
+      expenseIdEqualTo(int? value) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
         property: r'expenseId',
@@ -443,7 +626,7 @@ extension ReimbursementQueryFilter
 
   QueryBuilder<Reimbursement, Reimbursement, QAfterFilterCondition>
       expenseIdGreaterThan(
-    int value, {
+    int? value, {
     bool include = false,
   }) {
     return QueryBuilder.apply(this, (query) {
@@ -457,7 +640,7 @@ extension ReimbursementQueryFilter
 
   QueryBuilder<Reimbursement, Reimbursement, QAfterFilterCondition>
       expenseIdLessThan(
-    int value, {
+    int? value, {
     bool include = false,
   }) {
     return QueryBuilder.apply(this, (query) {
@@ -471,8 +654,8 @@ extension ReimbursementQueryFilter
 
   QueryBuilder<Reimbursement, Reimbursement, QAfterFilterCondition>
       expenseIdBetween(
-    int lower,
-    int upper, {
+    int? lower,
+    int? upper, {
     bool includeLower = true,
     bool includeUpper = true,
   }) {
@@ -540,6 +723,152 @@ extension ReimbursementQueryFilter
       ));
     });
   }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterFilterCondition>
+      originYearMonthEqualTo(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'originYearMonth',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterFilterCondition>
+      originYearMonthGreaterThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'originYearMonth',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterFilterCondition>
+      originYearMonthLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'originYearMonth',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterFilterCondition>
+      originYearMonthBetween(
+    String lower,
+    String upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'originYearMonth',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterFilterCondition>
+      originYearMonthStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'originYearMonth',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterFilterCondition>
+      originYearMonthEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'originYearMonth',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterFilterCondition>
+      originYearMonthContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'originYearMonth',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterFilterCondition>
+      originYearMonthMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'originYearMonth',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterFilterCondition>
+      originYearMonthIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'originYearMonth',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterFilterCondition>
+      originYearMonthIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'originYearMonth',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterFilterCondition>
+      orphanedEqualTo(bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'orphaned',
+        value: value,
+      ));
+    });
+  }
 }
 
 extension ReimbursementQueryObject
@@ -584,6 +913,33 @@ extension ReimbursementQuerySortBy
       sortByExpenseIdDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'expenseId', Sort.desc);
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterSortBy>
+      sortByOriginYearMonth() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'originYearMonth', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterSortBy>
+      sortByOriginYearMonthDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'originYearMonth', Sort.desc);
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterSortBy> sortByOrphaned() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'orphaned', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterSortBy>
+      sortByOrphanedDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'orphaned', Sort.desc);
     });
   }
 }
@@ -638,6 +994,33 @@ extension ReimbursementQuerySortThenBy
       return query.addSortBy(r'id', Sort.desc);
     });
   }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterSortBy>
+      thenByOriginYearMonth() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'originYearMonth', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterSortBy>
+      thenByOriginYearMonthDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'originYearMonth', Sort.desc);
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterSortBy> thenByOrphaned() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'orphaned', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterSortBy>
+      thenByOrphanedDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'orphaned', Sort.desc);
+    });
+  }
 }
 
 extension ReimbursementQueryWhereDistinct
@@ -657,6 +1040,20 @@ extension ReimbursementQueryWhereDistinct
   QueryBuilder<Reimbursement, Reimbursement, QDistinct> distinctByExpenseId() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'expenseId');
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QDistinct>
+      distinctByOriginYearMonth({bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'originYearMonth',
+          caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QDistinct> distinctByOrphaned() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'orphaned');
     });
   }
 }
@@ -681,9 +1078,22 @@ extension ReimbursementQueryProperty
     });
   }
 
-  QueryBuilder<Reimbursement, int, QQueryOperations> expenseIdProperty() {
+  QueryBuilder<Reimbursement, int?, QQueryOperations> expenseIdProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'expenseId');
+    });
+  }
+
+  QueryBuilder<Reimbursement, String, QQueryOperations>
+      originYearMonthProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'originYearMonth');
+    });
+  }
+
+  QueryBuilder<Reimbursement, bool, QQueryOperations> orphanedProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'orphaned');
     });
   }
 }

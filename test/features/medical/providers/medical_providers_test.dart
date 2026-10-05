@@ -1,5 +1,4 @@
 import 'package:budget_buddy/core/models/expense.dart';
-import 'package:budget_buddy/core/models/insurance_profile.dart';
 import 'package:budget_buddy/core/models/medical_bill.dart';
 import 'package:budget_buddy/features/medical/providers/medical_providers.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -8,135 +7,104 @@ import 'package:flutter_test/flutter_test.dart';
 /// These need no Isar instance because they only read the bill objects handed
 /// to them plus the joined expense statuses.
 void main() {
+  /// A bill with the US2 model in mind: a 20% patient share is the default, so
+  /// most tests only vary what they actually care about.
   MedicalBill bill({
     int id = 1,
     required double billed,
-    double coverage = 80,
+    double patientShare = 20,
     double reimbursed = 0,
+    MedicalPaymentMethod method = MedicalPaymentMethod.insurerPaid,
+    MedicalBillState state = MedicalBillState.waiting,
     int? familyMemberId,
     int? expenseId = 100,
   }) {
     return MedicalBill()
       ..id = id
       ..billedAmount = billed
-      ..insuranceCoveragePercent = coverage
+      ..patientSharePercent = patientShare
       ..reimbursedAmount = reimbursed
+      ..paymentMethod = method
+      ..state = state
       ..familyMemberId = familyMemberId
       ..linkedExpenseId = expenseId
       ..serviceDate = DateTime(2026, 1, 10);
   }
 
-  group('DeductibleProgress', () {
-    final insurance = InsuranceProfile()
-      ..individualDeductible = 2000
-      ..familyDeductible = 4000;
+  group('PatientShareTotals', () {
+    test('no bills yields an empty aggregate', () {
+      final totals = PatientShareTotals.from(const []);
 
-    test('no bills means an untouched individual bar', () {
-      final progress = DeductibleProgress.from(
-        bills: const [],
-        insurance: insurance,
-      );
-
-      expect(progress.outOfPocketTotal, 0);
-      expect(progress.billCount, 0);
-      expect(progress.fractionOf(), 0);
-      expect(progress.remainingFor(), 2000);
-      expect(progress.hasInsuranceProfile, isTrue);
+      expect(totals.isEmpty, isTrue);
+      expect(totals.billCount, 0);
+      expect(totals.billedTotal, 0);
+      expect(totals.patientShareTotal, 0);
+      expect(totals.insurerPaidTotal, 0);
+      expect(totals.reimbursedTotal, 0);
+      expect(totals.netPatientCost, 0);
     });
 
-    test('FR-006: a 1000 bill at 80% moves the bar by 200', () {
-      final progress = DeductibleProgress.from(
-        bills: [bill(billed: 1000)],
-        insurance: insurance,
-      );
-
-      expect(progress.outOfPocketTotal, 200);
-      expect(progress.fractionOf(), closeTo(0.1, 1e-9));
-      expect(progress.remainingFor(), 1800);
-      expect(progress.individualOutOfPocket, 200);
-    });
-
-    test('FR-006: a fully covered bill does not move the bar', () {
-      final progress = DeductibleProgress.from(
-        bills: [bill(billed: 1000, coverage: 100)],
-        insurance: insurance,
-      );
-
-      expect(progress.outOfPocketTotal, 0);
-      expect(progress.billedTotal, 1000);
-    });
-
-    test('out-of-pocket accumulates across bills in the same year', () {
-      final progress = DeductibleProgress.from(
-        bills: [
-          bill(id: 1, billed: 1000, expenseId: 1),
-          bill(id: 2, billed: 500, expenseId: 2),
-        ],
-        insurance: insurance,
-      );
-
-      expect(progress.outOfPocketTotal, 300);
-      expect(progress.billedTotal, 1500);
-      expect(progress.billCount, 2);
-    });
-
-    test('a reimbursable bill still counts what was estimated out-of-pocket',
+    test('FR-048: the share is the user\'s, so 1000 at 20% leaves them 200',
         () {
-      final progress = DeductibleProgress.from(
-        bills: [bill(billed: 1000, reimbursed: 800)],
-        insurance: insurance,
-      );
+      final totals = PatientShareTotals.from([bill(billed: 1000)]);
 
-      // Insurance money does not retroactively reduce what hit the deductible.
-      expect(progress.outOfPocketTotal, 200);
-      expect(progress.reimbursedTotal, 800);
+      expect(totals.billedTotal, 1000);
+      expect(totals.patientShareTotal, 200);
+      expect(totals.insurerPaidTotal, 800);
+      expect(totals.billCount, 1);
+      expect(totals.isEmpty, isFalse);
     });
 
-    test('family bills are excluded from the individual bar', () {
-      final progress = DeductibleProgress.from(
-        bills: [
-          bill(id: 1, billed: 1000, expenseId: 1),
-          bill(id: 2, billed: 1000, familyMemberId: 7, expenseId: 2),
-        ],
-        insurance: insurance,
-      );
+    test('the split accumulates across every bill in the month', () {
+      final totals = PatientShareTotals.from([
+        bill(id: 1, billed: 1000, expenseId: 1),
+        bill(id: 2, billed: 500, expenseId: 2),
+      ]);
 
-      expect(progress.outOfPocketTotal, 400);
-      expect(progress.individualOutOfPocket, 200);
-      expect(progress.fractionOf(), closeTo(0.1, 1e-9));
+      expect(totals.billedTotal, 1500);
+      expect(totals.patientShareTotal, 300);
+      expect(totals.insurerPaidTotal, 1200);
+      expect(totals.billCount, 2);
     });
 
-    test('the bar caps at 100% once the limit is passed', () {
-      final progress = DeductibleProgress.from(
-        bills: [bill(billed: 12000)],
-        insurance: insurance,
-      );
+    test('a self-paid bill still shows the share arithmetic', () {
+      final totals = PatientShareTotals.from([
+        bill(
+          billed: 1000,
+          method: MedicalPaymentMethod.selfPaid,
+          state: MedicalBillState.finished,
+        ),
+      ]);
 
-      // 12000 billed at 80% leaves 2400 out of pocket against a 2000 limit.
-      expect(progress.outOfPocketTotal, 2400);
-      expect(progress.fractionOf(), 1);
-      expect(progress.remainingFor(), 0);
-      expect(progress.familyFraction(), closeTo(0.6, 1e-9));
+      // The totals are descriptive: who paid what on the bill itself. What the
+      // budget felt is `fundsImpact`, covered separately.
+      expect(totals.patientShareTotal, 200);
+      expect(totals.insurerPaidTotal, 800);
     });
 
-    test('an unset limit shows no progress instead of dividing by zero', () {
-      final progress = DeductibleProgress.from(
-        bills: [bill(billed: 1000)],
-        insurance: InsuranceProfile(),
-      );
+    test('a reimbursement reduces the net cost but not the original share', () {
+      final totals = PatientShareTotals.from([
+        bill(billed: 1000, reimbursed: 800, state: MedicalBillState.finished),
+      ]);
 
-      expect(progress.fractionOf(), 0);
-      expect(progress.remainingFor(), 0);
+      // Money that came back does not retroactively change what was billed.
+      expect(totals.patientShareTotal, 200);
+      expect(totals.reimbursedTotal, 800);
+      expect(totals.netPatientCost, 200);
     });
 
-    test('a null insurance profile degrades gracefully', () {
-      final progress = DeductibleProgress.from(
-        bills: [bill(billed: 1000)],
-        insurance: null,
-      );
+    test('FR-037: there is no deductible limit, so nothing is ever excluded',
+        () {
+      final totals = PatientShareTotals.from([
+        bill(id: 1, billed: 1000, expenseId: 1),
+        bill(id: 2, billed: 1000, familyMemberId: 7, expenseId: 2),
+      ]);
 
-      expect(progress.outOfPocketTotal, 200);
-      expect(progress.fractionOf(), 0);
+      // A family member used to be filtered out of an "individual" bar. With no
+      // deductible there is nothing to exclude, so both bills count.
+      expect(totals.billedTotal, 2000);
+      expect(totals.patientShareTotal, 400);
+      expect(totals.billCount, 2);
     });
   });
 
@@ -153,28 +121,78 @@ void main() {
       expect(impact.hasPending, isTrue);
     });
 
-    test('paying the provider makes the full billed amount due (FR-003)', () {
+    test('FR-042: an insurer-paid bill costs only the patient share', () {
       final impact = MedicalBudgetImpact.from(
         [bill(billed: 1000)],
         expenseStatuses: const {100: ExpenseStatus.paid},
       );
 
-      expect(impact.paidTotal, 1000);
+      expect(impact.paidTotal, 200);
       expect(impact.plannedTotal, 0);
       expect(impact.outOfPocketTotal, 200);
-      // Nothing reimbursed yet, so the whole payment is still the user's cost.
-      expect(impact.netOutOfPocket, 1000);
+      // An insurer-paid bill never cost the full charge, so there is nothing to
+      // give back: the net cost is the share all along.
+      expect(impact.netOutOfPocket, 200);
       expect(impact.hasPending, isFalse);
     });
 
-    test('FR-005: a reimbursement cuts the net cost back to the estimate', () {
+    test('FR-042: a self-paid bill costs the full charge', () {
       final impact = MedicalBudgetImpact.from(
-        [bill(billed: 1000, reimbursed: 800)],
+        [
+          bill(
+            billed: 1000,
+            method: MedicalPaymentMethod.selfPaid,
+            state: MedicalBillState.waiting,
+          ),
+        ],
+        expenseStatuses: const {100: ExpenseStatus.paid},
+      );
+
+      expect(impact.paidTotal, 1000);
+      expect(impact.netOutOfPocket, 1000);
+    });
+
+    test('a planned bill never costs anything, whatever the method', () {
+      final impact = MedicalBudgetImpact.from(
+        [
+          bill(
+            billed: 1000,
+            method: MedicalPaymentMethod.selfPaid,
+            state: MedicalBillState.planned,
+          ),
+        ],
+        expenseStatuses: const {100: ExpenseStatus.planned},
+      );
+
+      expect(impact.plannedTotal, 1000);
+      expect(impact.paidTotal, 0);
+      expect(impact.netOutOfPocket, 0);
+    });
+
+    test('FR-034: a reimbursement cuts the net cost back to the share', () {
+      final impact = MedicalBudgetImpact.from(
+        [
+          bill(
+            billed: 1000,
+            reimbursed: 800,
+            state: MedicalBillState.finished,
+          ),
+        ],
         expenseStatuses: const {100: ExpenseStatus.paid},
       );
 
       expect(impact.reimbursedTotal, 800);
       expect(impact.netOutOfPocket, 200);
+    });
+
+    test('a rejected insurer-paid bill falls back to the full charge', () {
+      final impact = MedicalBudgetImpact.from(
+        [bill(billed: 1000, state: MedicalBillState.rejected)],
+        expenseStatuses: const {100: ExpenseStatus.paid},
+      );
+
+      // Rejected means no insurer contribution, so the user owes everything.
+      expect(impact.paidTotal, 1000);
     });
 
     test('cancelled expenses leave the budget untouched', () {
@@ -202,7 +220,14 @@ void main() {
       final impact = MedicalBudgetImpact.from(
         [
           bill(id: 1, billed: 1000, expenseId: 1),
-          bill(id: 2, billed: 250, expenseId: 2, reimbursed: 250),
+          bill(
+            id: 2,
+            billed: 250,
+            expenseId: 2,
+            reimbursed: 250,
+            method: MedicalPaymentMethod.selfPaid,
+            state: MedicalBillState.finished,
+          ),
         ],
         expenseStatuses: const {
           1: ExpenseStatus.planned,
@@ -211,6 +236,7 @@ void main() {
       );
 
       expect(impact.plannedTotal, 1000);
+      // A self-paid bill costs its full charge until a payout reduces the net.
       expect(impact.paidTotal, 250);
       expect(impact.reimbursedTotal, 250);
       expect(impact.netOutOfPocket, 0);
@@ -249,46 +275,126 @@ void main() {
   });
 
   group('MedicalBill money math', () {
-    test('coverage splits the bill into covered and out-of-pocket', () {
-      final subject = bill(billed: 1000, coverage: 80);
+    test('FR-048: the percentage is the user\'s share, not the insurer\'s', () {
+      final subject = bill(billed: 1000, patientShare: 20);
 
-      expect(subject.insuranceCoveredAmount, 800);
-      expect(subject.estimatedOutPocket, 200);
+      expect(subject.patientShareAmount, 200);
+      expect(subject.insurerPaidAmount, 800);
     });
 
-    test('net cost is the provider payment minus the payout', () {
-      final subject = bill(billed: 1000, reimbursed: 800);
+    test('a 100% patient share leaves the insurer owing nothing', () {
+      final subject = bill(billed: 1000, patientShare: 100);
 
-      expect(subject.netOutOfPocket, 200);
-      expect(subject.patientShare, 200);
+      expect(subject.patientShareAmount, 1000);
+      expect(subject.insurerPaidAmount, 0);
     });
 
-    test('the patient share falls back to the estimate before any payout', () {
-      final subject = bill(billed: 1000);
+    test('a 0% patient share is fully covered by the insurer', () {
+      final subject = bill(billed: 1000, patientShare: 0);
 
-      expect(subject.netOutOfPocket, 1000);
-      expect(subject.patientShare, 200);
-    });
-
-    test('net cost never goes negative on an overpayment', () {
-      final subject = bill(billed: 1000, reimbursed: 1200);
-
-      expect(subject.netOutOfPocket, 0);
-      expect(subject.patientShare, 0);
+      expect(subject.patientShareAmount, 0);
+      expect(subject.insurerPaidAmount, 1000);
     });
   });
 
-  group('ClaimStatusLabel', () {
-    test('unclaimed and processing are worth following up on', () {
-      expect(ClaimStatus.unclaimed.isPending, isTrue);
-      expect(ClaimStatus.processing.isPending, isTrue);
-      expect(ClaimStatus.reimbursed.isPending, isFalse);
-      expect(ClaimStatus.denied.isPending, isFalse);
+  group('fundsImpact (R07)', () {
+    test('a planned bill leaves the budget untouched', () {
+      final subject = bill(billed: 1000, state: MedicalBillState.planned);
+
+      expect(subject.fundsImpact, 0);
+      expect(subject.countsAsPaid, isFalse);
     });
 
-    test('every status has a human label', () {
-      for (final status in ClaimStatus.values) {
-        expect(status.label, isNotEmpty);
+    test('a rejected bill costs the full charge whatever the method', () {
+      final insurerPaid = bill(billed: 1000, state: MedicalBillState.rejected);
+      final selfPaid = bill(
+        billed: 1000,
+        method: MedicalPaymentMethod.selfPaid,
+        state: MedicalBillState.rejected,
+      );
+
+      expect(insurerPaid.fundsImpact, 1000);
+      expect(selfPaid.fundsImpact, 1000);
+    });
+
+    test('a rejected insurer-paid bill is settled, so it is not pending', () {
+      final subject = bill(billed: 1000, state: MedicalBillState.rejected);
+
+      expect(subject.state.isPending, isFalse);
+      expect(subject.countsAsPaid, isTrue);
+    });
+
+    test('an insurer-paid bill in flight costs only the share', () {
+      for (final state in [
+        MedicalBillState.waiting,
+        MedicalBillState.paid,
+        MedicalBillState.finished,
+      ]) {
+        expect(
+          bill(billed: 1000, state: state).fundsImpact,
+          200,
+          reason: 'state $state should cost only the patient share',
+        );
+      }
+    });
+
+    test('a self-paid bill in flight costs the full charge', () {
+      for (final state in [
+        MedicalBillState.waiting,
+        MedicalBillState.paid,
+      ]) {
+        expect(
+          bill(
+            billed: 1000,
+            method: MedicalPaymentMethod.selfPaid,
+            state: state,
+          ).fundsImpact,
+          1000,
+          reason: 'state $state should cost the full charge',
+        );
+      }
+    });
+
+    test('an insurer-paid bill can never be finished (R-1)', () {
+      expect(bill(billed: 1000).canBeReimbursed, isFalse);
+      expect(
+        bill(
+          billed: 1000,
+          method: MedicalPaymentMethod.selfPaid,
+        ).canBeReimbursed,
+        isTrue,
+      );
+    });
+  });
+
+  group('MedicalBillState labels', () {
+    // `isPending` means "submitted but unanswered", which is exactly `waiting`.
+    // A `planned` bill has not been submitted yet, and `paid`/`finished`/
+    // `rejected` are already resolved.
+    test('only a waiting claim is unanswered', () {
+      expect(MedicalBillState.planned.isPending, isFalse);
+      expect(MedicalBillState.waiting.isPending, isTrue);
+      expect(MedicalBillState.paid.isPending, isFalse);
+      expect(MedicalBillState.finished.isPending, isFalse);
+      expect(MedicalBillState.rejected.isPending, isFalse);
+    });
+
+    test(
+        'anything other than planned or waiting has settled one way or the other',
+        () {
+      expect(MedicalBillState.paid.isSettled, isTrue);
+      expect(MedicalBillState.finished.isSettled, isTrue);
+      expect(MedicalBillState.rejected.isSettled, isTrue);
+      expect(MedicalBillState.planned.isSettled, isFalse);
+      expect(MedicalBillState.waiting.isSettled, isFalse);
+    });
+
+    test('every state and method has a human label', () {
+      for (final state in MedicalBillState.values) {
+        expect(state.label, isNotEmpty);
+      }
+      for (final method in MedicalPaymentMethod.values) {
+        expect(method.label, isNotEmpty);
       }
     });
   });

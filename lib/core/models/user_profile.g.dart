@@ -22,24 +22,35 @@ const UserProfileSchema = CollectionSchema(
       name: r'createdAt',
       type: IsarType.dateTime,
     ),
-    r'monthlyAvailableAmount': PropertySchema(
+    r'defaultNetSalary': PropertySchema(
       id: 1,
+      name: r'defaultNetSalary',
+      type: IsarType.double,
+    ),
+    r'fontFamily': PropertySchema(
+      id: 2,
+      name: r'fontFamily',
+      type: IsarType.byte,
+      enumMap: _UserProfilefontFamilyEnumValueMap,
+    ),
+    r'monthlyAvailableAmount': PropertySchema(
+      id: 3,
       name: r'monthlyAvailableAmount',
       type: IsarType.double,
     ),
     r'name': PropertySchema(
-      id: 2,
+      id: 4,
       name: r'name',
       type: IsarType.string,
     ),
     r'primaryCurrency': PropertySchema(
-      id: 3,
+      id: 5,
       name: r'primaryCurrency',
       type: IsarType.byte,
       enumMap: _UserProfileprimaryCurrencyEnumValueMap,
     ),
     r'updatedAt': PropertySchema(
-      id: 4,
+      id: 6,
       name: r'updatedAt',
       type: IsarType.dateTime,
     )
@@ -75,10 +86,12 @@ void _userProfileSerialize(
   Map<Type, List<int>> allOffsets,
 ) {
   writer.writeDateTime(offsets[0], object.createdAt);
-  writer.writeDouble(offsets[1], object.monthlyAvailableAmount);
-  writer.writeString(offsets[2], object.name);
-  writer.writeByte(offsets[3], object.primaryCurrency.index);
-  writer.writeDateTime(offsets[4], object.updatedAt);
+  writer.writeDouble(offsets[1], object.defaultNetSalary);
+  writer.writeByte(offsets[2], object.fontFamily.index);
+  writer.writeDouble(offsets[3], object.monthlyAvailableAmount);
+  writer.writeString(offsets[4], object.name);
+  writer.writeByte(offsets[5], object.primaryCurrency.index);
+  writer.writeDateTime(offsets[6], object.updatedAt);
 }
 
 UserProfile _userProfileDeserialize(
@@ -89,13 +102,17 @@ UserProfile _userProfileDeserialize(
 ) {
   final object = UserProfile();
   object.createdAt = reader.readDateTime(offsets[0]);
+  object.defaultNetSalary = reader.readDouble(offsets[1]);
+  object.fontFamily =
+      _UserProfilefontFamilyValueEnumMap[reader.readByteOrNull(offsets[2])] ??
+          AppFontFamily.system;
   object.id = id;
-  object.monthlyAvailableAmount = reader.readDouble(offsets[1]);
-  object.name = reader.readString(offsets[2]);
+  object.monthlyAvailableAmount = reader.readDouble(offsets[3]);
+  object.name = reader.readString(offsets[4]);
   object.primaryCurrency = _UserProfileprimaryCurrencyValueEnumMap[
-          reader.readByteOrNull(offsets[3])] ??
+          reader.readByteOrNull(offsets[5])] ??
       PrimaryCurrency.huf;
-  object.updatedAt = reader.readDateTime(offsets[4]);
+  object.updatedAt = reader.readDateTime(offsets[6]);
   return object;
 }
 
@@ -111,18 +128,36 @@ P _userProfileDeserializeProp<P>(
     case 1:
       return (reader.readDouble(offset)) as P;
     case 2:
-      return (reader.readString(offset)) as P;
+      return (_UserProfilefontFamilyValueEnumMap[
+              reader.readByteOrNull(offset)] ??
+          AppFontFamily.system) as P;
     case 3:
+      return (reader.readDouble(offset)) as P;
+    case 4:
+      return (reader.readString(offset)) as P;
+    case 5:
       return (_UserProfileprimaryCurrencyValueEnumMap[
               reader.readByteOrNull(offset)] ??
           PrimaryCurrency.huf) as P;
-    case 4:
+    case 6:
       return (reader.readDateTime(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
   }
 }
 
+const _UserProfilefontFamilyEnumValueMap = {
+  'system': 0,
+  'roboto': 1,
+  'inter': 2,
+  'openSans': 3,
+};
+const _UserProfilefontFamilyValueEnumMap = {
+  0: AppFontFamily.system,
+  1: AppFontFamily.roboto,
+  2: AppFontFamily.inter,
+  3: AppFontFamily.openSans,
+};
 const _UserProfileprimaryCurrencyEnumValueMap = {
   'huf': 0,
   'usd': 1,
@@ -277,6 +312,128 @@ extension UserProfileQueryFilter
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.between(
         property: r'createdAt',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition>
+      defaultNetSalaryEqualTo(
+    double value, {
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'defaultNetSalary',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition>
+      defaultNetSalaryGreaterThan(
+    double value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'defaultNetSalary',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition>
+      defaultNetSalaryLessThan(
+    double value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'defaultNetSalary',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition>
+      defaultNetSalaryBetween(
+    double lower,
+    double upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'defaultNetSalary',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition>
+      fontFamilyEqualTo(AppFontFamily value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'fontFamily',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition>
+      fontFamilyGreaterThan(
+    AppFontFamily value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'fontFamily',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition>
+      fontFamilyLessThan(
+    AppFontFamily value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'fontFamily',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition>
+      fontFamilyBetween(
+    AppFontFamily lower,
+    AppFontFamily upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'fontFamily',
         lower: lower,
         includeLower: includeLower,
         upper: upper,
@@ -669,6 +826,32 @@ extension UserProfileQuerySortBy
   }
 
   QueryBuilder<UserProfile, UserProfile, QAfterSortBy>
+      sortByDefaultNetSalary() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'defaultNetSalary', Sort.asc);
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterSortBy>
+      sortByDefaultNetSalaryDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'defaultNetSalary', Sort.desc);
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterSortBy> sortByFontFamily() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'fontFamily', Sort.asc);
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterSortBy> sortByFontFamilyDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'fontFamily', Sort.desc);
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterSortBy>
       sortByMonthlyAvailableAmount() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'monthlyAvailableAmount', Sort.asc);
@@ -731,6 +914,32 @@ extension UserProfileQuerySortThenBy
   QueryBuilder<UserProfile, UserProfile, QAfterSortBy> thenByCreatedAtDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'createdAt', Sort.desc);
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterSortBy>
+      thenByDefaultNetSalary() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'defaultNetSalary', Sort.asc);
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterSortBy>
+      thenByDefaultNetSalaryDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'defaultNetSalary', Sort.desc);
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterSortBy> thenByFontFamily() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'fontFamily', Sort.asc);
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterSortBy> thenByFontFamilyDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'fontFamily', Sort.desc);
     });
   }
 
@@ -807,6 +1016,19 @@ extension UserProfileQueryWhereDistinct
   }
 
   QueryBuilder<UserProfile, UserProfile, QDistinct>
+      distinctByDefaultNetSalary() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'defaultNetSalary');
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QDistinct> distinctByFontFamily() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'fontFamily');
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QDistinct>
       distinctByMonthlyAvailableAmount() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'monthlyAvailableAmount');
@@ -845,6 +1067,20 @@ extension UserProfileQueryProperty
   QueryBuilder<UserProfile, DateTime, QQueryOperations> createdAtProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'createdAt');
+    });
+  }
+
+  QueryBuilder<UserProfile, double, QQueryOperations>
+      defaultNetSalaryProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'defaultNetSalary');
+    });
+  }
+
+  QueryBuilder<UserProfile, AppFontFamily, QQueryOperations>
+      fontFamilyProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'fontFamily');
     });
   }
 

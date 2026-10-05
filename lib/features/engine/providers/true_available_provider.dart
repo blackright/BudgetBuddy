@@ -14,14 +14,20 @@ final monthlyExpensesProvider = StreamProvider<List<Expense>>((ref) {
   return repository.watchExpenses(profile.id, budget.yearMonth);
 });
 
+/// Reimbursements that *belong* to the selected month, keyed on
+/// `originYearMonth` (FR-032, FR-033).
+///
+/// Deliberately not derived from the viewed month's expense ids: a
+/// reimbursement recorded months after the expense it belongs to would then
+/// vanish from the month that actually spent the money. Keying on the origin
+/// month is what stops that (SC-005).
 final monthlyReimbursementsProvider =
     StreamProvider<List<Reimbursement>>((ref) {
-  final expenses = ref.watch(monthlyExpensesProvider).value ?? [];
-  if (expenses.isEmpty) return Stream.value([]);
+  final budget = ref.watch(activeBudgetProvider).value;
+  if (budget == null) return Stream.value([]);
 
-  final expenseIds = expenses.map((e) => e.id).toList();
   final repository = ref.watch(expenseRepositoryProvider);
-  return repository.watchReimbursementsForExpenses(expenseIds);
+  return repository.watchReimbursementsForMonth(budget.yearMonth);
 });
 
 final trueAvailableProvider = Provider<double>((ref) {
@@ -43,8 +49,9 @@ final trueAvailableProvider = Provider<double>((ref) {
 
   double totalReimbursements = 0.0;
   for (final reimb in reimbursements) {
-    // Find matching expense to get exchange rate (or assume reimbursement amount is already in primary currency? Wait, data model says Reimbursement amount must be <= Expense amount. Usually reimbursement is in the same currency, so we should convert it using the same exchange rate).
-    // Let's find the matching expense:
+    // The origin month is the target expense's own month, so the target expense
+    // is in `expenses` unless it was deleted. A reimbursement with no surviving
+    // expense (FR-035) contributes nothing rather than guessing a rate.
     final expense = expenses.where((e) => e.id == reimb.expenseId).firstOrNull;
     if (expense != null) {
       totalReimbursements += reimb.amount * expense.exchangeRateToPrimary;

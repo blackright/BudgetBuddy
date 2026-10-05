@@ -17,29 +17,29 @@ const InsuranceProfileSchema = CollectionSchema(
   name: r'InsuranceProfile',
   id: -3407618466763548404,
   properties: {
-    r'defaultCoveragePercent': PropertySchema(
+    r'defaultPatientPercent': PropertySchema(
       id: 0,
-      name: r'defaultCoveragePercent',
+      name: r'defaultPatientPercent',
       type: IsarType.double,
     ),
-    r'familyDeductible': PropertySchema(
+    r'insurerName': PropertySchema(
       id: 1,
-      name: r'familyDeductible',
-      type: IsarType.double,
+      name: r'insurerName',
+      type: IsarType.string,
     ),
-    r'individualDeductible': PropertySchema(
+    r'planName': PropertySchema(
       id: 2,
-      name: r'individualDeductible',
-      type: IsarType.double,
+      name: r'planName',
+      type: IsarType.string,
+    ),
+    r'planSummary': PropertySchema(
+      id: 3,
+      name: r'planSummary',
+      type: IsarType.string,
     ),
     r'profileId': PropertySchema(
-      id: 3,
-      name: r'profileId',
-      type: IsarType.long,
-    ),
-    r'year': PropertySchema(
       id: 4,
-      name: r'year',
+      name: r'profileId',
       type: IsarType.long,
     )
   },
@@ -61,19 +61,6 @@ const InsuranceProfileSchema = CollectionSchema(
           caseSensitive: false,
         )
       ],
-    ),
-    r'year': IndexSchema(
-      id: -875522826430421864,
-      name: r'year',
-      unique: false,
-      replace: false,
-      properties: [
-        IndexPropertySchema(
-          name: r'year',
-          type: IndexType.value,
-          caseSensitive: false,
-        )
-      ],
     )
   },
   links: {},
@@ -90,6 +77,24 @@ int _insuranceProfileEstimateSize(
   Map<Type, List<int>> allOffsets,
 ) {
   var bytesCount = offsets.last;
+  {
+    final value = object.insurerName;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
+  {
+    final value = object.planName;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
+  {
+    final value = object.planSummary;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
   return bytesCount;
 }
 
@@ -99,11 +104,11 @@ void _insuranceProfileSerialize(
   List<int> offsets,
   Map<Type, List<int>> allOffsets,
 ) {
-  writer.writeDouble(offsets[0], object.defaultCoveragePercent);
-  writer.writeDouble(offsets[1], object.familyDeductible);
-  writer.writeDouble(offsets[2], object.individualDeductible);
-  writer.writeLong(offsets[3], object.profileId);
-  writer.writeLong(offsets[4], object.year);
+  writer.writeDouble(offsets[0], object.defaultPatientPercent);
+  writer.writeString(offsets[1], object.insurerName);
+  writer.writeString(offsets[2], object.planName);
+  writer.writeString(offsets[3], object.planSummary);
+  writer.writeLong(offsets[4], object.profileId);
 }
 
 InsuranceProfile _insuranceProfileDeserialize(
@@ -113,12 +118,11 @@ InsuranceProfile _insuranceProfileDeserialize(
   Map<Type, List<int>> allOffsets,
 ) {
   final object = InsuranceProfile();
-  object.defaultCoveragePercent = reader.readDouble(offsets[0]);
-  object.familyDeductible = reader.readDouble(offsets[1]);
+  object.defaultPatientPercent = reader.readDouble(offsets[0]);
   object.id = id;
-  object.individualDeductible = reader.readDouble(offsets[2]);
-  object.profileId = reader.readLongOrNull(offsets[3]);
-  object.year = reader.readLong(offsets[4]);
+  object.insurerName = reader.readStringOrNull(offsets[1]);
+  object.planName = reader.readStringOrNull(offsets[2]);
+  object.profileId = reader.readLongOrNull(offsets[4]);
   return object;
 }
 
@@ -132,13 +136,13 @@ P _insuranceProfileDeserializeProp<P>(
     case 0:
       return (reader.readDouble(offset)) as P;
     case 1:
-      return (reader.readDouble(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 2:
-      return (reader.readDouble(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 3:
-      return (reader.readLongOrNull(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 4:
-      return (reader.readLong(offset)) as P;
+      return (reader.readLongOrNull(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
   }
@@ -169,14 +173,6 @@ extension InsuranceProfileQueryWhereSort
     return QueryBuilder.apply(this, (query) {
       return query.addWhereClause(
         const IndexWhereClause.any(indexName: r'profileId'),
-      );
-    });
-  }
-
-  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterWhere> anyYear() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addWhereClause(
-        const IndexWhereClause.any(indexName: r'year'),
       );
     });
   }
@@ -365,111 +361,18 @@ extension InsuranceProfileQueryWhere
       ));
     });
   }
-
-  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterWhereClause>
-      yearEqualTo(int year) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addWhereClause(IndexWhereClause.equalTo(
-        indexName: r'year',
-        value: [year],
-      ));
-    });
-  }
-
-  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterWhereClause>
-      yearNotEqualTo(int year) {
-    return QueryBuilder.apply(this, (query) {
-      if (query.whereSort == Sort.asc) {
-        return query
-            .addWhereClause(IndexWhereClause.between(
-              indexName: r'year',
-              lower: [],
-              upper: [year],
-              includeUpper: false,
-            ))
-            .addWhereClause(IndexWhereClause.between(
-              indexName: r'year',
-              lower: [year],
-              includeLower: false,
-              upper: [],
-            ));
-      } else {
-        return query
-            .addWhereClause(IndexWhereClause.between(
-              indexName: r'year',
-              lower: [year],
-              includeLower: false,
-              upper: [],
-            ))
-            .addWhereClause(IndexWhereClause.between(
-              indexName: r'year',
-              lower: [],
-              upper: [year],
-              includeUpper: false,
-            ));
-      }
-    });
-  }
-
-  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterWhereClause>
-      yearGreaterThan(
-    int year, {
-    bool include = false,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addWhereClause(IndexWhereClause.between(
-        indexName: r'year',
-        lower: [year],
-        includeLower: include,
-        upper: [],
-      ));
-    });
-  }
-
-  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterWhereClause>
-      yearLessThan(
-    int year, {
-    bool include = false,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addWhereClause(IndexWhereClause.between(
-        indexName: r'year',
-        lower: [],
-        upper: [year],
-        includeUpper: include,
-      ));
-    });
-  }
-
-  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterWhereClause>
-      yearBetween(
-    int lowerYear,
-    int upperYear, {
-    bool includeLower = true,
-    bool includeUpper = true,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addWhereClause(IndexWhereClause.between(
-        indexName: r'year',
-        lower: [lowerYear],
-        includeLower: includeLower,
-        upper: [upperYear],
-        includeUpper: includeUpper,
-      ));
-    });
-  }
 }
 
 extension InsuranceProfileQueryFilter
     on QueryBuilder<InsuranceProfile, InsuranceProfile, QFilterCondition> {
   QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
-      defaultCoveragePercentEqualTo(
+      defaultPatientPercentEqualTo(
     double value, {
     double epsilon = Query.epsilon,
   }) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'defaultCoveragePercent',
+        property: r'defaultPatientPercent',
         value: value,
         epsilon: epsilon,
       ));
@@ -477,7 +380,7 @@ extension InsuranceProfileQueryFilter
   }
 
   QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
-      defaultCoveragePercentGreaterThan(
+      defaultPatientPercentGreaterThan(
     double value, {
     bool include = false,
     double epsilon = Query.epsilon,
@@ -485,7 +388,7 @@ extension InsuranceProfileQueryFilter
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.greaterThan(
         include: include,
-        property: r'defaultCoveragePercent',
+        property: r'defaultPatientPercent',
         value: value,
         epsilon: epsilon,
       ));
@@ -493,7 +396,7 @@ extension InsuranceProfileQueryFilter
   }
 
   QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
-      defaultCoveragePercentLessThan(
+      defaultPatientPercentLessThan(
     double value, {
     bool include = false,
     double epsilon = Query.epsilon,
@@ -501,7 +404,7 @@ extension InsuranceProfileQueryFilter
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.lessThan(
         include: include,
-        property: r'defaultCoveragePercent',
+        property: r'defaultPatientPercent',
         value: value,
         epsilon: epsilon,
       ));
@@ -509,7 +412,7 @@ extension InsuranceProfileQueryFilter
   }
 
   QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
-      defaultCoveragePercentBetween(
+      defaultPatientPercentBetween(
     double lower,
     double upper, {
     bool includeLower = true,
@@ -518,73 +421,7 @@ extension InsuranceProfileQueryFilter
   }) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.between(
-        property: r'defaultCoveragePercent',
-        lower: lower,
-        includeLower: includeLower,
-        upper: upper,
-        includeUpper: includeUpper,
-        epsilon: epsilon,
-      ));
-    });
-  }
-
-  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
-      familyDeductibleEqualTo(
-    double value, {
-    double epsilon = Query.epsilon,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'familyDeductible',
-        value: value,
-        epsilon: epsilon,
-      ));
-    });
-  }
-
-  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
-      familyDeductibleGreaterThan(
-    double value, {
-    bool include = false,
-    double epsilon = Query.epsilon,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.greaterThan(
-        include: include,
-        property: r'familyDeductible',
-        value: value,
-        epsilon: epsilon,
-      ));
-    });
-  }
-
-  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
-      familyDeductibleLessThan(
-    double value, {
-    bool include = false,
-    double epsilon = Query.epsilon,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.lessThan(
-        include: include,
-        property: r'familyDeductible',
-        value: value,
-        epsilon: epsilon,
-      ));
-    });
-  }
-
-  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
-      familyDeductibleBetween(
-    double lower,
-    double upper, {
-    bool includeLower = true,
-    bool includeUpper = true,
-    double epsilon = Query.epsilon,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.between(
-        property: r'familyDeductible',
+        property: r'defaultPatientPercent',
         lower: lower,
         includeLower: includeLower,
         upper: upper,
@@ -651,67 +488,463 @@ extension InsuranceProfileQueryFilter
   }
 
   QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
-      individualDeductibleEqualTo(
-    double value, {
-    double epsilon = Query.epsilon,
-  }) {
+      insurerNameIsNull() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'individualDeductible',
-        value: value,
-        epsilon: epsilon,
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'insurerName',
       ));
     });
   }
 
   QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
-      individualDeductibleGreaterThan(
-    double value, {
+      insurerNameIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'insurerName',
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
+      insurerNameEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'insurerName',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
+      insurerNameGreaterThan(
+    String? value, {
     bool include = false,
-    double epsilon = Query.epsilon,
+    bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.greaterThan(
         include: include,
-        property: r'individualDeductible',
+        property: r'insurerName',
         value: value,
-        epsilon: epsilon,
+        caseSensitive: caseSensitive,
       ));
     });
   }
 
   QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
-      individualDeductibleLessThan(
-    double value, {
+      insurerNameLessThan(
+    String? value, {
     bool include = false,
-    double epsilon = Query.epsilon,
+    bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.lessThan(
         include: include,
-        property: r'individualDeductible',
+        property: r'insurerName',
         value: value,
-        epsilon: epsilon,
+        caseSensitive: caseSensitive,
       ));
     });
   }
 
   QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
-      individualDeductibleBetween(
-    double lower,
-    double upper, {
+      insurerNameBetween(
+    String? lower,
+    String? upper, {
     bool includeLower = true,
     bool includeUpper = true,
-    double epsilon = Query.epsilon,
+    bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.between(
-        property: r'individualDeductible',
+        property: r'insurerName',
         lower: lower,
         includeLower: includeLower,
         upper: upper,
         includeUpper: includeUpper,
-        epsilon: epsilon,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
+      insurerNameStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'insurerName',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
+      insurerNameEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'insurerName',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
+      insurerNameContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'insurerName',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
+      insurerNameMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'insurerName',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
+      insurerNameIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'insurerName',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
+      insurerNameIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'insurerName',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
+      planNameIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'planName',
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
+      planNameIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'planName',
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
+      planNameEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'planName',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
+      planNameGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'planName',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
+      planNameLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'planName',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
+      planNameBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'planName',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
+      planNameStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'planName',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
+      planNameEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'planName',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
+      planNameContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'planName',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
+      planNameMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'planName',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
+      planNameIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'planName',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
+      planNameIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'planName',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
+      planSummaryIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'planSummary',
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
+      planSummaryIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'planSummary',
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
+      planSummaryEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'planSummary',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
+      planSummaryGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'planSummary',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
+      planSummaryLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'planSummary',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
+      planSummaryBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'planSummary',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
+      planSummaryStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'planSummary',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
+      planSummaryEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'planSummary',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
+      planSummaryContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'planSummary',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
+      planSummaryMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'planSummary',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
+      planSummaryIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'planSummary',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
+      planSummaryIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'planSummary',
+        value: '',
       ));
     });
   }
@@ -789,62 +1022,6 @@ extension InsuranceProfileQueryFilter
       ));
     });
   }
-
-  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
-      yearEqualTo(int value) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'year',
-        value: value,
-      ));
-    });
-  }
-
-  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
-      yearGreaterThan(
-    int value, {
-    bool include = false,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.greaterThan(
-        include: include,
-        property: r'year',
-        value: value,
-      ));
-    });
-  }
-
-  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
-      yearLessThan(
-    int value, {
-    bool include = false,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.lessThan(
-        include: include,
-        property: r'year',
-        value: value,
-      ));
-    });
-  }
-
-  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
-      yearBetween(
-    int lower,
-    int upper, {
-    bool includeLower = true,
-    bool includeUpper = true,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.between(
-        property: r'year',
-        lower: lower,
-        includeLower: includeLower,
-        upper: upper,
-        includeUpper: includeUpper,
-      ));
-    });
-  }
 }
 
 extension InsuranceProfileQueryObject
@@ -856,44 +1033,58 @@ extension InsuranceProfileQueryLinks
 extension InsuranceProfileQuerySortBy
     on QueryBuilder<InsuranceProfile, InsuranceProfile, QSortBy> {
   QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterSortBy>
-      sortByDefaultCoveragePercent() {
+      sortByDefaultPatientPercent() {
     return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'defaultCoveragePercent', Sort.asc);
+      return query.addSortBy(r'defaultPatientPercent', Sort.asc);
     });
   }
 
   QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterSortBy>
-      sortByDefaultCoveragePercentDesc() {
+      sortByDefaultPatientPercentDesc() {
     return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'defaultCoveragePercent', Sort.desc);
+      return query.addSortBy(r'defaultPatientPercent', Sort.desc);
     });
   }
 
   QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterSortBy>
-      sortByFamilyDeductible() {
+      sortByInsurerName() {
     return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'familyDeductible', Sort.asc);
+      return query.addSortBy(r'insurerName', Sort.asc);
     });
   }
 
   QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterSortBy>
-      sortByFamilyDeductibleDesc() {
+      sortByInsurerNameDesc() {
     return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'familyDeductible', Sort.desc);
+      return query.addSortBy(r'insurerName', Sort.desc);
     });
   }
 
   QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterSortBy>
-      sortByIndividualDeductible() {
+      sortByPlanName() {
     return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'individualDeductible', Sort.asc);
+      return query.addSortBy(r'planName', Sort.asc);
     });
   }
 
   QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterSortBy>
-      sortByIndividualDeductibleDesc() {
+      sortByPlanNameDesc() {
     return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'individualDeductible', Sort.desc);
+      return query.addSortBy(r'planName', Sort.desc);
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterSortBy>
+      sortByPlanSummary() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'planSummary', Sort.asc);
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterSortBy>
+      sortByPlanSummaryDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'planSummary', Sort.desc);
     });
   }
 
@@ -910,48 +1101,21 @@ extension InsuranceProfileQuerySortBy
       return query.addSortBy(r'profileId', Sort.desc);
     });
   }
-
-  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterSortBy> sortByYear() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'year', Sort.asc);
-    });
-  }
-
-  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterSortBy>
-      sortByYearDesc() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'year', Sort.desc);
-    });
-  }
 }
 
 extension InsuranceProfileQuerySortThenBy
     on QueryBuilder<InsuranceProfile, InsuranceProfile, QSortThenBy> {
   QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterSortBy>
-      thenByDefaultCoveragePercent() {
+      thenByDefaultPatientPercent() {
     return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'defaultCoveragePercent', Sort.asc);
+      return query.addSortBy(r'defaultPatientPercent', Sort.asc);
     });
   }
 
   QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterSortBy>
-      thenByDefaultCoveragePercentDesc() {
+      thenByDefaultPatientPercentDesc() {
     return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'defaultCoveragePercent', Sort.desc);
-    });
-  }
-
-  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterSortBy>
-      thenByFamilyDeductible() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'familyDeductible', Sort.asc);
-    });
-  }
-
-  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterSortBy>
-      thenByFamilyDeductibleDesc() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'familyDeductible', Sort.desc);
+      return query.addSortBy(r'defaultPatientPercent', Sort.desc);
     });
   }
 
@@ -969,16 +1133,44 @@ extension InsuranceProfileQuerySortThenBy
   }
 
   QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterSortBy>
-      thenByIndividualDeductible() {
+      thenByInsurerName() {
     return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'individualDeductible', Sort.asc);
+      return query.addSortBy(r'insurerName', Sort.asc);
     });
   }
 
   QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterSortBy>
-      thenByIndividualDeductibleDesc() {
+      thenByInsurerNameDesc() {
     return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'individualDeductible', Sort.desc);
+      return query.addSortBy(r'insurerName', Sort.desc);
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterSortBy>
+      thenByPlanName() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'planName', Sort.asc);
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterSortBy>
+      thenByPlanNameDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'planName', Sort.desc);
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterSortBy>
+      thenByPlanSummary() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'planSummary', Sort.asc);
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterSortBy>
+      thenByPlanSummaryDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'planSummary', Sort.desc);
     });
   }
 
@@ -995,41 +1187,35 @@ extension InsuranceProfileQuerySortThenBy
       return query.addSortBy(r'profileId', Sort.desc);
     });
   }
-
-  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterSortBy> thenByYear() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'year', Sort.asc);
-    });
-  }
-
-  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterSortBy>
-      thenByYearDesc() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'year', Sort.desc);
-    });
-  }
 }
 
 extension InsuranceProfileQueryWhereDistinct
     on QueryBuilder<InsuranceProfile, InsuranceProfile, QDistinct> {
   QueryBuilder<InsuranceProfile, InsuranceProfile, QDistinct>
-      distinctByDefaultCoveragePercent() {
+      distinctByDefaultPatientPercent() {
     return QueryBuilder.apply(this, (query) {
-      return query.addDistinctBy(r'defaultCoveragePercent');
+      return query.addDistinctBy(r'defaultPatientPercent');
     });
   }
 
   QueryBuilder<InsuranceProfile, InsuranceProfile, QDistinct>
-      distinctByFamilyDeductible() {
+      distinctByInsurerName({bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addDistinctBy(r'familyDeductible');
+      return query.addDistinctBy(r'insurerName', caseSensitive: caseSensitive);
     });
   }
 
   QueryBuilder<InsuranceProfile, InsuranceProfile, QDistinct>
-      distinctByIndividualDeductible() {
+      distinctByPlanName({bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addDistinctBy(r'individualDeductible');
+      return query.addDistinctBy(r'planName', caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QDistinct>
+      distinctByPlanSummary({bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'planSummary', caseSensitive: caseSensitive);
     });
   }
 
@@ -1037,12 +1223,6 @@ extension InsuranceProfileQueryWhereDistinct
       distinctByProfileId() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'profileId');
-    });
-  }
-
-  QueryBuilder<InsuranceProfile, InsuranceProfile, QDistinct> distinctByYear() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addDistinctBy(r'year');
     });
   }
 }
@@ -1056,35 +1236,35 @@ extension InsuranceProfileQueryProperty
   }
 
   QueryBuilder<InsuranceProfile, double, QQueryOperations>
-      defaultCoveragePercentProperty() {
+      defaultPatientPercentProperty() {
     return QueryBuilder.apply(this, (query) {
-      return query.addPropertyName(r'defaultCoveragePercent');
+      return query.addPropertyName(r'defaultPatientPercent');
     });
   }
 
-  QueryBuilder<InsuranceProfile, double, QQueryOperations>
-      familyDeductibleProperty() {
+  QueryBuilder<InsuranceProfile, String?, QQueryOperations>
+      insurerNameProperty() {
     return QueryBuilder.apply(this, (query) {
-      return query.addPropertyName(r'familyDeductible');
+      return query.addPropertyName(r'insurerName');
     });
   }
 
-  QueryBuilder<InsuranceProfile, double, QQueryOperations>
-      individualDeductibleProperty() {
+  QueryBuilder<InsuranceProfile, String?, QQueryOperations> planNameProperty() {
     return QueryBuilder.apply(this, (query) {
-      return query.addPropertyName(r'individualDeductible');
+      return query.addPropertyName(r'planName');
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, String?, QQueryOperations>
+      planSummaryProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'planSummary');
     });
   }
 
   QueryBuilder<InsuranceProfile, int?, QQueryOperations> profileIdProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'profileId');
-    });
-  }
-
-  QueryBuilder<InsuranceProfile, int, QQueryOperations> yearProperty() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addPropertyName(r'year');
     });
   }
 }

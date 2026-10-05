@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
-import '../../../core/models/expense.dart';
 import '../../../core/models/medical_bill.dart';
 import '../providers/medical_providers.dart';
 import '../repositories/medical_repository.dart';
@@ -83,14 +82,15 @@ class _DetailScaffold extends ConsumerWidget {
             const SizedBox(height: 16),
             _InsuranceBreakdown(bill: bill),
             const SizedBox(height: 16),
-            _ProviderPaymentSection(bill: bill),
+            _PaymentMethodSection(bill: bill),
             const SizedBox(height: 16),
-            _ClaimStatusSection(bill: bill),
+            _BillStateSection(bill: bill),
             const SizedBox(height: 16),
             _FollowUpSection(bill: bill),
-            if (bill.attachmentPaths.isNotEmpty) ...[
+            if (bill.billPhotoPath != null ||
+                bill.insurerReplyPath != null) ...[
               const SizedBox(height: 16),
-              _AttachmentsCard(bill: bill),
+              _DocumentsCard(bill: bill),
             ],
           ],
         ),
@@ -104,7 +104,7 @@ class _DetailScaffold extends ConsumerWidget {
     final repo = ref.read(medicalRepositoryProvider);
 
     // A reimbursed bill already moved budget history, so warn before removing.
-    final isReimbursed = bill.claimStatus == ClaimStatus.reimbursed;
+    final isReimbursed = bill.reimbursedAmount > 0;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -164,8 +164,7 @@ class _HeaderSection extends ConsumerWidget {
     final symbol = ref.watch(medicalCurrencySymbolProvider);
     final provider = directory.providerName(bill.providerId);
     final patient = directory.memberName(bill.familyMemberId);
-    final statusColor =
-        MedicalTheme.claimStatusColor(context, bill.claimStatus);
+    final stateColor = MedicalTheme.billStateColor(context, bill.state);
 
     return Card(
       color: MedicalTheme.surface(context),
@@ -175,10 +174,10 @@ class _HeaderSection extends ConsumerWidget {
           children: [
             CircleAvatar(
               radius: 32,
-              backgroundColor: statusColor.withValues(alpha: 0.2),
+              backgroundColor: stateColor.withValues(alpha: 0.2),
               child: Icon(
-                MedicalTheme.claimStatusIcon(bill.claimStatus),
-                color: statusColor,
+                MedicalTheme.billStateIcon(bill.state),
+                color: stateColor,
                 size: 30,
               ),
             ),
@@ -204,14 +203,25 @@ class _HeaderSection extends ConsumerWidget {
               style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
+            // FR-042: state and payment method are the two labels that matter
+            // now; the old single "Claim" chip conflated them.
             Chip(
               avatar: Icon(
-                MedicalTheme.claimStatusIcon(bill.claimStatus),
+                MedicalTheme.billStateIcon(bill.state),
                 size: 18,
-                color: statusColor,
+                color: stateColor,
               ),
-              label: Text('Claim: ${bill.claimStatus.label}'),
-              backgroundColor: statusColor.withValues(alpha: 0.15),
+              label: Text(bill.state.label),
+              backgroundColor: stateColor.withValues(alpha: 0.15),
+              side: BorderSide.none,
+            ),
+            const SizedBox(height: 8),
+            Chip(
+              avatar:
+                  const Icon(Icons.account_balance_wallet_outlined, size: 18),
+              label: Text(bill.paymentMethod.label),
+              backgroundColor:
+                  MedicalTheme.subtleText(context).withValues(alpha: 0.15),
               side: BorderSide.none,
             ),
           ],
@@ -242,15 +252,18 @@ class _InsuranceBreakdown extends ConsumerWidget {
             label: 'Billed amount',
             value: MedicalTheme.money(symbol, bill.billedAmount),
           ),
+          // FR-048: the user-facing share, with the insurer's complement shown
+          // rather than a second percentage the user never entered.
           _MoneyRow(
-            label: 'Insurance covered '
-                '(${bill.insuranceCoveragePercent.toStringAsFixed(0)}%)',
-            value: MedicalTheme.money(symbol, bill.insuranceCoveredAmount),
+            label: 'Insurer pays '
+                '(${(100 - bill.patientSharePercent).toStringAsFixed(0)}%)',
+            value: MedicalTheme.money(symbol, bill.insurerPaidAmount),
             color: Colors.green,
           ),
           _MoneyRow(
-            label: 'Estimated out-of-pocket',
-            value: MedicalTheme.money(symbol, bill.estimatedOutPocket),
+            label: 'Your share '
+                '(${bill.patientSharePercent.toStringAsFixed(0)}%)',
+            value: MedicalTheme.money(symbol, bill.patientShareAmount),
             color: Colors.orange,
           ),
           if (bill.reimbursedAmount > 0)
@@ -315,40 +328,44 @@ class _MoneyRow extends StatelessWidget {
 }
 
 // -----------------------------------------------------------------------------
-// Provider payment (T018)
+// Payment method (FR-041)
 // -----------------------------------------------------------------------------
 
-class _ProviderPaymentSection extends ConsumerWidget {
-  const _ProviderPaymentSection({required this.bill});
+/// Switching between insurer-paid and self-paid.
+///
+/// The method decides what the bill costs the budget, so changing it re-syncs
+/// the linked expense through the repository rather than editing it locally.
+class _PaymentMethodSection extends ConsumerWidget {
+  const _PaymentMethodSection({required this.bill});
 
   final MedicalBill bill;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final statuses = ref.watch(medicalExpenseStatusesProvider).value ??
-        const <int, ExpenseStatus>{};
     final symbol = ref.watch(medicalCurrencySymbolProvider);
-    final paid = isPaidToProvider(bill, statuses);
+    final insurerPaid = bill.paymentMethod == MedicalPaymentMethod.insurerPaid;
 
     return _SectionCard(
-      title: 'Provider Payment',
+      title: 'Payment Method',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          Text(
+            insurerPaid
+                ? 'The insurer was billed directly. Only your share affects '
+                    'this month, and there is nothing to claim back.'
+                : 'You paid in full, so the whole charge left your budget until a '
+                    'reimbursement is recorded.',
+            style: TextStyle(color: MedicalTheme.subtleText(context)),
+          ),
+          const SizedBox(height: 12),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
+              Text(bill.paymentMethod.label,
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
               Text(
-                paid ? 'Paid' : 'Planned',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: paid ? Colors.green : Colors.orange,
-                ),
-              ),
-              Text(
-                paid
-                    ? '${MedicalTheme.money(symbol, bill.billedAmount)} left your account'
-                    : 'Not counted against your budget yet',
+                '${MedicalTheme.money(symbol, bill.fundsImpact)} left your budget',
                 style: TextStyle(
                   fontSize: 12,
                   color: MedicalTheme.subtleText(context),
@@ -357,72 +374,69 @@ class _ProviderPaymentSection extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 12),
-          FilledButton.icon(
-            onPressed: () => _toggle(context, ref, paid: !paid),
-            icon: Icon(paid ? Icons.schedule : Icons.check_circle),
-            label: Text(
-                paid ? 'Move back to Planned' : 'Mark as Paid to Provider'),
-            style: FilledButton.styleFrom(
-              backgroundColor: paid ? Colors.orange : Colors.green,
-            ),
+          SegmentedButton<MedicalPaymentMethod>(
+            key: const Key('detailPaymentMethod'),
+            segments: const [
+              ButtonSegment(
+                value: MedicalPaymentMethod.selfPaid,
+                label: Text('Self-paid'),
+              ),
+              ButtonSegment(
+                value: MedicalPaymentMethod.insurerPaid,
+                label: Text('Insurer paid'),
+              ),
+            ],
+            selected: {bill.paymentMethod},
+            onSelectionChanged: (selection) =>
+                _setMethod(context, ref, selection.first),
           ),
         ],
       ),
     );
   }
 
-  Future<void> _toggle(
+  Future<void> _setMethod(
     BuildContext context,
-    WidgetRef ref, {
-    required bool paid,
-  }) async {
-    final billContext = ref.read(medicalBillContextProvider);
-    if (billContext == null) {
-      _toast(context, 'No active budget, so this cannot change your balance.');
-      return;
-    }
+    WidgetRef ref,
+    MedicalPaymentMethod method,
+  ) async {
     final messenger = ScaffoldMessenger.of(context);
     try {
-      final delta = await ref
-          .read(medicalRepositoryProvider)
-          .setBillPaidToProvider(bill, billContext, paid: paid);
+      await ref.read(medicalRepositoryProvider).setPaymentMethod(bill, method);
       if (!context.mounted) return;
       messenger
         ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(
-          content: Text(
-            paid
-                ? 'Marked as paid. Available drops by '
-                    '${delta.trueAvailableDelta.abs().toStringAsFixed(2)} 💸'
-                : 'Moved back to planned. Available restored ✅',
-          ),
-        ));
+        ..showSnackBar(SnackBar(content: Text('Now marked ${method.label}')));
     } catch (error) {
       if (!context.mounted) return;
-      _toast(context, 'Could not update the payment: $error');
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+              content: Text('Could not change the payment method: $error')),
+        );
     }
-  }
-
-  void _toast(BuildContext context, String message) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
   }
 }
 
 // -----------------------------------------------------------------------------
-// Claim status (T019 / T021)
+// Bill state (FR-042 / FR-052)
 // -----------------------------------------------------------------------------
 
-class _ClaimStatusSection extends ConsumerWidget {
-  const _ClaimStatusSection({required this.bill});
+class _BillStateSection extends ConsumerWidget {
+  const _BillStateSection({required this.bill});
 
   final MedicalBill bill;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // R-1: an insurer-paid bill is settled with the provider, so it can never be
+    // finished and can never be reimbursed.
+    final selfPaid = bill.paymentMethod == MedicalPaymentMethod.selfPaid;
+    final canFinish = selfPaid && bill.reimbursedAmount > 0;
+
     return _SectionCard(
-      title: 'Insurance Claim',
+      title: 'Bill Status',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -430,111 +444,140 @@ class _ClaimStatusSection extends ConsumerWidget {
             spacing: 8,
             runSpacing: 8,
             children: [
-              if (bill.claimStatus != ClaimStatus.processing)
-                OutlinedButton.icon(
-                  onPressed: () =>
-                      _setStatus(context, ref, ClaimStatus.processing),
-                  icon: const Icon(Icons.autorenew, size: 18),
-                  label: const Text('Filed'),
-                ),
-              if (bill.claimStatus != ClaimStatus.denied)
-                OutlinedButton.icon(
-                  onPressed: () => _setStatus(context, ref, ClaimStatus.denied),
-                  icon: const Icon(Icons.cancel_outlined, size: 18),
-                  label: const Text('Denied'),
-                ),
-              FilledButton.icon(
-                onPressed: () => _logReimbursement(context, ref),
-                icon: const Icon(Icons.payments_outlined, size: 18),
-                label: Text(
-                  bill.claimStatus == ClaimStatus.reimbursed
-                      ? 'Update Reimbursement'
-                      : 'Log Reimbursement',
-                ),
-                style: FilledButton.styleFrom(backgroundColor: Colors.green),
-              ),
+              for (final state in MedicalBillState.values)
+                if (state != MedicalBillState.finished || canFinish)
+                  OutlinedButton.icon(
+                    key: Key('state-${state.name}'),
+                    onPressed: () => _setState(context, ref, state),
+                    icon: Icon(MedicalTheme.billStateIcon(state), size: 18),
+                    label: Text(state.label),
+                    style: bill.state == state
+                        ? OutlinedButton.styleFrom(
+                            backgroundColor:
+                                MedicalTheme.billStateColor(context, state)
+                                    .withValues(alpha: 0.18),
+                          )
+                        : null,
+                  ),
             ],
           ),
           const SizedBox(height: 8),
           Text(
-            _statusHint(bill.claimStatus),
+            _stateHint(bill.state, selfPaid: selfPaid),
             style: TextStyle(
               fontSize: 12,
               color: MedicalTheme.subtleText(context),
             ),
           ),
+          if (selfPaid) ...[
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              key: const Key('logReimbursementButton'),
+              onPressed: () => _logReimbursement(context, ref),
+              icon: const Icon(Icons.payments_outlined, size: 18),
+              label: Text(
+                bill.reimbursedAmount > 0
+                    ? 'Update Reimbursement'
+                    : 'Log Reimbursement',
+              ),
+              style: FilledButton.styleFrom(backgroundColor: Colors.green),
+            ),
+          ],
         ],
       ),
     );
   }
 
-  static String _statusHint(ClaimStatus status) => switch (status) {
-        ClaimStatus.unclaimed =>
-          'Not submitted to insurance yet. Filing it does not change your budget.',
-        ClaimStatus.processing =>
-          'Insurance is reviewing this bill. Your budget stays as-is until a payout.',
-        ClaimStatus.reimbursed =>
-          'The payout is added back to your available budget.',
-        ClaimStatus.denied =>
-          'Insurance declined this bill, so there is no payout to expect.',
+  static String _stateHint(MedicalBillState state, {required bool selfPaid}) =>
+      switch (state) {
+        MedicalBillState.planned =>
+          'A plan. Nothing leaves your budget until it actually happens.',
+        MedicalBillState.waiting =>
+          'In flight. Your budget already reflects what you owe.',
+        MedicalBillState.paid =>
+          'The provider has been paid and the claim is moving.',
+        MedicalBillState.finished =>
+          'Settled. A reimbursement has been recorded and added back.',
+        MedicalBillState.rejected =>
+          'Turned down, so the full charge stands and there is no payout to expect.',
       };
 
-  Future<void> _setStatus(
+  Future<void> _setState(
     BuildContext context,
     WidgetRef ref,
-    ClaimStatus status,
+    MedicalBillState state,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
     try {
-      await ref
-          .read(medicalRepositoryProvider)
-          .updateClaimStatus(bill, status: status);
+      await ref.read(medicalRepositoryProvider).setBillState(bill, state);
       if (!context.mounted) return;
       messenger
         ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text('Claim marked ${status.label}')));
+        ..showSnackBar(SnackBar(content: Text('Marked ${state.label}')));
+    } on InvalidBillTransitionException catch (error) {
+      // R-1 / D4: explain the rule rather than showing a raw failure.
+      if (!context.mounted) return;
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(error.toString())));
     } catch (error) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not update the claim: $error')),
-      );
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text('Could not update: $error')));
     }
   }
 
-  /// FR-005: the payout is injected into the budget via a reimbursement row.
+  /// FR-034: the payout is injected into the budget via a reimbursement row.
   Future<void> _logReimbursement(BuildContext context, WidgetRef ref) async {
     final symbol = ref.read(medicalCurrencySymbolProvider);
+    // Pre-fill with the last payout, or the patient share as the best estimate
+    // of what the insurer will return.
     final controller = TextEditingController(
       text: bill.reimbursedAmount > 0
           ? bill.reimbursedAmount.toStringAsFixed(2)
-          : bill.insuranceCoveredAmount.toStringAsFixed(2),
+          : bill.patientShareAmount.toStringAsFixed(2),
     );
 
     final amount = await showDialog<double>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Log Reimbursement'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'How much did insurance pay you? This amount is added back to your '
-              'available budget.',
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: controller,
-              autofocus: true,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              decoration: InputDecoration(
-                labelText: 'Amount',
-                prefixText: '$symbol ',
-                border: const OutlineInputBorder(),
+        // An AlertDialog sizes itself to its content's intrinsic height and never
+        // subtracts the keyboard inset, so a text field inside one overflows the
+        // Column as soon as the soft keyboard covers the lower half of the screen.
+        // Consuming the inset here and letting the content scroll keeps the field
+        // reachable instead of clipping it.
+        content: Builder(
+          builder: (contentContext) => SingleChildScrollView(
+            child: Padding(
+              padding: EdgeInsets.only(
+                top: 24,
+                bottom: 24 + MediaQuery.viewInsetsOf(contentContext).bottom,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'How much did insurance pay you? This amount is added back '
+                    'to your available budget.',
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: controller,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration: InputDecoration(
+                      labelText: 'Amount',
+                      prefixText: '$symbol ',
+                      border: const OutlineInputBorder(),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
+          ),
         ),
         actions: [
           TextButton(
@@ -643,31 +686,60 @@ class _FollowUpSection extends ConsumerWidget {
 }
 
 // -----------------------------------------------------------------------------
-// Attachments
+// Documents (FR-047)
 // -----------------------------------------------------------------------------
 
-class _AttachmentsCard extends ConsumerWidget {
-  const _AttachmentsCard({required this.bill});
+/// The two documents are listed separately because only a self-paid bill can
+/// carry an insurer reply (D2).
+class _DocumentsCard extends ConsumerWidget {
+  const _DocumentsCard({required this.bill});
 
   final MedicalBill bill;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final insurerReply = bill.insurerReplyPath;
     return _SectionCard(
-      title: 'Attachments',
+      title: 'Documents',
       child: Column(
         children: [
-          for (final path in bill.attachmentPaths)
+          if (bill.billPhotoPath != null)
+            _DocumentRow(label: 'Bill photo', path: bill.billPhotoPath!),
+          if (insurerReply != null)
+            _DocumentRow(label: 'Insurer reply', path: insurerReply)
+          else if (bill.paymentMethod == MedicalPaymentMethod.selfPaid)
             ListTile(
               dense: true,
               contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.attach_file),
-              title: Text(
-                path.split(RegExp(r'[/\\]')).last,
-                overflow: TextOverflow.ellipsis,
+              leading: const Icon(Icons.hourglass_empty),
+              title: const Text('No insurer reply yet'),
+              subtitle: Text(
+                'Add one to keep what you need to claim this bill back.',
+                style: TextStyle(color: MedicalTheme.subtleText(context)),
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+class _DocumentRow extends StatelessWidget {
+  const _DocumentRow({required this.label, required this.path});
+
+  final String label;
+  final String path;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      dense: true,
+      contentPadding: EdgeInsets.zero,
+      leading: const Icon(Icons.attach_file),
+      title: Text(label),
+      subtitle: Text(
+        path.split(RegExp(r'[/\\]')).last,
+        overflow: TextOverflow.ellipsis,
       ),
     );
   }

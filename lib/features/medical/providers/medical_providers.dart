@@ -4,41 +4,47 @@ import '../../../core/database/isar_helper.dart';
 import '../../../core/models/expense.dart';
 import '../../../core/models/insurance_profile.dart';
 import '../../../core/models/medical_bill.dart';
+import '../../../core/models/medical_service_type.dart';
 import '../../../core/models/user_profile.dart';
 import '../../../core/providers/active_budget_provider.dart';
 import '../../../core/providers/active_profile_provider.dart';
+import '../../../core/providers/selected_month_provider.dart';
 import '../repositories/medical_repository.dart';
 
 final medicalRepositoryProvider = Provider<MedicalRepository>((ref) {
   return MedicalRepository(IsarHelper.instance);
 });
 
-/// Deductible year currently in force. A provider (not a constant) so the app
-/// stays correct if it is left running across New Year.
-final currentMedicalYearProvider = Provider<int>((ref) => DateTime.now().year);
+/// Alias used by the service-type providers so a rename of the primary
+/// repository provider cannot silently orphan them.
+final medicalServiceTypesRepositoryProvider = Provider<MedicalRepository>(
+  (ref) => ref.watch(medicalRepositoryProvider),
+);
 
 // -----------------------------------------------------------------------------
 // Streamed source data
 // -----------------------------------------------------------------------------
 
-/// Every medical bill for the active profile in the current calendar year.
+/// Every medical bill for the active profile in the selected month.
+///
+/// Month-scoped: a bill's money impact lands in exactly one month's totals
+/// (FR-055, FR-056).
 ///
 /// Yields an empty list until a profile exists so consumers never have to
 /// null-check the profile themselves.
 final medicalBillsProvider = StreamProvider<List<MedicalBill>>((ref) {
   final profileId = ref.watch(activeProfileProvider).value?.id;
+  final yearMonth = ref.watch(selectedYearMonthProvider);
   if (profileId == null) return Stream.value(const <MedicalBill>[]);
   return ref
       .watch(medicalRepositoryProvider)
-      .watchMedicalBills(profileId, ref.watch(currentMedicalYearProvider));
+      .watchMedicalBills(profileId, yearMonth);
 });
 
 final insuranceProfileProvider = StreamProvider<InsuranceProfile?>((ref) {
   final profileId = ref.watch(activeProfileProvider).value?.id;
   if (profileId == null) return Stream.value(null);
-  return ref
-      .watch(medicalRepositoryProvider)
-      .watchInsuranceProfile(profileId, ref.watch(currentMedicalYearProvider));
+  return ref.watch(medicalRepositoryProvider).watchInsuranceProfile(profileId);
 });
 
 final familyMembersProvider = StreamProvider<List<FamilyMember>>((ref) {
@@ -115,17 +121,38 @@ final medicalDirectoryProvider = Provider<MedicalDirectory>((ref) {
   return MedicalDirectory(members: members, providers: providers);
 });
 
-/// Deductible progress for the current year (FR-006).
+/// User-editable service types for the active profile (FR-040).
 ///
-/// Summed on the fly rather than stored (research.md §3) so edits and deletes
-/// are reflected without maintaining a running total.
-final deductibleProgressProvider = Provider<DeductibleProgress>((ref) {
-  final bills = ref.watch(medicalBillsProvider).value ?? const <MedicalBill>[];
-  final insurance = ref.watch(insuranceProfileProvider).value;
-  return DeductibleProgress.from(bills: bills, insurance: insurance);
+/// Archived types are included so a historical bill can still resolve its type
+/// by name.
+final medicalServiceTypesProvider =
+    StreamProvider<List<MedicalServiceType>>((ref) {
+  final profileId = ref.watch(activeProfileProvider).value?.id;
+  if (profileId == null) return Stream.value(const <MedicalServiceType>[]);
+  return ref
+      .watch(medicalServiceTypesRepositoryProvider)
+      .watchServiceTypes(profileId);
 });
 
-/// What the medical feature currently costs the budget.
+/// Types offered when picking one for a new bill — archived types are excluded.
+final selectableServiceTypesProvider =
+    Provider<List<MedicalServiceType>>((ref) {
+  final all = ref.watch(medicalServiceTypesProvider).value ??
+      const <MedicalServiceType>[];
+  return all.where((t) => !t.archived).toList();
+});
+
+/// Patient-share totals for the selected month (FR-038, SC-007).
+///
+/// Replaces the retired deductible aggregation: there is no deductible, so this
+/// reports what the user actually owes and what the insurers covered. Summed on
+/// the fly so edits and deletes need no stored running total.
+final patientShareTotalsProvider = Provider<PatientShareTotals>((ref) {
+  final bills = ref.watch(medicalBillsProvider).value ?? const <MedicalBill>[];
+  return PatientShareTotals.from(bills);
+});
+
+/// What the medical feature currently costs the selected month's budget.
 final medicalBudgetImpactProvider = Provider<MedicalBudgetImpact>((ref) {
   final bills = ref.watch(medicalBillsProvider).value ?? const <MedicalBill>[];
   final statuses = ref.watch(medicalExpenseStatusesProvider).value ??
@@ -163,103 +190,72 @@ class MedicalDirectory {
   }
 }
 
-/// Aggregate out-of-pocket spend against the deductible for the current year.
-class DeductibleProgress {
-  const DeductibleProgress({
-    required this.outOfPocketTotal,
+/// Patient-share totals for a set of bills (FR-038).
+///
+/// The deductible aggregate this replaces is gone by design (FR-037): every bill
+/// is treated as if no deductible applies, so there is no limit, no remaining
+/// balance and no progress to track - only what the user owes and what the
+/// insurers covered.
+class PatientShareTotals {
+  const PatientShareTotals({
     required this.billedTotal,
+    required this.patientShareTotal,
+    required this.insurerPaidTotal,
     required this.reimbursedTotal,
-    required this.individualLimit,
-    required this.familyLimit,
-    required this.individualOutOfPocket,
+    required this.netPatientCost,
     required this.billCount,
   });
 
-  const DeductibleProgress.empty()
-      : outOfPocketTotal = 0.0,
-        billedTotal = 0.0,
+  const PatientShareTotals.empty()
+      : billedTotal = 0.0,
+        patientShareTotal = 0.0,
+        insurerPaidTotal = 0.0,
         reimbursedTotal = 0.0,
-        individualLimit = 0.0,
-        familyLimit = 0.0,
-        individualOutOfPocket = 0.0,
+        netPatientCost = 0.0,
         billCount = 0;
 
-  final double outOfPocketTotal;
+  /// Full charges across every bill.
   final double billedTotal;
+
+  /// What the user owes across every bill, before reimbursements.
+  final double patientShareTotal;
+
+  /// What the insurers paid across every bill.
+  final double insurerPaidTotal;
+
+  /// Money that came back.
   final double reimbursedTotal;
-  final double individualLimit;
-  final double familyLimit;
-  final double individualOutOfPocket;
+
+  /// What the user is actually out of pocket once returns are counted.
+  final double netPatientCost;
+
   final int billCount;
 
-  bool get hasInsuranceProfile => individualLimit > 0 || familyLimit > 0;
+  bool get isEmpty => billCount == 0;
 
-  bool get hasFamilyLimit => familyLimit > individualLimit && familyLimit > 0;
+  static PatientShareTotals from(List<MedicalBill> bills) {
+    if (bills.isEmpty) return const PatientShareTotals.empty();
 
-  /// Limit that applies to a bill attributed to [memberId].
-  double limitFor(int? memberId) {
-    if (memberId == null) return individualLimit;
-    return hasFamilyLimit ? familyLimit : individualLimit;
-  }
-
-  /// Out-of-pocket already credited against the limit for [memberId].
-  ///
-  /// The individual limit only absorbs bills with no family attribution, so a
-  /// family member's care never eats into [individualOutOfPocket].
-  double metFor(int? memberId) =>
-      memberId == null ? individualOutOfPocket : outOfPocketTotal;
-
-  /// Family-wide out-of-pocket, i.e. every attributed and unattributed bill.
-  double get familyMet => outOfPocketTotal;
-
-  /// Fraction of the deductible met, clamped to 0..1 for progress indicators.
-  double fractionOf({int? memberId}) =>
-      _fraction(metFor(memberId), limitFor(memberId));
-
-  /// Fraction of the *family* aggregate deductible met.
-  double familyFraction() => _fraction(familyMet, familyLimit);
-
-  double remainingFor({int? memberId}) =>
-      _remaining(metFor(memberId), limitFor(memberId));
-
-  double familyRemaining() => _remaining(familyMet, familyLimit);
-
-  static double _fraction(double met, double limit) =>
-      limit <= 0 ? 0.0 : (met / limit).clamp(0.0, 1.0);
-
-  static double _remaining(double met, double limit) =>
-      limit <= 0 ? 0.0 : (limit - met).clamp(0.0, double.infinity);
-
-  static DeductibleProgress from({
-    required List<MedicalBill> bills,
-    required InsuranceProfile? insurance,
-  }) {
-    if (bills.isEmpty && insurance == null) {
-      return const DeductibleProgress.empty();
-    }
-
-    var outOfPocket = 0.0;
-    var individualOutOfPocket = 0.0;
     var billed = 0.0;
+    var patient = 0.0;
+    var insurer = 0.0;
     var reimbursed = 0.0;
+    var net = 0.0;
 
     for (final bill in bills) {
-      outOfPocket += bill.estimatedOutPocket;
       billed += bill.billedAmount;
+      patient += bill.patientShareAmount;
+      insurer += bill.insurerPaidAmount;
       reimbursed += bill.reimbursedAmount;
-      // Bills with no patient attribution count against the individual limit.
-      if (bill.familyMemberId == null) {
-        individualOutOfPocket += bill.estimatedOutPocket;
-      }
+      net += bill.netOutOfPocket;
     }
 
-    return DeductibleProgress(
-      outOfPocketTotal: outOfPocket,
+    return PatientShareTotals(
       billedTotal: billed,
+      patientShareTotal: patient,
+      insurerPaidTotal: insurer,
       reimbursedTotal: reimbursed,
-      individualLimit: insurance?.individualDeductible ?? 0.0,
-      familyLimit: insurance?.familyDeductible ?? 0.0,
-      individualOutOfPocket: individualOutOfPocket,
+      netPatientCost: net,
       billCount: bills.length,
     );
   }
@@ -285,7 +281,12 @@ class MedicalBudgetImpact {
   /// Billed amount of bills whose linked expense is still `planned`.
   final double plannedTotal;
 
-  /// Billed amount of bills whose linked expense is `paid`.
+  /// What the selected month's medical spending actually cost the budget.
+  ///
+  /// Taken from [MedicalBill.fundsImpact] rather than from
+  /// [MedicalBill.billedAmount], so an insurer-paid bill contributes only the
+  /// patient share (FR-042). SC-009 — this is the same figure the month summary
+  /// reports for its medical line.
   final double paidTotal;
 
   final double outOfPocketTotal;
@@ -313,14 +314,16 @@ class MedicalBudgetImpact {
     var net = 0.0;
 
     for (final bill in bills) {
-      outOfPocket += bill.estimatedOutPocket;
+      outOfPocket += bill.patientShareAmount;
       reimbursed += bill.reimbursedAmount;
 
       final expenseId = bill.linkedExpenseId;
       final status = expenseId == null ? null : expenseStatuses[expenseId];
       switch (status) {
         case ExpenseStatus.paid:
-          paid += bill.billedAmount;
+          // `fundsImpact`, not the billed amount: a rejected insurer-paid bill
+          // owes the full charge and an unresolved one owes only the share.
+          paid += bill.fundsImpact;
           net += bill.netOutOfPocket;
         case ExpenseStatus.planned:
           planned += bill.billedAmount;

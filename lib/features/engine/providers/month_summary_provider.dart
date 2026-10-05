@@ -1,0 +1,59 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/models/expense.dart';
+import '../../../core/providers/active_profile_provider.dart';
+import '../../../core/providers/selected_month_provider.dart';
+import '../../expenses/repositories/expense_repository.dart';
+import '../../finance/providers/finance_providers.dart';
+import '../month_summary.dart';
+import 'true_available_provider.dart';
+
+/// Reimbursements belonging to the selected month.
+///
+/// Scoped by `originYearMonth` — the month the money belongs to — not by the
+/// month the user happened to record them in (FR-032).
+final monthlyOriginReimbursementsProvider = StreamProvider((ref) {
+  ref.watch(activeProfileProvider);
+  final yearMonth = ref.watch(selectedYearMonthProvider);
+  return ref
+      .watch(expenseRepositoryProvider)
+      .watchReimbursementsForMonth(yearMonth);
+});
+
+/// The financial verdict for the selected month.
+///
+/// Derived on every read from already-watched streams and never persisted
+/// (FR-017), so an edit anywhere upstream is reflected without a manual
+/// refresh. Recomputes in microseconds because it is pure arithmetic over rows
+/// that are already in memory.
+final monthSummaryProvider = Provider<MonthSummary>((ref) {
+  final yearMonth = ref.watch(selectedYearMonthProvider);
+  final month = ref.watch(monthFinanceProvider).value;
+  final income = ref.watch(resolvedIncomeProvider);
+  final expenses =
+      ref.watch(monthlyExpensesProvider).value ?? const <Expense>[];
+  final reimbursements =
+      ref.watch(monthlyOriginReimbursementsProvider).value ?? const [];
+
+  // Reimbursements are denominated in their target's currency. Targets inside
+  // the selected month can be converted from the rows already held; a target in
+  // another month contributes no excess figure until User Story 3 resolves
+  // cross-month targets.
+  final targetPaidAmounts = <int, double>{
+    for (final expense in expenses)
+      if (expense.status == ExpenseStatus.paid)
+        expense.id: expense.amount * expense.exchangeRateToPrimary,
+  };
+
+  return MonthSummary.from(
+    yearMonth: yearMonth,
+    income: income.amount,
+    usesOverriddenIncome: income.usesOverride,
+    expenses: expenses,
+    reimbursements: reimbursements,
+    openingBalance: month != null && month.openingBalanceConfirmed
+        ? month.baseAvailableAmount
+        : null,
+    targetPaidAmounts: targetPaidAmounts,
+  );
+});

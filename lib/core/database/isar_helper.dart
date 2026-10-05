@@ -10,6 +10,8 @@ import '../../features/vault/models/savings_vault.dart';
 import '../models/category.dart';
 import '../models/medical_bill.dart';
 import '../models/insurance_profile.dart';
+import '../models/medical_service_type.dart';
+import 'schema_migrations.dart';
 
 class IsarHelper {
   static late Isar _isar;
@@ -31,8 +33,12 @@ class IsarHelper {
         InsuranceProfileSchema,
         FamilyMemberSchema,
         MedicalProviderSchema,
+        MedicalServiceTypeSchema,
+        SchemaMigrationStampSchema,
       ],
       directory: dir.path,
     );
+
+    await runSchemaMigrations(_isar);
   }
 }

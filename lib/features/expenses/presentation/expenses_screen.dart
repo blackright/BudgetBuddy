@@ -5,10 +5,15 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../../core/models/expense.dart';
 import '../../../core/providers/active_budget_provider.dart';
+import '../../../core/providers/active_profile_provider.dart';
+import '../../../core/providers/selected_month_provider.dart';
 import '../../../core/models/user_profile.dart';
+import '../../medical/providers/medical_providers.dart';
+import '../models/reimbursement.dart';
 import '../providers/expenses_provider.dart';
 import '../providers/expense_filter_provider.dart';
 import '../providers/category_provider.dart';
+import '../repositories/expense_repository.dart';
 
 class ExpensesScreen extends ConsumerWidget {
   const ExpensesScreen({super.key});
@@ -40,6 +45,10 @@ class ExpensesScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Expenses'),
+        // FR-035: money really did come back, so the return is kept. The user
+        // decides whether to move it to another expense or drop it, rather than
+        // having the app silently discard it with the target.
+        actions: const [_OrphanBannerButton()],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(110),
           child: Column(
@@ -141,6 +150,178 @@ class ExpensesScreen extends ConsumerWidget {
       floatingActionButton: FloatingActionButton(
         onPressed: () => context.push('/add_expense'),
         child: const Icon(Icons.add),
+      ),
+    );
+  }
+}
+
+/// App-bar entry that appears only when reimbursements need resolving (FR-035).
+class _OrphanBannerButton extends ConsumerWidget {
+  const _OrphanBannerButton();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final repository = ref.watch(expenseRepositoryProvider);
+    return StreamBuilder<List<Reimbursement>>(
+      stream: repository.watchOrphanedReimbursements(),
+      builder: (context, snapshot) {
+        final orphans = snapshot.data ?? const <Reimbursement>[];
+        if (orphans.isEmpty) return const SizedBox.shrink();
+        return IconButton(
+          key: const ValueKey('orphan-reimbursements'),
+          tooltip: '${orphans.length} reimbursement'
+              '${orphans.length == 1 ? '' : 's'} need attention',
+          icon: Badge(
+            label: Text('${orphans.length}'),
+            child: const Icon(Icons.warning_amber_rounded),
+          ),
+          onPressed: () => _resolveOrphans(context, ref, orphans),
+        );
+      },
+    );
+  }
+
+  Future<void> _resolveOrphans(
+    BuildContext context,
+    WidgetRef ref,
+    List<Reimbursement> orphans,
+  ) async {
+    final repository = ref.read(expenseRepositoryProvider);
+    final profileId = ref.read(activeProfileProvider).value?.id;
+    final currencySymbol = ref.read(medicalCurrencySymbolProvider);
+    final yearMonth = ref.read(selectedYearMonthProvider);
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Reimbursement without an expense'),
+        // `double.maxFinite` width inside a dialog asked for more room than the
+        // dialog would grant, and `Flexible` + `shrinkWrap` inside a
+        // `MainAxisSize.min` column overflowed as soon as the list outgrew the
+        // space left by the keyboard. A bounded box plus one real scroll view
+        // keeps the list reachable at any height (FR-035).
+        content: SizedBox(
+          width: 360,
+          // Always a bounded height: `Expanded` inside a `MainAxisSize.min`
+          // column is an error when the height is unbounded, and the count-based
+          // cap keeps a short list from reserving a tall empty box.
+          height: 96 + orphans.length.clamp(1, 4) * 56.0,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'These returns were kept, but the expense they paid for is gone. '
+                'Move each one to an expense, or remove it.',
+                style: Theme.of(dialogContext).textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: ListView(
+                  children: [
+                    for (final orphan in orphans)
+                      ListTile(
+                        key: ValueKey('orphan-${orphan.id}'),
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(
+                          '$currencySymbol${orphan.amount.toStringAsFixed(2)}'
+                          ' received ${DateFormat.yMMMd().format(orphan.date)}',
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            TextButton(
+                              key: ValueKey('orphan-restore-${orphan.id}'),
+                              onPressed: profileId == null
+                                  ? null
+                                  : () async {
+                                      final target = await _pickTarget(
+                                        dialogContext,
+                                        profileId,
+                                        yearMonth,
+                                        repository,
+                                      );
+                                      if (target == null) return;
+                                      await repository
+                                          .restoreOrphanReimbursement(
+                                        orphan.id,
+                                        target,
+                                      );
+                                      if (dialogContext.mounted) {
+                                        Navigator.pop(dialogContext);
+                                      }
+                                    },
+                              child: const Text('Move'),
+                            ),
+                            TextButton(
+                              key: ValueKey('orphan-discard-${orphan.id}'),
+                              onPressed: () async {
+                                await repository
+                                    .discardOrphanReimbursement(orphan.id);
+                                if (dialogContext.mounted) {
+                                  Navigator.pop(dialogContext);
+                                }
+                              },
+                              child: const Text('Remove'),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Done'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Lets the user pick which expense the return should now pay for.
+  ///
+  /// Scoped to the month being viewed, so the choice matches what the user can
+  /// see on screen rather than reaching across the whole ledger.
+  Future<int?> _pickTarget(
+    BuildContext context,
+    int profileId,
+    String yearMonth,
+    ExpenseRepository repository,
+  ) async {
+    final expenses = await repository.getExpenses(profileId, yearMonth);
+    if (expenses.isEmpty) {
+      if (!context.mounted) return null;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'No expenses in $yearMonth to move this reimbursement to. '
+            'Remove it, or switch to the month the expense belongs to.',
+          ),
+        ),
+      );
+      return null;
+    }
+
+    if (!context.mounted) return null;
+    return showDialog<int>(
+      context: context,
+      builder: (pickerContext) => SimpleDialog(
+        title: Text('Move to which $yearMonth expense?'),
+        children: [
+          for (final expense in expenses)
+            SimpleDialogOption(
+              key: ValueKey('restore-target-${expense.id}'),
+              onPressed: () => Navigator.pop(pickerContext, expense.id),
+              child: Text(
+                '${expense.title} - ${expense.amount.toStringAsFixed(2)}',
+              ),
+            ),
+        ],
       ),
     );
   }

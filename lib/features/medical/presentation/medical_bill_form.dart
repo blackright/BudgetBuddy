@@ -106,42 +106,66 @@ class _RouteMessage extends StatelessWidget {
 class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
   final _formKey = GlobalKey<FormState>();
   final _amountController = TextEditingController();
-  final _coverageController = TextEditingController();
+  final _patientShareController = TextEditingController();
   final _providerNameController = TextEditingController();
   final _memberNameController = TextEditingController();
   final _reimbursementController = TextEditingController();
 
   int? _selectedProviderId;
   int? _selectedFamilyMemberId;
-  List<String> _attachments = [];
+  int? _serviceTypeId;
+
+  /// FR-041: the only two methods. Changes what the bill costs the budget.
+  MedicalPaymentMethod _paymentMethod = MedicalPaymentMethod.selfPaid;
+
+  /// The bill document. Optional either way (FR-047).
+  String? _billPhotoPath;
+
+  /// The insurer's reply. Self-paid bills only (FR-047, D2).
+  String? _insurerReplyPath;
+
   DateTime _serviceDate = DateTime.now();
-  bool _paidToProvider = false;
+
+  /// FR-055: the bill belongs to its service month unless the user overrides it.
+  String? _monthOverride;
+
+  /// FR-053: `planned` keeps a bill out of payments entirely.
+  MedicalBillState _state = MedicalBillState.waiting;
+
   bool _saving = false;
 
   bool get _isEditing => widget.existingBill != null;
+
+  /// Only a self-paid bill can be reimbursed (R-1).
+  bool get _showReimbursementField =>
+      _paymentMethod == MedicalPaymentMethod.selfPaid &&
+      (_isEditing || _state == MedicalBillState.finished);
 
   @override
   void initState() {
     super.initState();
     final bill = widget.existingBill;
     if (bill == null) {
-      _coverageController.text = '80';
+      _patientShareController.text = '20';
       return;
     }
     _amountController.text = bill.billedAmount.toStringAsFixed(2);
-    _coverageController.text = bill.insuranceCoveragePercent.toStringAsFixed(0);
+    _patientShareController.text = bill.patientSharePercent.toStringAsFixed(0);
     _selectedProviderId = bill.providerId;
     _selectedFamilyMemberId = bill.familyMemberId;
-    _attachments = List<String>.from(bill.attachmentPaths);
+    _serviceTypeId = bill.serviceTypeId;
+    _paymentMethod = bill.paymentMethod;
+    _billPhotoPath = bill.billPhotoPath;
+    _insurerReplyPath = bill.insurerReplyPath;
     _serviceDate = bill.serviceDate ?? DateTime.now();
-    _paidToProvider = widget.initialPaidToProvider;
+    _state = bill.state;
     _reimbursementController.text = bill.reimbursedAmount.toStringAsFixed(2);
   }
 
   @override
   void dispose() {
     _amountController.dispose();
-    _coverageController.dispose();
+    _patientShareController.dispose();
     _providerNameController.dispose();
     _memberNameController.dispose();
     _reimbursementController.dispose();
@@ -149,7 +173,7 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
   }
 
   // -----------------------------------------------------------------------------
-  // Attachments (T012)
+  // Documents (FR-047)
   // -----------------------------------------------------------------------------
 
   Future<void> _pickImage(ImageSource source) async {
@@ -161,22 +185,38 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
     );
     final path = file?.path;
     if (path == null || !mounted) return;
-    setState(() {
-      if (!_attachments.contains(path)) _attachments.add(path);
-    });
+    setState(() => _billPhotoPath = path);
   }
 
-  /// Picks any document the insurer sent over, e.g. an EOB PDF.
-  Future<void> _pickDocument() async {
+  /// Picks the insurer's reply document, e.g. an EOB PDF.
+  Future<void> _pickInsurerReply() async {
+    // D2: an insurer reply only makes sense on a bill the user paid in full.
+    if (_paymentMethod == MedicalPaymentMethod.insurerPaid) {
+      _toast(
+        'An insurer reply only applies to a self-paid bill. An insurer-paid '
+        'bill is settled directly with the provider.',
+      );
+      return;
+    }
     final file = await FilePicker.pickFile(
       type: FileType.custom,
       allowedExtensions: const ['pdf', 'jpg', 'jpeg', 'png', 'heic'],
     );
     final path = file?.path;
     if (path == null || !mounted) return;
-    setState(() {
-      if (!_attachments.contains(path)) _attachments.add(path);
-    });
+    setState(() => _insurerReplyPath = path);
+  }
+
+  Future<void> _pickMonthOverride() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _serviceDate,
+      firstDate: DateTime(DateTime.now().year - 5),
+      lastDate: DateTime(DateTime.now().year + 1),
+      helpText: 'Which month should this bill land in?',
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _monthOverride = DateFormat('yyyy-MM').format(picked));
   }
 
   // -----------------------------------------------------------------------------
@@ -185,16 +225,26 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
 
   double get _amount => double.tryParse(_amountController.text.trim()) ?? 0.0;
 
-  double get _coveragePercent =>
-      double.tryParse(_coverageController.text.trim()) ?? 0.0;
+  /// FR-048: the share the *user* pays, not the insurer's coverage.
+  double get _patientSharePercent =>
+      double.tryParse(_patientShareController.text.trim()) ?? 0.0;
 
-  /// Live preview of the insurance math while the user types (T013).
-  ({double covered, double outOfPocket}) get _estimate {
-    final covered = _amount * (_coveragePercent / 100);
-    return (
-      covered: covered,
-      outOfPocket: (_amount - covered).clamp(0.0, double.infinity),
-    );
+  /// Live preview of the split while the user types.
+  ({double patientShare, double insurerPaid}) get _estimate {
+    final patient = _amount * (_patientSharePercent / 100);
+    return (patientShare: patient, insurerPaid: _amount - patient);
+  }
+
+  /// What this bill will take from the budget, straight from the same rule the
+  /// repository applies (R07). Shown so the consequence of method and state is
+  /// visible before saving.
+  double get _projectedImpact {
+    final probe = MedicalBill()
+      ..billedAmount = _amount
+      ..patientSharePercent = _patientSharePercent
+      ..paymentMethod = _paymentMethod
+      ..state = _state;
+    return probe.fundsImpact;
   }
 
   // -----------------------------------------------------------------------------
@@ -247,21 +297,34 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
       final bill = widget.existingBill ?? MedicalBill();
       bill
         ..billedAmount = _amount
-        ..insuranceCoveragePercent = _coveragePercent
+        ..patientSharePercent = _patientSharePercent
+        ..paymentMethod = _paymentMethod
+        ..serviceTypeId = _serviceTypeId
         ..providerId = providerId
         ..familyMemberId = memberId
-        ..attachmentPaths = List<String>.from(_attachments)
+        ..billPhotoPath = _billPhotoPath
+        ..insurerReplyPath = _insurerReplyPath
         ..serviceDate = _serviceDate
-        ..profileId = profileId;
+        ..profileId = profileId
+        ..state = _state;
+
+      // FR-055: an explicit month override wins over the service month.
+      final override = _monthOverride?.trim();
+      if (override != null && override.isNotEmpty) {
+        bill.yearMonth = override;
+      }
 
       final saved = await repo.saveBill(
         bill,
         billContext,
-        status: _paidToProvider ? ExpenseStatus.paid : ExpenseStatus.planned,
+        status: _state == MedicalBillState.planned
+            ? ExpenseStatus.planned
+            : ExpenseStatus.paid,
       );
 
-      // T021: editing an already-reimbursed bill can correct the payout.
-      if (saved.claimStatus == ClaimStatus.reimbursed) {
+      // FR-034: editing a reimbursed bill corrects the payout rather than
+      // stacking a second one.
+      if (saved.reimbursedAmount > 0) {
         final amount = double.tryParse(_reimbursementController.text.trim());
         if (amount != null && amount > 0 && amount != saved.reimbursedAmount) {
           await repo.logReimbursement(saved, amount: amount);
@@ -308,13 +371,15 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
     setState(() => _serviceDate = picked);
   }
 
-  void _prefillCoverage(InsuranceProfile? profile) {
+  /// Adopts the profile's default patient share once it resolves.
+  void _prefillPatientShare(InsuranceProfile? profile) {
     if (_isEditing || profile == null) return;
-    final percent = profile.defaultCoveragePercent;
+    final percent = profile.defaultPatientPercent;
     if (percent <= 0) return;
     final next = percent.toStringAsFixed(0);
-    if (_coverageController.text != next) {
-      _coverageController.text = next;
+    if (_patientShareController.text != next) {
+      _patientShareController.text = next;
+      setState(() {});
     }
   }
 
@@ -324,17 +389,17 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
 
   @override
   Widget build(BuildContext context) {
-    // Adopt the profile's default coverage once it resolves.
-    ref.listen<AsyncValue<InsuranceProfile?>>(
-        insuranceProfileProvider, (_, next) => _prefillCoverage(next.value));
+    // Adopt the profile's default patient share once it resolves.
+    ref.listen<AsyncValue<InsuranceProfile?>>(insuranceProfileProvider,
+        (_, next) => _prefillPatientShare(next.value));
 
     final background = MedicalTheme.background(context);
     final symbol = ref.watch(medicalCurrencySymbolProvider);
     final providers = ref.watch(medicalProvidersProvider).value ?? const [];
     final members = ref.watch(familyMembersProvider).value ?? const [];
+    final serviceTypes = ref.watch(selectableServiceTypesProvider);
     final estimate = _estimate;
-    final showReimbursement =
-        widget.existingBill?.claimStatus == ClaimStatus.reimbursed;
+    final showReimbursement = _showReimbursementField;
 
     return Scaffold(
       backgroundColor: background,
@@ -401,23 +466,73 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
               onChanged: (_) => setState(() {}),
             ),
             const SizedBox(height: 16),
-            TextFormField(
-              controller: _coverageController,
+            // FR-041: the single most consequential choice on this form.
+            DropdownButtonFormField<MedicalPaymentMethod>(
+              key: const Key('paymentMethodField'),
+              initialValue: _paymentMethod,
               decoration: const InputDecoration(
-                labelText: 'Insurance coverage (%)',
+                labelText: 'How was this paid?',
+                border: OutlineInputBorder(),
+              ),
+              items: [
+                for (final method in MedicalPaymentMethod.values)
+                  DropdownMenuItem(
+                    value: method,
+                    child: Text(
+                      method == MedicalPaymentMethod.insurerPaid
+                          ? 'Insurer paid (you pay your share only)'
+                          : 'Self-paid (you pay in full, then claim back)',
+                    ),
+                  ),
+              ],
+              onChanged: (value) {
+                if (value == null) return;
+                setState(() {
+                  _paymentMethod = value;
+                  // D2: an insurer reply cannot survive the switch to
+                  // insurer-paid, so drop it rather than save an invalid pair.
+                  if (value == MedicalPaymentMethod.insurerPaid) {
+                    _insurerReplyPath = null;
+                  }
+                });
+              },
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              key: const Key('patientShareField'),
+              controller: _patientShareController,
+              decoration: const InputDecoration(
+                labelText: 'Your share (%)',
+                helperText: 'The percentage you pay, not the insurer\'s.',
                 border: OutlineInputBorder(),
               ),
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
               validator: (value) {
                 final parsed = double.tryParse(value?.trim() ?? '');
-                if (parsed == null) return 'Enter a coverage percentage';
+                if (parsed == null) return 'Enter your share';
                 if (parsed < 0 || parsed > 100) {
                   return 'Must be between 0 and 100';
                 }
                 return null;
               },
               onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<int?>(
+              key: const Key('serviceTypeField'),
+              initialValue: _serviceTypeId,
+              decoration: const InputDecoration(
+                labelText: 'Service type',
+                border: OutlineInputBorder(),
+              ),
+              items: [
+                const DropdownMenuItem<int?>(value: null, child: Text('None')),
+                for (final type in serviceTypes)
+                  DropdownMenuItem<int?>(
+                      value: type.id, child: Text(type.name)),
+              ],
+              onChanged: (value) => setState(() => _serviceTypeId = value),
             ),
             const SizedBox(height: 8),
             ListTile(
@@ -428,22 +543,48 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
               trailing: const Icon(Icons.chevron_right),
               onTap: _pickServiceDate,
             ),
-            SwitchListTile(
+            ListTile(
+              key: const Key('monthOverrideTile'),
               contentPadding: EdgeInsets.zero,
-              value: _paidToProvider,
-              title: const Text('Already paid to provider'),
+              leading: const Icon(Icons.calendar_month_outlined),
+              title: const Text('Belongs to month'),
               subtitle: Text(
-                _paidToProvider
-                    ? 'Your available budget drops by the full billed amount.'
-                    : 'Stays planned — your budget is not affected yet.',
+                (_monthOverride ?? '').isNotEmpty
+                    ? _monthOverride!
+                    : DateFormat.yMMM().format(_serviceDate),
               ),
-              onChanged: (value) => setState(() => _paidToProvider = value),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: _pickMonthOverride,
+            ),
+            const SizedBox(height: 8),
+            // FR-052: the state drives both the insurance meaning and the cost.
+            SegmentedButton<MedicalBillState>(
+              key: const Key('billStateField'),
+              segments: const [
+                ButtonSegment(
+                  value: MedicalBillState.planned,
+                  label: Text('Planned'),
+                ),
+                ButtonSegment(
+                  value: MedicalBillState.waiting,
+                  label: Text('Waiting'),
+                ),
+                ButtonSegment(
+                  value: MedicalBillState.paid,
+                  label: Text('Paid'),
+                ),
+              ],
+              selected: {_state},
+              onSelectionChanged: (selection) =>
+                  setState(() => _state = selection.first),
             ),
             const SizedBox(height: 8),
             _EstimateCard(
               currencySymbol: symbol,
-              covered: estimate.covered,
-              outOfPocket: estimate.outOfPocket,
+              patientShare: estimate.patientShare,
+              insurerPaid: estimate.insurerPaid,
+              projectedImpact: _projectedImpact,
+              paymentMethod: _paymentMethod,
             ),
             if (showReimbursement) ...[
               const SizedBox(height: 16),
@@ -453,7 +594,7 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
                   labelText: 'Reimbursed amount',
                   border: OutlineInputBorder(),
                   helperText:
-                      'Already reimbursed — edit to correct the payout.',
+                      'Already reimbursed - edit to correct the payout.',
                 ),
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
@@ -465,13 +606,26 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
               ),
             ],
             const SizedBox(height: 24),
-            _AttachmentSection(
-              attachments: _attachments,
+            // FR-047: the two documents are separate, and the insurer reply is
+            // self-paid only.
+            _DocumentTile(
+              documentKey: const Key('billPhotoTile'),
+              label: 'Bill photo',
+              path: _billPhotoPath,
+              helper: 'Optional. Keep it for your own records.',
               onPickCamera: () => _pickImage(ImageSource.camera),
               onPickGallery: () => _pickImage(ImageSource.gallery),
-              onPickDocument: _pickDocument,
-              onRemove: (path) => setState(() => _attachments.remove(path)),
+              onClear: () => setState(() => _billPhotoPath = null),
             ),
+            if (_paymentMethod == MedicalPaymentMethod.selfPaid)
+              _DocumentTile(
+                documentKey: const Key('insurerReplyTile'),
+                label: 'Insurer reply',
+                path: _insurerReplyPath,
+                helper: 'Optional. Needed to claim a self-paid bill back.',
+                onPickDocument: _pickInsurerReply,
+                onClear: () => setState(() => _insurerReplyPath = null),
+              ),
             const SizedBox(height: 32),
             ElevatedButton(
               onPressed: _saving ? null : _saveBill,
@@ -629,22 +783,35 @@ class _MemberSelectorState extends State<_MemberSelector> {
 }
 
 // -----------------------------------------------------------------------------
-// Insurance estimate + attachments
+// Patient-share estimate + documents
 // -----------------------------------------------------------------------------
 
+/// Live preview of who pays what, and - most importantly - what this bill will
+/// actually take out of the budget once saved.
+///
+/// The impact figure comes from [MedicalBill.fundsImpact] rather than local
+/// arithmetic, so the preview cannot drift from what gets stored (R07).
 class _EstimateCard extends StatelessWidget {
   const _EstimateCard({
     required this.currencySymbol,
-    required this.covered,
-    required this.outOfPocket,
+    required this.patientShare,
+    required this.insurerPaid,
+    required this.projectedImpact,
+    required this.paymentMethod,
   });
 
   final String currencySymbol;
-  final double covered;
-  final double outOfPocket;
+  final double patientShare;
+  final double insurerPaid;
+
+  /// What this bill removes from available funds, per the money-impact table.
+  final double projectedImpact;
+
+  final MedicalPaymentMethod paymentMethod;
 
   @override
   Widget build(BuildContext context) {
+    final insurerPaidBill = paymentMethod == MedicalPaymentMethod.insurerPaid;
     return Card(
       color: MedicalTheme.surface(context),
       child: Padding(
@@ -652,40 +819,35 @@ class _EstimateCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Insurance estimate',
+            Text('Who pays what',
                 style: Theme.of(context).textTheme.titleSmall),
             const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Insurance covers'),
-                Text(
-                  MedicalTheme.money(currencySymbol, covered),
-                  style: const TextStyle(
-                    color: Colors.green,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
+            _AmountRow(
+              label: 'You pay',
+              value: MedicalTheme.money(currencySymbol, patientShare),
+              color: Colors.orange,
             ),
-            const SizedBox(height: 4),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Your estimate'),
-                Text(
-                  MedicalTheme.money(currencySymbol, outOfPocket),
-                  style: const TextStyle(
-                    color: Colors.orange,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
+            _AmountRow(
+              label: 'Insurer pays',
+              value: MedicalTheme.money(currencySymbol, insurerPaid),
+              color: Colors.green,
+            ),
+            const Divider(height: 24),
+            _AmountRow(
+              label: insurerPaidBill
+                  ? 'Leaves your budget (your share)'
+                  : 'Leaves your budget (full charge)',
+              value: MedicalTheme.money(currencySymbol, projectedImpact),
+              color: Colors.red,
+              bold: true,
             ),
             const SizedBox(height: 8),
             Text(
-              'Deductibles reset yearly, so this counts toward your '
-              '${DateTime.now().year} deductible.',
+              insurerPaidBill
+                  ? 'The insurer is billed directly, so only your share affects '
+                      'this month. There is nothing to claim back.'
+                  : 'You paid in full, so the whole charge leaves your budget '
+                      'until a reimbursement is recorded.',
               style: TextStyle(
                 fontSize: 12,
                 color: MedicalTheme.subtleText(context),
@@ -698,101 +860,99 @@ class _EstimateCard extends StatelessWidget {
   }
 }
 
-class _AttachmentSection extends StatelessWidget {
-  const _AttachmentSection({
-    required this.attachments,
-    required this.onPickCamera,
-    required this.onPickGallery,
-    required this.onPickDocument,
-    required this.onRemove,
+class _AmountRow extends StatelessWidget {
+  const _AmountRow({
+    required this.label,
+    required this.value,
+    required this.color,
+    this.bold = false,
   });
 
-  final List<String> attachments;
-  final VoidCallback onPickCamera;
-  final VoidCallback onPickGallery;
-  final VoidCallback onPickDocument;
-  final ValueChanged<String> onRemove;
-
-  static const Map<String, IconData> _icons = {
-    'pdf': Icons.picture_as_pdf_outlined,
-    'heic': Icons.image_outlined,
-    'jpg': Icons.image_outlined,
-    'jpeg': Icons.image_outlined,
-    'png': Icons.image_outlined,
-  };
+  final String label;
+  final String value;
+  final Color color;
+  final bool bold;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      color: MedicalTheme.surface(context),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Receipts & EOBs',
-              style: Theme.of(context).textTheme.titleSmall,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Attach photos or PDFs so you have them at claim time.',
-              style: TextStyle(
-                fontSize: 12,
-                color: MedicalTheme.subtleText(context),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                OutlinedButton.icon(
-                  onPressed: onPickCamera,
-                  icon: const Icon(Icons.photo_camera_outlined, size: 18),
-                  label: const Text('Camera'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: onPickGallery,
-                  icon: const Icon(Icons.photo_outlined, size: 18),
-                  label: const Text('Gallery'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: onPickDocument,
-                  icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
-                  label: const Text('File'),
-                ),
-              ],
-            ),
-            if (attachments.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              for (final path in attachments)
-                ListTile(
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  leading: Icon(_iconFor(path)),
-                  title: Text(
-                    path.split(RegExp(r'[/\\]')).last,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.close),
-                    tooltip: 'Remove attachment',
-                    onPressed: () => onRemove(path),
-                  ),
-                ),
-            ],
-          ],
-        ),
+    final base = Theme.of(context).textTheme.bodyMedium;
+    final style = base?.copyWith(
+      fontWeight: bold ? FontWeight.bold : FontWeight.w600,
+      color: color,
+    );
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: base),
+          Text(value, style: style),
+        ],
       ),
     );
   }
+}
 
-  static IconData _iconFor(String path) {
-    final lower = path.toLowerCase();
-    for (final entry in _icons.entries) {
-      if (lower.endsWith('.${entry.key}')) return entry.value;
-    }
-    return Icons.insert_drive_file_outlined;
+/// One optional document with its own pickers (FR-047).
+///
+/// Split from the old single attachment list because the two documents carry
+/// different rules: the bill photo is free for either payment method, the
+/// insurer reply belongs only on a self-paid bill.
+class _DocumentTile extends StatelessWidget {
+  const _DocumentTile({
+    required this.documentKey,
+    required this.label,
+    required this.path,
+    required this.helper,
+    required this.onClear,
+    this.onPickCamera,
+    this.onPickGallery,
+    this.onPickDocument,
+  });
+
+  final Key documentKey;
+  final String label;
+  final String? path;
+  final String helper;
+  final VoidCallback onClear;
+  final VoidCallback? onPickCamera;
+  final VoidCallback? onPickGallery;
+  final VoidCallback? onPickDocument;
+
+  @override
+  Widget build(BuildContext context) {
+    final attached = path != null && path!.isNotEmpty;
+    return Card(
+      key: documentKey,
+      color: MedicalTheme.surface(context),
+      child: ListTile(
+        contentPadding: EdgeInsets.zero,
+        leading: Icon(
+          attached ? Icons.description : Icons.description_outlined,
+        ),
+        title: Text(label),
+        subtitle: Text(
+          attached ? path! : helper,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+        trailing: attached
+            ? IconButton(
+                icon: const Icon(Icons.close),
+                tooltip: 'Remove',
+                onPressed: onClear,
+              )
+            : const Icon(Icons.add_photo_alternate_outlined),
+        onTap: attached
+            ? null
+            : () {
+                if (onPickDocument != null) {
+                  onPickDocument!();
+                } else if (onPickCamera != null) {
+                  onPickCamera!();
+                }
+              },
+      ),
+    );
   }
 }

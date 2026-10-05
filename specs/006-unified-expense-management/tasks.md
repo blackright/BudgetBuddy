@@ -75,4 +75,4 @@
 ## Phase 7: Polish & Cross-Cutting Concerns
 **Goal**: Final cleanups, tests, and documentation.
 
-- [ ] T020 Run quickstart.md validation
+- [x] T020 Run quickstart.md validation

@@ -3,6 +3,7 @@ import 'package:isar/isar.dart';
 import '../../../core/models/expense.dart';
 import '../../../core/models/insurance_profile.dart';
 import '../../../core/models/medical_bill.dart';
+import '../../../core/models/medical_service_type.dart';
 import '../../engine/expense_delta.dart';
 import '../../expenses/models/reimbursement.dart';
 
@@ -23,6 +24,37 @@ class MedicalBillContext {
   /// engine's `trueAvailable` picks the bill up in the right month.
   final String yearMonth;
   final String primaryCurrency;
+}
+
+/// Thrown when a state change would produce an impossible bill.
+class InvalidBillTransitionException implements Exception {
+  const InvalidBillTransitionException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
+/// Thrown when a document is attached to a bill that cannot have one (FR-047).
+class InvalidDocumentException implements Exception {
+  const InvalidDocumentException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
+/// Thrown when a service type name collides with an existing one (FR-040).
+class DuplicateServiceTypeException implements Exception {
+  const DuplicateServiceTypeException(this.name);
+
+  final String name;
+
+  @override
+  String toString() =>
+      'A service type named "$name" already exists. Choose a different name.';
 }
 
 /// Thrown when deleting a reimbursed bill without an explicit override.
@@ -60,15 +92,15 @@ class MedicalRepository {
   // Reactive reads
   // ---------------------------------------------------------------------------
 
-  /// Bills belonging to [profileId] whose service date falls in [year].
-  Stream<List<MedicalBill>> watchMedicalBills(int profileId, int year) {
-    final (start, end) = _yearBounds(year);
+  /// Bills belonging to [profileId] whose owning month is [yearMonth].
+  ///
+  /// Month-scoped rather than year-scoped because a bill's money impact lands in
+  /// exactly one month's totals (FR-055, FR-056).
+  Stream<List<MedicalBill>> watchMedicalBills(int profileId, String yearMonth) {
     return _isar.medicalBills
         .filter()
         .profileIdEqualTo(profileId)
-        .serviceDateIsNotNull()
-        .and()
-        .serviceDateBetween(start, end)
+        .yearMonthEqualTo(yearMonth)
         .sortByServiceDateDesc()
         .watch(fireImmediately: true);
   }
@@ -77,10 +109,10 @@ class MedicalRepository {
     return _isar.medicalBills.watchObject(id, fireImmediately: true);
   }
 
-  Stream<InsuranceProfile?> watchInsuranceProfile(int profileId, int year) {
+  Stream<InsuranceProfile?> watchInsuranceProfile(int profileId) {
     return _isar.insuranceProfiles
         .filter()
-        .yearEqualTo(year)
+        .profileIdEqualTo(profileId)
         .watch(fireImmediately: true)
         .map((rows) => _pickProfile(rows, profileId));
   }
@@ -117,21 +149,23 @@ class MedicalRepository {
 
   Future<MedicalBill?> getMedicalBill(int id) => _isar.medicalBills.get(id);
 
-  Future<List<MedicalBill>> getMedicalBillsForYear(int profileId, int year) {
-    final (start, end) = _yearBounds(year);
+  Future<List<MedicalBill>> getMedicalBillsForMonth(
+    int profileId,
+    String yearMonth,
+  ) {
     return _isar.medicalBills
         .filter()
         .profileIdEqualTo(profileId)
-        .serviceDateIsNotNull()
-        .and()
-        .serviceDateBetween(start, end)
+        .yearMonthEqualTo(yearMonth)
         .sortByServiceDateDesc()
         .findAll();
   }
 
-  Future<InsuranceProfile?> getInsuranceProfile(int profileId, int year) async {
-    final rows =
-        await _isar.insuranceProfiles.filter().yearEqualTo(year).findAll();
+  Future<InsuranceProfile?> getInsuranceProfile(int profileId) async {
+    final rows = await _isar.insuranceProfiles
+        .filter()
+        .profileIdEqualTo(profileId)
+        .findAll();
     return _pickProfile(rows, profileId);
   }
 
@@ -182,8 +216,7 @@ class MedicalRepository {
     bill
       ..serviceDate ??= DateTime.now()
       ..profileId ??= context.profileId
-      ..insuranceCoveragePercent =
-          bill.insuranceCoveragePercent.clamp(0.0, 100.0);
+      ..patientSharePercent = bill.patientSharePercent.clamp(0.0, 100.0);
 
     await _isar.writeTxn(() async {
       final expense = await _syncLinkedExpense(bill, context, status: status);
@@ -224,39 +257,109 @@ class MedicalRepository {
     );
   }
 
-  /// Moves the claim through its lifecycle (T019).
+  /// Validation gate for a state change (T2, FR-044).
   ///
-  /// - [ClaimStatus.reimbursed] delegates to [logReimbursement]; [reimbursedAmount]
-  ///   is required.
-  /// - Moving *away* from `reimbursed` (including to `denied`) deletes the
-  ///   injected reimbursement so the budget no longer carries a payout the user
-  ///   no longer has (edge case: denied claims are not reimbursed).
-  Future<void> updateClaimStatus(
-    MedicalBill bill, {
-    required ClaimStatus status,
+  /// `finished` means "fully resolved, money accounted for". An insurer-paid
+  /// bill has no reimbursement to account for, so the state cannot be reached.
+  static void _validateTransition(MedicalBill bill, MedicalBillState next) {
+    if (next == MedicalBillState.finished &&
+        bill.paymentMethod == MedicalPaymentMethod.insurerPaid) {
+      throw const InvalidBillTransitionException(
+        'An insurer-paid bill has no reimbursement to finish. Mark it paid or '
+        'rejected instead.',
+      );
+    }
+  }
+
+  /// Moves a bill to [state], keeping the linked expense and any reimbursement
+  /// consistent (FR-054, M5).
+  ///
+  /// Entering or leaving `rejected` recomputes the expense from the method and
+  /// percentage rather than leaving a stale amount, and any reimbursement is
+  /// deleted when the bill is rejected or when it moves away from `finished`
+  /// (T3, T4). Money that did not return must not appear as returned.
+  Future<void> setBillState(
+    MedicalBill bill,
+    MedicalBillState state, {
+    MedicalBillContext? context,
     double? reimbursedAmount,
   }) async {
-    if (status == ClaimStatus.reimbursed) {
+    _validateTransition(bill, state);
+
+    if (state == MedicalBillState.finished && bill.canBeReimbursed) {
+      // T1 — a self-paid bill cannot be finished without the payout recorded, so
+      // the amount is required rather than silently defaulted to zero.
       if (reimbursedAmount == null) {
         throw ArgumentError.notNull('reimbursedAmount');
       }
       await logReimbursement(bill, amount: reimbursedAmount);
+      // `logReimbursement` sets the state itself.
       return;
     }
 
     await _isar.writeTxn(() async {
-      await _clearReimbursementFor(bill);
-      bill
-        ..claimStatus = status
-        ..reimbursedAmount = 0.0;
+      // T4 — a bill that is no longer finished, or is rejected, must not keep a
+      // reimbursement.
+      final losesReimbursement = state == MedicalBillState.rejected ||
+          bill.state == MedicalBillState.finished;
+      if (losesReimbursement) {
+        await _clearReimbursementFor(bill);
+        bill.reimbursedAmount = 0.0;
+      }
+
+      bill.state = state;
       await _isar.medicalBills.put(bill);
+
+      final syncContext = context ?? await _contextForExistingBill(bill);
+      if (syncContext != null) {
+        await _syncLinkedExpense(bill, syncContext);
+      }
+    });
+  }
+
+  /// Switches a bill between insurer-paid and self-paid (FR-041).
+  ///
+  /// The method is the biggest lever on the budget, so the linked expense is
+  /// re-synced through the same money-impact rule as any other change. Moving to
+  /// insurer-paid clears the insurer reply (D2) and any reimbursement, because
+  /// neither is meaningful when the insurer settles directly.
+  Future<void> setPaymentMethod(
+    MedicalBill bill,
+    MedicalPaymentMethod method, {
+    MedicalBillContext? context,
+  }) async {
+    if (bill.paymentMethod == method) return;
+
+    await _isar.writeTxn(() async {
+      final becomesInsurerPaid = method == MedicalPaymentMethod.insurerPaid;
+      if (becomesInsurerPaid) {
+        await _clearReimbursementFor(bill);
+        bill
+          ..reimbursedAmount = 0.0
+          ..insurerReplyPath = null;
+        // R-1 — an insurer-paid bill is settled with the provider, so it can
+        // never be `finished`.
+        if (bill.state == MedicalBillState.finished) {
+          bill.state = MedicalBillState.paid;
+        }
+      }
+
+      bill.paymentMethod = method;
+      await _isar.medicalBills.put(bill);
+
+      final syncContext = context ?? await _contextForExistingBill(bill);
+      if (syncContext != null) {
+        await _syncLinkedExpense(bill, syncContext);
+      }
     });
   }
 
   /// Records the insurer payout and injects it into the budget (FR-005).
   ///
-  /// Idempotent: re-logging replaces the previous amount instead of stacking a
-  /// second reimbursement against the same expense.
+  /// All-or-nothing and idempotent: re-logging replaces the previous amount
+  /// instead of stacking a second reimbursement against the same expense (R-2,
+  /// R-3, R-4). The money is attributed to the bill's owning month, not the date
+  /// it was recorded (R-5).
   Future<void> logReimbursement(
     MedicalBill bill, {
     required double amount,
@@ -269,6 +372,17 @@ class MedicalRepository {
         'must be greater than zero',
       );
     }
+    // FR-044 / R-1: an insurer-paid bill is settled with the provider, so there
+    // is no payout to record. Refuse before touching the budget rather than
+    // silently injecting money that was never coming.
+    if (!bill.canBeReimbursed) {
+      throw ArgumentError.value(
+        amount,
+        'amount',
+        'only a self-paid bill can be reimbursed; bill ${bill.id} is '
+            '${bill.paymentMethod.label}',
+      );
+    }
     final expenseId = bill.linkedExpenseId;
     if (expenseId == null) {
       throw StateError(
@@ -276,8 +390,8 @@ class MedicalRepository {
         'applied to the budget.',
       );
     }
-    final expenseExists = await _isar.expenses.get(expenseId);
-    if (expenseExists == null) {
+    final expense = await _isar.expenses.get(expenseId);
+    if (expense == null) {
       throw StateError('Linked expense $expenseId no longer exists.');
     }
 
@@ -292,6 +406,9 @@ class MedicalRepository {
           Reimbursement()
             ..expenseId = expenseId
             ..amount = amount
+            // R-5 — credited to the bill's month, never the recording date.
+            ..originYearMonth =
+                bill.yearMonth.isNotEmpty ? bill.yearMonth : expense.yearMonth
             ..date = date ?? DateTime.now(),
         );
       } else {
@@ -299,6 +416,8 @@ class MedicalRepository {
         existing.sort((a, b) => a.id.compareTo(b.id));
         existing.first
           ..amount = amount
+          ..originYearMonth =
+              bill.yearMonth.isNotEmpty ? bill.yearMonth : expense.yearMonth
           ..date = date ?? existing.first.date;
         await _isar.reimbursements.put(existing.first);
         final extras = existing.skip(1).map((r) => r.id).toList();
@@ -309,7 +428,7 @@ class MedicalRepository {
 
       bill
         ..reimbursedAmount = amount
-        ..claimStatus = ClaimStatus.reimbursed;
+        ..state = MedicalBillState.finished;
       await _isar.medicalBills.put(bill);
     });
   }
@@ -324,14 +443,15 @@ class MedicalRepository {
 
   /// Deletes the bill, its linked expense and any reimbursement.
   ///
-  /// Throws [ReimbursedBillDeletionException] when the bill has an injected
-  /// reimbursement unless [force] is set, because that rewrites past budget
-  /// states and the user has to be warned first.
+  /// T5 — a bill carrying a reimbursement MUST NOT have that reimbursement
+  /// deleted silently, because it removes money from a closed month's history.
+  /// Throws [ReimbursedBillDeletionException] unless [force] is set, so the
+  /// caller has to warn the user first.
   Future<void> deleteBill(int billId, {bool force = false}) async {
     final bill = await _isar.medicalBills.get(billId);
     if (bill == null) return;
 
-    if (!force && bill.claimStatus == ClaimStatus.reimbursed) {
+    if (!force && bill.reimbursedAmount > 0) {
       throw ReimbursedBillDeletionException(billId, bill.reimbursedAmount);
     }
 
@@ -342,6 +462,106 @@ class MedicalRepository {
         await _isar.expenses.delete(expenseId);
       }
       await _isar.medicalBills.delete(billId);
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Service types (FR-039, FR-040)
+  // ---------------------------------------------------------------------------
+
+  /// Service types available for new bills: not archived, in display order.
+  Stream<List<MedicalServiceType>> watchServiceTypes(int profileId) {
+    return _isar.medicalServiceTypes
+        .filter()
+        .profileIdEqualTo(profileId)
+        .sortBySortOrder()
+        .thenByName()
+        .watch(fireImmediately: true);
+  }
+
+  /// The types still offered in the picker (FR-040).
+  ///
+  /// Archived types stay in the database so historical bills keep their label,
+  /// but they must not clutter the list of new choices.
+  Future<List<MedicalServiceType>> getServiceTypes(int profileId) {
+    return _isar.medicalServiceTypes
+        .filter()
+        .profileIdEqualTo(profileId)
+        .archivedEqualTo(false)
+        .sortBySortOrder()
+        .thenByName()
+        .findAll();
+  }
+
+  /// Every type including archived ones, for rendering historical bills (FR-040).
+  Future<List<MedicalServiceType>> getAllServiceTypes(int profileId) {
+    return _isar.medicalServiceTypes
+        .filter()
+        .profileIdEqualTo(profileId)
+        .sortBySortOrder()
+        .thenByName()
+        .findAll();
+  }
+
+  /// Creates or renames a service type, rejecting a name that already exists for
+  /// the same profile regardless of case (FR-040).
+  Future<MedicalServiceType> saveServiceType({
+    int? id,
+    required int profileId,
+    required String name,
+  }) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) {
+      throw ArgumentError.value(name, 'name', 'cannot be empty');
+    }
+
+    final siblings = await _isar.medicalServiceTypes
+        .filter()
+        .profileIdEqualTo(profileId)
+        .findAll();
+
+    for (final type in siblings) {
+      if (type.id != id &&
+          type.name.trim().toLowerCase() == trimmed.toLowerCase()) {
+        throw DuplicateServiceTypeException(trimmed);
+      }
+    }
+
+    final target = id == null
+        ? MedicalServiceType()
+        : siblings.firstWhere(
+            (t) => t.id == id,
+            orElse: () => MedicalServiceType(),
+          );
+
+    if (id == null) {
+      target.sortOrder = siblings.length;
+    }
+    target
+      ..id = id ?? target.id
+      ..profileId = profileId
+      ..name = trimmed
+      // Renaming a seeded type keeps its seeded status; only an unseeded type
+      // loses it.
+      ..archived = false;
+
+    await _isar.writeTxn(() async {
+      await isarPutServiceType(target);
+    });
+    return target;
+  }
+
+  Future<void> isarPutServiceType(MedicalServiceType type) =>
+      _isar.medicalServiceTypes.put(type);
+
+  /// Archives a type instead of deleting it, so historical bills keep a readable
+  /// reference (FR-040, R10).
+  Future<void> archiveServiceType(int id) async {
+    final type = await _isar.medicalServiceTypes.get(id);
+    if (type == null) return;
+    type.archived = true;
+    await _isar.writeTxn(() async {
+      await _isar.medicalServiceTypes.put(type);
     });
   }
 
@@ -470,7 +690,8 @@ class MedicalRepository {
   // Internals
   // ---------------------------------------------------------------------------
 
-  /// Prefers an exact profile match; falls back to a profile-less legacy row.
+  /// Pre-loaded so callers cannot fail the common case of a profile-less legacy
+  /// row.
   static InsuranceProfile? _pickProfile(
     List<InsuranceProfile> rows,
     int profileId,
@@ -490,17 +711,50 @@ class MedicalRepository {
         'must be greater than zero',
       );
     }
-    if (bill.insuranceCoveragePercent < 0 ||
-        bill.insuranceCoveragePercent > 100) {
+    if (bill.patientSharePercent < 0 || bill.patientSharePercent > 100) {
       throw ArgumentError.value(
-        bill.insuranceCoveragePercent,
-        'insuranceCoveragePercent',
+        bill.patientSharePercent,
+        'patientSharePercent',
         'must be between 0 and 100',
       );
     }
+    // D2 — there is no reimbursement to claim on an insurer-paid bill, so an
+    // insurer reply document cannot apply to one (FR-047).
+    if (bill.insurerReplyPath != null &&
+        bill.insurerReplyPath!.trim().isNotEmpty &&
+        bill.paymentMethod == MedicalPaymentMethod.insurerPaid) {
+      throw const InvalidDocumentException(
+        'An insurer reply only applies to a self-paid bill. An insurer-paid '
+        'bill is settled directly with the provider.',
+      );
+    }
+    // T2 — mirrored here so a bill can never be constructed in an illegal state.
+    _validateTransition(bill, bill.state);
+  }
+
+  /// Resolves the owning month and mirrors it onto the linked expense, inside the
+  /// caller's transaction (FR-055, O2).
+  ///
+  /// Precedence, highest first:
+  ///  1. a year-month already on the bill (an explicit user override),
+  ///  2. the service date,
+  ///  3. the month of the expense being written.
+  ///
+  /// The bill and its expense are written together, so they can never disagree
+  /// about which month they belong to.
+  void _applyOwningMonth(MedicalBill bill, String expenseYearMonth) {
+    final serviceDate = bill.serviceDate;
+    if (bill.yearMonth.isNotEmpty) return;
+    bill.yearMonth =
+        serviceDate == null ? expenseYearMonth : _yearMonthOf(serviceDate);
   }
 
   /// Creates or refreshes the linked expense inside the caller's transaction.
+  ///
+  /// `Expense.amount` is set from [MedicalBill.fundsImpact], which *is* the
+  /// money-impact table, so the bill and the budget can never disagree about
+  /// what a bill cost (R07). M2 — the reduction is applied here, at entry, not
+  /// deferred to a month-end event.
   Future<Expense> _syncLinkedExpense(
     MedicalBill bill,
     MedicalBillContext context, {
@@ -513,12 +767,18 @@ class MedicalRepository {
         ? null
         : await _isar.expenses.get(bill.linkedExpenseId!);
 
+    // O1 — the service month owns the bill, not the month it happened to be
+    // entered in.
+    final yearMonth =
+        bill.yearMonth.isNotEmpty ? bill.yearMonth : context.yearMonth;
+    _applyOwningMonth(bill, yearMonth);
+
     final expense = stored ??
         Expense(
           profileId: context.profileId,
-          yearMonth: context.yearMonth,
+          yearMonth: bill.yearMonth,
           title: title,
-          amount: bill.billedAmount,
+          amount: bill.fundsImpact,
           currency: context.primaryCurrency,
           categoryId: medicalCategoryId,
           date: bill.serviceDate ?? DateTime.now(),
@@ -527,24 +787,30 @@ class MedicalRepository {
 
     expense
       ..profileId = context.profileId
-      ..yearMonth = context.yearMonth
+      // O2 — mirrored in the same transaction, never independently derived.
+      ..yearMonth = bill.yearMonth
       ..budgetId = context.budgetId
       ..title = title
-      ..amount = bill.billedAmount
+      // R-007 — the expense amount *is* the money impact.
+      ..amount = bill.fundsImpact
       // Medical bills are always tracked in the budget's primary currency, so
       // no conversion applies and the rate stays locked at 1.0.
       ..currency = context.primaryCurrency
       ..exchangeRateToPrimary = 1.0
       ..categoryId = medicalCategoryId
       ..type = ExpenseType.medical
-      ..isReimbursable = true
+      // R-1 — only a self-paid bill can be reimbursed, so only a self-paid bill
+      // offers the user a reimbursement.
+      ..isReimbursable = bill.canBeReimbursed
+      // M4 — a planned bill belongs to the planned pool, never to payments.
+      // Derived from the bill's state rather than inherited from the stored row,
+      // otherwise moving back to `planned` would leave the expense still paid.
       ..status = status ??
-          (stored?.status ??
-              (bill.claimStatus == ClaimStatus.reimbursed
-                  ? ExpenseStatus.paid
-                  : ExpenseStatus.planned))
+          (bill.state == MedicalBillState.planned
+              ? ExpenseStatus.planned
+              : ExpenseStatus.paid)
       ..date = bill.serviceDate ?? DateTime.now()
-      ..notes = '${bill.insuranceCoveragePercent.toStringAsFixed(0)}% covered';
+      ..notes = _notesFor(bill);
 
     if (expense.status == ExpenseStatus.paid) {
       expense.paidAt ??= DateTime.now();
@@ -554,6 +820,29 @@ class MedicalRepository {
 
     await _isar.expenses.put(expense);
     return expense;
+  }
+
+  /// Human-readable provenance shown on the linked expense.
+  static String _notesFor(MedicalBill bill) {
+    if (bill.paymentMethod == MedicalPaymentMethod.selfPaid) {
+      return 'Self-paid';
+    }
+    return '${bill.patientSharePercent.toStringAsFixed(0)}% patient share';
+  }
+
+  /// Rebuilds the context needed to re-sync a bill's expense when only the bill
+  /// is in hand, by reading the month back off its own linked expense.
+  Future<MedicalBillContext?> _contextForExistingBill(MedicalBill bill) async {
+    final expenseId = bill.linkedExpenseId;
+    if (expenseId == null) return null;
+    final expense = await _isar.expenses.get(expenseId);
+    if (expense == null) return null;
+    return MedicalBillContext(
+      profileId: expense.profileId,
+      budgetId: expense.budgetId,
+      yearMonth: expense.yearMonth,
+      primaryCurrency: expense.currency,
+    );
   }
 
   Future<String?> _providerNameFor(int? providerId) async {
@@ -573,7 +862,12 @@ class MedicalRepository {
     if (rows.isEmpty) return;
     await _isar.reimbursements.deleteAll(rows.map((r) => r.id).toList());
   }
-
-  static (DateTime, DateTime) _yearBounds(int year) =>
-      (DateTime(year), DateTime(year + 1));
 }
+
+/// `YYYY-MM` for a date, used for month attribution (FR-055).
+String _yearMonthOf(DateTime date) => '${date.year.toString().padLeft(4, '0')}-'
+    '${date.month.toString().padLeft(2, '0')}';
+
+/// `YYYY-MM` for a date offset by [months] from [from].
+String shiftYearMonth(DateTime from, int months) =>
+    _yearMonthOf(DateTime(from.year, from.month + months));

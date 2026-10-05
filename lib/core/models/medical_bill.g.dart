@@ -17,61 +17,82 @@ const MedicalBillSchema = CollectionSchema(
   name: r'MedicalBill',
   id: -5833106467415866040,
   properties: {
-    r'attachmentPaths': PropertySchema(
+    r'billPhotoPath': PropertySchema(
       id: 0,
-      name: r'attachmentPaths',
-      type: IsarType.stringList,
+      name: r'billPhotoPath',
+      type: IsarType.string,
     ),
     r'billedAmount': PropertySchema(
       id: 1,
       name: r'billedAmount',
       type: IsarType.double,
     ),
-    r'claimStatus': PropertySchema(
-      id: 2,
-      name: r'claimStatus',
-      type: IsarType.byte,
-      enumMap: _MedicalBillclaimStatusEnumValueMap,
-    ),
     r'familyMemberId': PropertySchema(
-      id: 3,
+      id: 2,
       name: r'familyMemberId',
       type: IsarType.long,
     ),
     r'followUpDate': PropertySchema(
-      id: 4,
+      id: 3,
       name: r'followUpDate',
       type: IsarType.dateTime,
     ),
-    r'insuranceCoveragePercent': PropertySchema(
-      id: 5,
-      name: r'insuranceCoveragePercent',
-      type: IsarType.double,
+    r'insurerReplyPath': PropertySchema(
+      id: 4,
+      name: r'insurerReplyPath',
+      type: IsarType.string,
     ),
     r'linkedExpenseId': PropertySchema(
-      id: 6,
+      id: 5,
       name: r'linkedExpenseId',
       type: IsarType.long,
     ),
-    r'profileId': PropertySchema(
+    r'patientSharePercent': PropertySchema(
+      id: 6,
+      name: r'patientSharePercent',
+      type: IsarType.double,
+    ),
+    r'paymentMethod': PropertySchema(
       id: 7,
+      name: r'paymentMethod',
+      type: IsarType.byte,
+      enumMap: _MedicalBillpaymentMethodEnumValueMap,
+    ),
+    r'profileId': PropertySchema(
+      id: 8,
       name: r'profileId',
       type: IsarType.long,
     ),
     r'providerId': PropertySchema(
-      id: 8,
+      id: 9,
       name: r'providerId',
       type: IsarType.long,
     ),
     r'reimbursedAmount': PropertySchema(
-      id: 9,
+      id: 10,
       name: r'reimbursedAmount',
       type: IsarType.double,
     ),
     r'serviceDate': PropertySchema(
-      id: 10,
+      id: 11,
       name: r'serviceDate',
       type: IsarType.dateTime,
+    ),
+    r'serviceTypeId': PropertySchema(
+      id: 12,
+      name: r'serviceTypeId',
+      type: IsarType.long,
+    ),
+    r'state': PropertySchema(
+      id: 13,
+      name: r'state',
+      type: IsarType.byte,
+      enumMap: _MedicalBillstateEnumValueMap,
+    ),
+    r'yearMonth': PropertySchema(
+      id: 14,
+      name: r'yearMonth',
+      type: IsarType.string,
     )
   },
   estimateSize: _medicalBillEstimateSize,
@@ -131,6 +152,58 @@ const MedicalBillSchema = CollectionSchema(
           caseSensitive: false,
         )
       ],
+    ),
+    r'serviceTypeId': IndexSchema(
+      id: -684333780234681877,
+      name: r'serviceTypeId',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'serviceTypeId',
+          type: IndexType.value,
+          caseSensitive: false,
+        )
+      ],
+    ),
+    r'paymentMethod': IndexSchema(
+      id: 8757296919228604195,
+      name: r'paymentMethod',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'paymentMethod',
+          type: IndexType.value,
+          caseSensitive: false,
+        )
+      ],
+    ),
+    r'yearMonth': IndexSchema(
+      id: 5465596700411800841,
+      name: r'yearMonth',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'yearMonth',
+          type: IndexType.hash,
+          caseSensitive: true,
+        )
+      ],
+    ),
+    r'serviceDate': IndexSchema(
+      id: 7987519527273564449,
+      name: r'serviceDate',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'serviceDate',
+          type: IndexType.value,
+          caseSensitive: false,
+        )
+      ],
     )
   },
   links: {},
@@ -147,13 +220,19 @@ int _medicalBillEstimateSize(
   Map<Type, List<int>> allOffsets,
 ) {
   var bytesCount = offsets.last;
-  bytesCount += 3 + object.attachmentPaths.length * 3;
   {
-    for (var i = 0; i < object.attachmentPaths.length; i++) {
-      final value = object.attachmentPaths[i];
-      bytesCount += value.length * 3;
+    final value = object.billPhotoPath;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
     }
   }
+  {
+    final value = object.insurerReplyPath;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
+  bytesCount += 3 + object.yearMonth.length * 3;
   return bytesCount;
 }
 
@@ -163,17 +242,21 @@ void _medicalBillSerialize(
   List<int> offsets,
   Map<Type, List<int>> allOffsets,
 ) {
-  writer.writeStringList(offsets[0], object.attachmentPaths);
+  writer.writeString(offsets[0], object.billPhotoPath);
   writer.writeDouble(offsets[1], object.billedAmount);
-  writer.writeByte(offsets[2], object.claimStatus.index);
-  writer.writeLong(offsets[3], object.familyMemberId);
-  writer.writeDateTime(offsets[4], object.followUpDate);
-  writer.writeDouble(offsets[5], object.insuranceCoveragePercent);
-  writer.writeLong(offsets[6], object.linkedExpenseId);
-  writer.writeLong(offsets[7], object.profileId);
-  writer.writeLong(offsets[8], object.providerId);
-  writer.writeDouble(offsets[9], object.reimbursedAmount);
-  writer.writeDateTime(offsets[10], object.serviceDate);
+  writer.writeLong(offsets[2], object.familyMemberId);
+  writer.writeDateTime(offsets[3], object.followUpDate);
+  writer.writeString(offsets[4], object.insurerReplyPath);
+  writer.writeLong(offsets[5], object.linkedExpenseId);
+  writer.writeDouble(offsets[6], object.patientSharePercent);
+  writer.writeByte(offsets[7], object.paymentMethod.index);
+  writer.writeLong(offsets[8], object.profileId);
+  writer.writeLong(offsets[9], object.providerId);
+  writer.writeDouble(offsets[10], object.reimbursedAmount);
+  writer.writeDateTime(offsets[11], object.serviceDate);
+  writer.writeLong(offsets[12], object.serviceTypeId);
+  writer.writeByte(offsets[13], object.state.index);
+  writer.writeString(offsets[14], object.yearMonth);
 }
 
 MedicalBill _medicalBillDeserialize(
@@ -183,20 +266,26 @@ MedicalBill _medicalBillDeserialize(
   Map<Type, List<int>> allOffsets,
 ) {
   final object = MedicalBill();
-  object.attachmentPaths = reader.readStringList(offsets[0]) ?? [];
+  object.billPhotoPath = reader.readStringOrNull(offsets[0]);
   object.billedAmount = reader.readDouble(offsets[1]);
-  object.claimStatus =
-      _MedicalBillclaimStatusValueEnumMap[reader.readByteOrNull(offsets[2])] ??
-          ClaimStatus.unclaimed;
-  object.familyMemberId = reader.readLongOrNull(offsets[3]);
-  object.followUpDate = reader.readDateTimeOrNull(offsets[4]);
+  object.familyMemberId = reader.readLongOrNull(offsets[2]);
+  object.followUpDate = reader.readDateTimeOrNull(offsets[3]);
   object.id = id;
-  object.insuranceCoveragePercent = reader.readDouble(offsets[5]);
-  object.linkedExpenseId = reader.readLongOrNull(offsets[6]);
-  object.profileId = reader.readLongOrNull(offsets[7]);
-  object.providerId = reader.readLongOrNull(offsets[8]);
-  object.reimbursedAmount = reader.readDouble(offsets[9]);
-  object.serviceDate = reader.readDateTimeOrNull(offsets[10]);
+  object.insurerReplyPath = reader.readStringOrNull(offsets[4]);
+  object.linkedExpenseId = reader.readLongOrNull(offsets[5]);
+  object.patientSharePercent = reader.readDouble(offsets[6]);
+  object.paymentMethod = _MedicalBillpaymentMethodValueEnumMap[
+          reader.readByteOrNull(offsets[7])] ??
+      MedicalPaymentMethod.insurerPaid;
+  object.profileId = reader.readLongOrNull(offsets[8]);
+  object.providerId = reader.readLongOrNull(offsets[9]);
+  object.reimbursedAmount = reader.readDouble(offsets[10]);
+  object.serviceDate = reader.readDateTimeOrNull(offsets[11]);
+  object.serviceTypeId = reader.readLongOrNull(offsets[12]);
+  object.state =
+      _MedicalBillstateValueEnumMap[reader.readByteOrNull(offsets[13])] ??
+          MedicalBillState.planned;
+  object.yearMonth = reader.readString(offsets[14]);
   return object;
 }
 
@@ -208,45 +297,64 @@ P _medicalBillDeserializeProp<P>(
 ) {
   switch (propertyId) {
     case 0:
-      return (reader.readStringList(offset) ?? []) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 1:
       return (reader.readDouble(offset)) as P;
     case 2:
-      return (_MedicalBillclaimStatusValueEnumMap[
-              reader.readByteOrNull(offset)] ??
-          ClaimStatus.unclaimed) as P;
+      return (reader.readLongOrNull(offset)) as P;
     case 3:
-      return (reader.readLongOrNull(offset)) as P;
-    case 4:
       return (reader.readDateTimeOrNull(offset)) as P;
+    case 4:
+      return (reader.readStringOrNull(offset)) as P;
     case 5:
-      return (reader.readDouble(offset)) as P;
+      return (reader.readLongOrNull(offset)) as P;
     case 6:
-      return (reader.readLongOrNull(offset)) as P;
+      return (reader.readDouble(offset)) as P;
     case 7:
-      return (reader.readLongOrNull(offset)) as P;
+      return (_MedicalBillpaymentMethodValueEnumMap[
+              reader.readByteOrNull(offset)] ??
+          MedicalPaymentMethod.insurerPaid) as P;
     case 8:
       return (reader.readLongOrNull(offset)) as P;
     case 9:
-      return (reader.readDouble(offset)) as P;
+      return (reader.readLongOrNull(offset)) as P;
     case 10:
+      return (reader.readDouble(offset)) as P;
+    case 11:
       return (reader.readDateTimeOrNull(offset)) as P;
+    case 12:
+      return (reader.readLongOrNull(offset)) as P;
+    case 13:
+      return (_MedicalBillstateValueEnumMap[reader.readByteOrNull(offset)] ??
+          MedicalBillState.planned) as P;
+    case 14:
+      return (reader.readString(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
   }
 }
 
-const _MedicalBillclaimStatusEnumValueMap = {
-  'unclaimed': 0,
-  'processing': 1,
-  'reimbursed': 2,
-  'denied': 3,
+const _MedicalBillpaymentMethodEnumValueMap = {
+  'insurerPaid': 0,
+  'selfPaid': 1,
 };
-const _MedicalBillclaimStatusValueEnumMap = {
-  0: ClaimStatus.unclaimed,
-  1: ClaimStatus.processing,
-  2: ClaimStatus.reimbursed,
-  3: ClaimStatus.denied,
+const _MedicalBillpaymentMethodValueEnumMap = {
+  0: MedicalPaymentMethod.insurerPaid,
+  1: MedicalPaymentMethod.selfPaid,
+};
+const _MedicalBillstateEnumValueMap = {
+  'planned': 0,
+  'waiting': 1,
+  'paid': 2,
+  'finished': 3,
+  'rejected': 4,
+};
+const _MedicalBillstateValueEnumMap = {
+  0: MedicalBillState.planned,
+  1: MedicalBillState.waiting,
+  2: MedicalBillState.paid,
+  3: MedicalBillState.finished,
+  4: MedicalBillState.rejected,
 };
 
 Id _medicalBillGetId(MedicalBill object) {
@@ -298,6 +406,30 @@ extension MedicalBillQueryWhereSort
     return QueryBuilder.apply(this, (query) {
       return query.addWhereClause(
         const IndexWhereClause.any(indexName: r'providerId'),
+      );
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterWhere> anyServiceTypeId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        const IndexWhereClause.any(indexName: r'serviceTypeId'),
+      );
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterWhere> anyPaymentMethod() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        const IndexWhereClause.any(indexName: r'paymentMethod'),
+      );
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterWhere> anyServiceDate() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        const IndexWhereClause.any(indexName: r'serviceDate'),
       );
     });
   }
@@ -824,18 +956,402 @@ extension MedicalBillQueryWhere
       ));
     });
   }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterWhereClause>
+      serviceTypeIdIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'serviceTypeId',
+        value: [null],
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterWhereClause>
+      serviceTypeIdIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'serviceTypeId',
+        lower: [null],
+        includeLower: false,
+        upper: [],
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterWhereClause>
+      serviceTypeIdEqualTo(int? serviceTypeId) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'serviceTypeId',
+        value: [serviceTypeId],
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterWhereClause>
+      serviceTypeIdNotEqualTo(int? serviceTypeId) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'serviceTypeId',
+              lower: [],
+              upper: [serviceTypeId],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'serviceTypeId',
+              lower: [serviceTypeId],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'serviceTypeId',
+              lower: [serviceTypeId],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'serviceTypeId',
+              lower: [],
+              upper: [serviceTypeId],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterWhereClause>
+      serviceTypeIdGreaterThan(
+    int? serviceTypeId, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'serviceTypeId',
+        lower: [serviceTypeId],
+        includeLower: include,
+        upper: [],
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterWhereClause>
+      serviceTypeIdLessThan(
+    int? serviceTypeId, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'serviceTypeId',
+        lower: [],
+        upper: [serviceTypeId],
+        includeUpper: include,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterWhereClause>
+      serviceTypeIdBetween(
+    int? lowerServiceTypeId,
+    int? upperServiceTypeId, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'serviceTypeId',
+        lower: [lowerServiceTypeId],
+        includeLower: includeLower,
+        upper: [upperServiceTypeId],
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterWhereClause>
+      paymentMethodEqualTo(MedicalPaymentMethod paymentMethod) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'paymentMethod',
+        value: [paymentMethod],
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterWhereClause>
+      paymentMethodNotEqualTo(MedicalPaymentMethod paymentMethod) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'paymentMethod',
+              lower: [],
+              upper: [paymentMethod],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'paymentMethod',
+              lower: [paymentMethod],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'paymentMethod',
+              lower: [paymentMethod],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'paymentMethod',
+              lower: [],
+              upper: [paymentMethod],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterWhereClause>
+      paymentMethodGreaterThan(
+    MedicalPaymentMethod paymentMethod, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'paymentMethod',
+        lower: [paymentMethod],
+        includeLower: include,
+        upper: [],
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterWhereClause>
+      paymentMethodLessThan(
+    MedicalPaymentMethod paymentMethod, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'paymentMethod',
+        lower: [],
+        upper: [paymentMethod],
+        includeUpper: include,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterWhereClause>
+      paymentMethodBetween(
+    MedicalPaymentMethod lowerPaymentMethod,
+    MedicalPaymentMethod upperPaymentMethod, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'paymentMethod',
+        lower: [lowerPaymentMethod],
+        includeLower: includeLower,
+        upper: [upperPaymentMethod],
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterWhereClause> yearMonthEqualTo(
+      String yearMonth) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'yearMonth',
+        value: [yearMonth],
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterWhereClause> yearMonthNotEqualTo(
+      String yearMonth) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'yearMonth',
+              lower: [],
+              upper: [yearMonth],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'yearMonth',
+              lower: [yearMonth],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'yearMonth',
+              lower: [yearMonth],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'yearMonth',
+              lower: [],
+              upper: [yearMonth],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterWhereClause>
+      serviceDateIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'serviceDate',
+        value: [null],
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterWhereClause>
+      serviceDateIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'serviceDate',
+        lower: [null],
+        includeLower: false,
+        upper: [],
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterWhereClause> serviceDateEqualTo(
+      DateTime? serviceDate) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'serviceDate',
+        value: [serviceDate],
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterWhereClause>
+      serviceDateNotEqualTo(DateTime? serviceDate) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'serviceDate',
+              lower: [],
+              upper: [serviceDate],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'serviceDate',
+              lower: [serviceDate],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'serviceDate',
+              lower: [serviceDate],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'serviceDate',
+              lower: [],
+              upper: [serviceDate],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterWhereClause>
+      serviceDateGreaterThan(
+    DateTime? serviceDate, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'serviceDate',
+        lower: [serviceDate],
+        includeLower: include,
+        upper: [],
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterWhereClause> serviceDateLessThan(
+    DateTime? serviceDate, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'serviceDate',
+        lower: [],
+        upper: [serviceDate],
+        includeUpper: include,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterWhereClause> serviceDateBetween(
+    DateTime? lowerServiceDate,
+    DateTime? upperServiceDate, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'serviceDate',
+        lower: [lowerServiceDate],
+        includeLower: includeLower,
+        upper: [upperServiceDate],
+        includeUpper: includeUpper,
+      ));
+    });
+  }
 }
 
 extension MedicalBillQueryFilter
     on QueryBuilder<MedicalBill, MedicalBill, QFilterCondition> {
   QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
-      attachmentPathsElementEqualTo(
-    String value, {
+      billPhotoPathIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'billPhotoPath',
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      billPhotoPathIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'billPhotoPath',
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      billPhotoPathEqualTo(
+    String? value, {
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'attachmentPaths',
+        property: r'billPhotoPath',
         value: value,
         caseSensitive: caseSensitive,
       ));
@@ -843,15 +1359,15 @@ extension MedicalBillQueryFilter
   }
 
   QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
-      attachmentPathsElementGreaterThan(
-    String value, {
+      billPhotoPathGreaterThan(
+    String? value, {
     bool include = false,
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.greaterThan(
         include: include,
-        property: r'attachmentPaths',
+        property: r'billPhotoPath',
         value: value,
         caseSensitive: caseSensitive,
       ));
@@ -859,15 +1375,15 @@ extension MedicalBillQueryFilter
   }
 
   QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
-      attachmentPathsElementLessThan(
-    String value, {
+      billPhotoPathLessThan(
+    String? value, {
     bool include = false,
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.lessThan(
         include: include,
-        property: r'attachmentPaths',
+        property: r'billPhotoPath',
         value: value,
         caseSensitive: caseSensitive,
       ));
@@ -875,16 +1391,16 @@ extension MedicalBillQueryFilter
   }
 
   QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
-      attachmentPathsElementBetween(
-    String lower,
-    String upper, {
+      billPhotoPathBetween(
+    String? lower,
+    String? upper, {
     bool includeLower = true,
     bool includeUpper = true,
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.between(
-        property: r'attachmentPaths',
+        property: r'billPhotoPath',
         lower: lower,
         includeLower: includeLower,
         upper: upper,
@@ -895,13 +1411,13 @@ extension MedicalBillQueryFilter
   }
 
   QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
-      attachmentPathsElementStartsWith(
+      billPhotoPathStartsWith(
     String value, {
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.startsWith(
-        property: r'attachmentPaths',
+        property: r'billPhotoPath',
         value: value,
         caseSensitive: caseSensitive,
       ));
@@ -909,13 +1425,13 @@ extension MedicalBillQueryFilter
   }
 
   QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
-      attachmentPathsElementEndsWith(
+      billPhotoPathEndsWith(
     String value, {
     bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.endsWith(
-        property: r'attachmentPaths',
+        property: r'billPhotoPath',
         value: value,
         caseSensitive: caseSensitive,
       ));
@@ -923,11 +1439,10 @@ extension MedicalBillQueryFilter
   }
 
   QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
-      attachmentPathsElementContains(String value,
-          {bool caseSensitive = true}) {
+      billPhotoPathContains(String value, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.contains(
-        property: r'attachmentPaths',
+        property: r'billPhotoPath',
         value: value,
         caseSensitive: caseSensitive,
       ));
@@ -935,11 +1450,10 @@ extension MedicalBillQueryFilter
   }
 
   QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
-      attachmentPathsElementMatches(String pattern,
-          {bool caseSensitive = true}) {
+      billPhotoPathMatches(String pattern, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.matches(
-        property: r'attachmentPaths',
+        property: r'billPhotoPath',
         wildcard: pattern,
         caseSensitive: caseSensitive,
       ));
@@ -947,111 +1461,22 @@ extension MedicalBillQueryFilter
   }
 
   QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
-      attachmentPathsElementIsEmpty() {
+      billPhotoPathIsEmpty() {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'attachmentPaths',
+        property: r'billPhotoPath',
         value: '',
       ));
     });
   }
 
   QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
-      attachmentPathsElementIsNotEmpty() {
+      billPhotoPathIsNotEmpty() {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.greaterThan(
-        property: r'attachmentPaths',
+        property: r'billPhotoPath',
         value: '',
       ));
-    });
-  }
-
-  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
-      attachmentPathsLengthEqualTo(int length) {
-    return QueryBuilder.apply(this, (query) {
-      return query.listLength(
-        r'attachmentPaths',
-        length,
-        true,
-        length,
-        true,
-      );
-    });
-  }
-
-  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
-      attachmentPathsIsEmpty() {
-    return QueryBuilder.apply(this, (query) {
-      return query.listLength(
-        r'attachmentPaths',
-        0,
-        true,
-        0,
-        true,
-      );
-    });
-  }
-
-  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
-      attachmentPathsIsNotEmpty() {
-    return QueryBuilder.apply(this, (query) {
-      return query.listLength(
-        r'attachmentPaths',
-        0,
-        false,
-        999999,
-        true,
-      );
-    });
-  }
-
-  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
-      attachmentPathsLengthLessThan(
-    int length, {
-    bool include = false,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.listLength(
-        r'attachmentPaths',
-        0,
-        true,
-        length,
-        include,
-      );
-    });
-  }
-
-  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
-      attachmentPathsLengthGreaterThan(
-    int length, {
-    bool include = false,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.listLength(
-        r'attachmentPaths',
-        length,
-        include,
-        999999,
-        true,
-      );
-    });
-  }
-
-  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
-      attachmentPathsLengthBetween(
-    int lower,
-    int upper, {
-    bool includeLower = true,
-    bool includeUpper = true,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.listLength(
-        r'attachmentPaths',
-        lower,
-        includeLower,
-        upper,
-        includeUpper,
-      );
     });
   }
 
@@ -1117,62 +1542,6 @@ extension MedicalBillQueryFilter
         upper: upper,
         includeUpper: includeUpper,
         epsilon: epsilon,
-      ));
-    });
-  }
-
-  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
-      claimStatusEqualTo(ClaimStatus value) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'claimStatus',
-        value: value,
-      ));
-    });
-  }
-
-  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
-      claimStatusGreaterThan(
-    ClaimStatus value, {
-    bool include = false,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.greaterThan(
-        include: include,
-        property: r'claimStatus',
-        value: value,
-      ));
-    });
-  }
-
-  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
-      claimStatusLessThan(
-    ClaimStatus value, {
-    bool include = false,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.lessThan(
-        include: include,
-        property: r'claimStatus',
-        value: value,
-      ));
-    });
-  }
-
-  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
-      claimStatusBetween(
-    ClaimStatus lower,
-    ClaimStatus upper, {
-    bool includeLower = true,
-    bool includeUpper = true,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.between(
-        property: r'claimStatus',
-        lower: lower,
-        includeLower: includeLower,
-        upper: upper,
-        includeUpper: includeUpper,
       ));
     });
   }
@@ -1379,67 +1748,155 @@ extension MedicalBillQueryFilter
   }
 
   QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
-      insuranceCoveragePercentEqualTo(
-    double value, {
-    double epsilon = Query.epsilon,
-  }) {
+      insurerReplyPathIsNull() {
     return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'insuranceCoveragePercent',
-        value: value,
-        epsilon: epsilon,
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'insurerReplyPath',
       ));
     });
   }
 
   QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
-      insuranceCoveragePercentGreaterThan(
-    double value, {
+      insurerReplyPathIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'insurerReplyPath',
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      insurerReplyPathEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'insurerReplyPath',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      insurerReplyPathGreaterThan(
+    String? value, {
     bool include = false,
-    double epsilon = Query.epsilon,
+    bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.greaterThan(
         include: include,
-        property: r'insuranceCoveragePercent',
+        property: r'insurerReplyPath',
         value: value,
-        epsilon: epsilon,
+        caseSensitive: caseSensitive,
       ));
     });
   }
 
   QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
-      insuranceCoveragePercentLessThan(
-    double value, {
+      insurerReplyPathLessThan(
+    String? value, {
     bool include = false,
-    double epsilon = Query.epsilon,
+    bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.lessThan(
         include: include,
-        property: r'insuranceCoveragePercent',
+        property: r'insurerReplyPath',
         value: value,
-        epsilon: epsilon,
+        caseSensitive: caseSensitive,
       ));
     });
   }
 
   QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
-      insuranceCoveragePercentBetween(
-    double lower,
-    double upper, {
+      insurerReplyPathBetween(
+    String? lower,
+    String? upper, {
     bool includeLower = true,
     bool includeUpper = true,
-    double epsilon = Query.epsilon,
+    bool caseSensitive = true,
   }) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.between(
-        property: r'insuranceCoveragePercent',
+        property: r'insurerReplyPath',
         lower: lower,
         includeLower: includeLower,
         upper: upper,
         includeUpper: includeUpper,
-        epsilon: epsilon,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      insurerReplyPathStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'insurerReplyPath',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      insurerReplyPathEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'insurerReplyPath',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      insurerReplyPathContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'insurerReplyPath',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      insurerReplyPathMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'insurerReplyPath',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      insurerReplyPathIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'insurerReplyPath',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      insurerReplyPathIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'insurerReplyPath',
+        value: '',
       ));
     });
   }
@@ -1510,6 +1967,128 @@ extension MedicalBillQueryFilter
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.between(
         property: r'linkedExpenseId',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      patientSharePercentEqualTo(
+    double value, {
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'patientSharePercent',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      patientSharePercentGreaterThan(
+    double value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'patientSharePercent',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      patientSharePercentLessThan(
+    double value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'patientSharePercent',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      patientSharePercentBetween(
+    double lower,
+    double upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'patientSharePercent',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      paymentMethodEqualTo(MedicalPaymentMethod value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'paymentMethod',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      paymentMethodGreaterThan(
+    MedicalPaymentMethod value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'paymentMethod',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      paymentMethodLessThan(
+    MedicalPaymentMethod value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'paymentMethod',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      paymentMethodBetween(
+    MedicalPaymentMethod lower,
+    MedicalPaymentMethod upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'paymentMethod',
         lower: lower,
         includeLower: includeLower,
         upper: upper,
@@ -1805,6 +2384,270 @@ extension MedicalBillQueryFilter
       ));
     });
   }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      serviceTypeIdIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'serviceTypeId',
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      serviceTypeIdIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'serviceTypeId',
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      serviceTypeIdEqualTo(int? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'serviceTypeId',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      serviceTypeIdGreaterThan(
+    int? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'serviceTypeId',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      serviceTypeIdLessThan(
+    int? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'serviceTypeId',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      serviceTypeIdBetween(
+    int? lower,
+    int? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'serviceTypeId',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition> stateEqualTo(
+      MedicalBillState value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'state',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      stateGreaterThan(
+    MedicalBillState value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'state',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition> stateLessThan(
+    MedicalBillState value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'state',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition> stateBetween(
+    MedicalBillState lower,
+    MedicalBillState upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'state',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      yearMonthEqualTo(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'yearMonth',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      yearMonthGreaterThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'yearMonth',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      yearMonthLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'yearMonth',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      yearMonthBetween(
+    String lower,
+    String upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'yearMonth',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      yearMonthStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'yearMonth',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      yearMonthEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'yearMonth',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      yearMonthContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'yearMonth',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      yearMonthMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'yearMonth',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      yearMonthIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'yearMonth',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      yearMonthIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'yearMonth',
+        value: '',
+      ));
+    });
+  }
 }
 
 extension MedicalBillQueryObject
@@ -1815,6 +2658,19 @@ extension MedicalBillQueryLinks
 
 extension MedicalBillQuerySortBy
     on QueryBuilder<MedicalBill, MedicalBill, QSortBy> {
+  QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy> sortByBillPhotoPath() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'billPhotoPath', Sort.asc);
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy>
+      sortByBillPhotoPathDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'billPhotoPath', Sort.desc);
+    });
+  }
+
   QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy> sortByBilledAmount() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'billedAmount', Sort.asc);
@@ -1825,18 +2681,6 @@ extension MedicalBillQuerySortBy
       sortByBilledAmountDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'billedAmount', Sort.desc);
-    });
-  }
-
-  QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy> sortByClaimStatus() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'claimStatus', Sort.asc);
-    });
-  }
-
-  QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy> sortByClaimStatusDesc() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'claimStatus', Sort.desc);
     });
   }
 
@@ -1867,16 +2711,16 @@ extension MedicalBillQuerySortBy
   }
 
   QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy>
-      sortByInsuranceCoveragePercent() {
+      sortByInsurerReplyPath() {
     return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'insuranceCoveragePercent', Sort.asc);
+      return query.addSortBy(r'insurerReplyPath', Sort.asc);
     });
   }
 
   QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy>
-      sortByInsuranceCoveragePercentDesc() {
+      sortByInsurerReplyPathDesc() {
     return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'insuranceCoveragePercent', Sort.desc);
+      return query.addSortBy(r'insurerReplyPath', Sort.desc);
     });
   }
 
@@ -1890,6 +2734,33 @@ extension MedicalBillQuerySortBy
       sortByLinkedExpenseIdDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'linkedExpenseId', Sort.desc);
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy>
+      sortByPatientSharePercent() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'patientSharePercent', Sort.asc);
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy>
+      sortByPatientSharePercentDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'patientSharePercent', Sort.desc);
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy> sortByPaymentMethod() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'paymentMethod', Sort.asc);
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy>
+      sortByPaymentMethodDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'paymentMethod', Sort.desc);
     });
   }
 
@@ -1942,10 +2813,60 @@ extension MedicalBillQuerySortBy
       return query.addSortBy(r'serviceDate', Sort.desc);
     });
   }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy> sortByServiceTypeId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'serviceTypeId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy>
+      sortByServiceTypeIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'serviceTypeId', Sort.desc);
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy> sortByState() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'state', Sort.asc);
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy> sortByStateDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'state', Sort.desc);
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy> sortByYearMonth() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'yearMonth', Sort.asc);
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy> sortByYearMonthDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'yearMonth', Sort.desc);
+    });
+  }
 }
 
 extension MedicalBillQuerySortThenBy
     on QueryBuilder<MedicalBill, MedicalBill, QSortThenBy> {
+  QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy> thenByBillPhotoPath() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'billPhotoPath', Sort.asc);
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy>
+      thenByBillPhotoPathDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'billPhotoPath', Sort.desc);
+    });
+  }
+
   QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy> thenByBilledAmount() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'billedAmount', Sort.asc);
@@ -1956,18 +2877,6 @@ extension MedicalBillQuerySortThenBy
       thenByBilledAmountDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'billedAmount', Sort.desc);
-    });
-  }
-
-  QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy> thenByClaimStatus() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'claimStatus', Sort.asc);
-    });
-  }
-
-  QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy> thenByClaimStatusDesc() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'claimStatus', Sort.desc);
     });
   }
 
@@ -2010,16 +2919,16 @@ extension MedicalBillQuerySortThenBy
   }
 
   QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy>
-      thenByInsuranceCoveragePercent() {
+      thenByInsurerReplyPath() {
     return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'insuranceCoveragePercent', Sort.asc);
+      return query.addSortBy(r'insurerReplyPath', Sort.asc);
     });
   }
 
   QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy>
-      thenByInsuranceCoveragePercentDesc() {
+      thenByInsurerReplyPathDesc() {
     return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'insuranceCoveragePercent', Sort.desc);
+      return query.addSortBy(r'insurerReplyPath', Sort.desc);
     });
   }
 
@@ -2033,6 +2942,33 @@ extension MedicalBillQuerySortThenBy
       thenByLinkedExpenseIdDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'linkedExpenseId', Sort.desc);
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy>
+      thenByPatientSharePercent() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'patientSharePercent', Sort.asc);
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy>
+      thenByPatientSharePercentDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'patientSharePercent', Sort.desc);
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy> thenByPaymentMethod() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'paymentMethod', Sort.asc);
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy>
+      thenByPaymentMethodDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'paymentMethod', Sort.desc);
     });
   }
 
@@ -2085,26 +3021,58 @@ extension MedicalBillQuerySortThenBy
       return query.addSortBy(r'serviceDate', Sort.desc);
     });
   }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy> thenByServiceTypeId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'serviceTypeId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy>
+      thenByServiceTypeIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'serviceTypeId', Sort.desc);
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy> thenByState() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'state', Sort.asc);
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy> thenByStateDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'state', Sort.desc);
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy> thenByYearMonth() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'yearMonth', Sort.asc);
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy> thenByYearMonthDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'yearMonth', Sort.desc);
+    });
+  }
 }
 
 extension MedicalBillQueryWhereDistinct
     on QueryBuilder<MedicalBill, MedicalBill, QDistinct> {
-  QueryBuilder<MedicalBill, MedicalBill, QDistinct>
-      distinctByAttachmentPaths() {
+  QueryBuilder<MedicalBill, MedicalBill, QDistinct> distinctByBillPhotoPath(
+      {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addDistinctBy(r'attachmentPaths');
+      return query.addDistinctBy(r'billPhotoPath',
+          caseSensitive: caseSensitive);
     });
   }
 
   QueryBuilder<MedicalBill, MedicalBill, QDistinct> distinctByBilledAmount() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'billedAmount');
-    });
-  }
-
-  QueryBuilder<MedicalBill, MedicalBill, QDistinct> distinctByClaimStatus() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addDistinctBy(r'claimStatus');
     });
   }
 
@@ -2120,10 +3088,11 @@ extension MedicalBillQueryWhereDistinct
     });
   }
 
-  QueryBuilder<MedicalBill, MedicalBill, QDistinct>
-      distinctByInsuranceCoveragePercent() {
+  QueryBuilder<MedicalBill, MedicalBill, QDistinct> distinctByInsurerReplyPath(
+      {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
-      return query.addDistinctBy(r'insuranceCoveragePercent');
+      return query.addDistinctBy(r'insurerReplyPath',
+          caseSensitive: caseSensitive);
     });
   }
 
@@ -2131,6 +3100,19 @@ extension MedicalBillQueryWhereDistinct
       distinctByLinkedExpenseId() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'linkedExpenseId');
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QDistinct>
+      distinctByPatientSharePercent() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'patientSharePercent');
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QDistinct> distinctByPaymentMethod() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'paymentMethod');
     });
   }
 
@@ -2158,6 +3140,25 @@ extension MedicalBillQueryWhereDistinct
       return query.addDistinctBy(r'serviceDate');
     });
   }
+
+  QueryBuilder<MedicalBill, MedicalBill, QDistinct> distinctByServiceTypeId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'serviceTypeId');
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QDistinct> distinctByState() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'state');
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QDistinct> distinctByYearMonth(
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'yearMonth', caseSensitive: caseSensitive);
+    });
+  }
 }
 
 extension MedicalBillQueryProperty
@@ -2168,23 +3169,15 @@ extension MedicalBillQueryProperty
     });
   }
 
-  QueryBuilder<MedicalBill, List<String>, QQueryOperations>
-      attachmentPathsProperty() {
+  QueryBuilder<MedicalBill, String?, QQueryOperations> billPhotoPathProperty() {
     return QueryBuilder.apply(this, (query) {
-      return query.addPropertyName(r'attachmentPaths');
+      return query.addPropertyName(r'billPhotoPath');
     });
   }
 
   QueryBuilder<MedicalBill, double, QQueryOperations> billedAmountProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'billedAmount');
-    });
-  }
-
-  QueryBuilder<MedicalBill, ClaimStatus, QQueryOperations>
-      claimStatusProperty() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addPropertyName(r'claimStatus');
     });
   }
 
@@ -2201,16 +3194,30 @@ extension MedicalBillQueryProperty
     });
   }
 
-  QueryBuilder<MedicalBill, double, QQueryOperations>
-      insuranceCoveragePercentProperty() {
+  QueryBuilder<MedicalBill, String?, QQueryOperations>
+      insurerReplyPathProperty() {
     return QueryBuilder.apply(this, (query) {
-      return query.addPropertyName(r'insuranceCoveragePercent');
+      return query.addPropertyName(r'insurerReplyPath');
     });
   }
 
   QueryBuilder<MedicalBill, int?, QQueryOperations> linkedExpenseIdProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'linkedExpenseId');
+    });
+  }
+
+  QueryBuilder<MedicalBill, double, QQueryOperations>
+      patientSharePercentProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'patientSharePercent');
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalPaymentMethod, QQueryOperations>
+      paymentMethodProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'paymentMethod');
     });
   }
 
@@ -2236,6 +3243,25 @@ extension MedicalBillQueryProperty
   QueryBuilder<MedicalBill, DateTime?, QQueryOperations> serviceDateProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'serviceDate');
+    });
+  }
+
+  QueryBuilder<MedicalBill, int?, QQueryOperations> serviceTypeIdProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'serviceTypeId');
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBillState, QQueryOperations>
+      stateProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'state');
+    });
+  }
+
+  QueryBuilder<MedicalBill, String, QQueryOperations> yearMonthProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'yearMonth');
     });
   }
 }
