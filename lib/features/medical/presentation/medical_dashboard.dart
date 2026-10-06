@@ -3,13 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/models/currency_code.dart';
 import '../../../core/models/insurance_profile.dart';
 import '../../../core/models/medical_bill.dart';
 import '../../../core/providers/active_profile_provider.dart';
 import '../../../core/providers/selected_month_provider.dart';
 import '../../../core/providers/clock_provider.dart';
 import '../providers/medical_providers.dart';
-import '../repositories/medical_repository.dart';
 import 'medical_theme.dart';
 import 'reminder_picker_sheet.dart';
 
@@ -44,9 +44,13 @@ class MedicalDashboard extends ConsumerWidget {
         onHorizontalDragEnd: (details) {
           if (details.primaryVelocity != null) {
             if (details.primaryVelocity! < -300) {
-              ref.read(selectedYearMonthProvider.notifier).update((state) => nextMonth(state));
+              ref
+                  .read(selectedYearMonthProvider.notifier)
+                  .update((state) => nextMonth(state));
             } else if (details.primaryVelocity! > 300) {
-              ref.read(selectedYearMonthProvider.notifier).update((state) => previousMonth(state));
+              ref
+                  .read(selectedYearMonthProvider.notifier)
+                  .update((state) => previousMonth(state));
             }
           }
         },
@@ -59,52 +63,54 @@ class MedicalDashboard extends ConsumerWidget {
               ..invalidate(familyMembersProvider)
               ..invalidate(medicalProvidersProvider);
           },
-        child: CustomScrollView(
-          slivers: [
-            SliverToBoxAdapter(
-              child: _InsuranceSection(
-                  onSetup: () => _editInsuranceProfile(context, ref)),
-            ),
-            const SliverToBoxAdapter(child: _BudgetImpactCard()),
-            const SliverToBoxAdapter(child: _PatientShareCard()),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
-                child: Row(
-                  children: [
-                    const Expanded(
-                      child: Text(
-                        'Medical Bills',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
+          child: CustomScrollView(
+            slivers: [
+              SliverToBoxAdapter(
+                child: _InsuranceSection(
+                    onSetup: () => _editInsuranceProfile(context, ref)),
+              ),
+              const SliverToBoxAdapter(child: _BudgetImpactCard()),
+              const SliverToBoxAdapter(child: _PatientShareCard()),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+                  child: Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Medical Bills',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
-                    ),
-                    ElevatedButton.icon(
-                      key: const Key('addBillButton'),
-                      onPressed: () => context.push('/medical_bill_form'),
-                      icon: const Icon(Icons.add, size: 20),
-                      label: const Text('Add', style: TextStyle(fontWeight: FontWeight.bold)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blueAccent,
-                        foregroundColor: Colors.white,
-                        elevation: 4,
-                        shadowColor: Colors.blueAccent.withAlpha(100),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(24),
+                      ElevatedButton.icon(
+                        key: const Key('addBillButton'),
+                        onPressed: () => context.push('/medical_bill_form'),
+                        icon: const Icon(Icons.add, size: 20),
+                        label: const Text('Add',
+                            style: TextStyle(fontWeight: FontWeight.bold)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blueAccent,
+                          foregroundColor: Colors.white,
+                          elevation: 4,
+                          shadowColor: Colors.blueAccent.withAlpha(100),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(24),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 8),
                         ),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
-            const _BillsSliver(),
-          ],
+              const _BillsSliver(),
+            ],
+          ),
         ),
-      ),
       ),
     );
   }
@@ -411,7 +417,7 @@ class _PatientShareCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final totals = ref.watch(patientShareTotalsProvider);
-    final symbol = ref.watch(medicalCurrencySymbolProvider);
+    final currency = ref.watch(medicalDisplayCurrencyProvider);
     final month = ref.watch(selectedYearMonthProvider);
 
     if (totals.isEmpty) {
@@ -441,32 +447,32 @@ class _PatientShareCard extends ConsumerWidget {
             _SplitRow(
               label: 'Billed',
               value: totals.billedTotal,
-              currencySymbol: symbol,
+              currency: currency,
               color: MedicalTheme.subtleText(context),
             ),
             _SplitRow(
               label: 'Insurer paid',
               value: totals.insurerPaidTotal,
-              currencySymbol: symbol,
+              currency: currency,
               color: Colors.green,
             ),
             _SplitRow(
               label: 'You paid',
               value: totals.patientShareTotal,
-              currencySymbol: symbol,
+              currency: currency,
               color: Colors.orange,
             ),
             if (totals.reimbursedTotal > 0) ...[
               _SplitRow(
                 label: 'Reimbursed to you',
                 value: totals.reimbursedTotal,
-                currencySymbol: symbol,
+                currency: currency,
                 color: Colors.teal,
               ),
               _SplitRow(
                 label: 'Net out of pocket',
                 value: totals.netPatientCost,
-                currencySymbol: symbol,
+                currency: currency,
                 color: Colors.red,
                 bold: true,
               ),
@@ -482,14 +488,14 @@ class _SplitRow extends StatelessWidget {
   const _SplitRow({
     required this.label,
     required this.value,
-    required this.currencySymbol,
+    required this.currency,
     required this.color,
     this.bold = false,
   });
 
   final String label;
   final double value;
-  final String currencySymbol;
+  final CurrencyCode currency;
   final Color color;
   final bool bold;
 
@@ -506,7 +512,7 @@ class _SplitRow extends StatelessWidget {
             style: bold ? base?.copyWith(fontWeight: FontWeight.bold) : base,
           ),
           Text(
-            MedicalTheme.money(currencySymbol, value),
+            MedicalTheme.money(currency, value),
             style: base?.copyWith(
               fontWeight: bold ? FontWeight.bold : FontWeight.w600,
               color: color,
@@ -524,7 +530,7 @@ class _BudgetImpactCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final impact = ref.watch(medicalBudgetImpactProvider);
-    final symbol = ref.watch(medicalCurrencySymbolProvider);
+    final currency = ref.watch(medicalDisplayCurrencyProvider);
 
     if (impact.plannedTotal == 0 && impact.paidTotal == 0) {
       return const SizedBox.shrink();
@@ -545,24 +551,24 @@ class _BudgetImpactCard extends ConsumerWidget {
             const SizedBox(height: 12),
             _ImpactRow(
               label: 'Paid to providers',
-              value: MedicalTheme.money(symbol, impact.paidTotal),
+              value: MedicalTheme.money(currency, impact.paidTotal),
               color: Colors.redAccent,
             ),
             if (impact.hasPending)
               _ImpactRow(
                 label: 'Still planned',
-                value: MedicalTheme.money(symbol, impact.plannedTotal),
+                value: MedicalTheme.money(currency, impact.plannedTotal),
                 color: Colors.orange,
               ),
             _ImpactRow(
               label: 'Estimated out-of-pocket',
-              value: MedicalTheme.money(symbol, impact.outOfPocketTotal),
+              value: MedicalTheme.money(currency, impact.outOfPocketTotal),
               color: Colors.blueAccent,
             ),
             if (impact.reimbursedTotal > 0)
               _ImpactRow(
                 label: 'Reimbursed',
-                value: '+${MedicalTheme.money(symbol, impact.reimbursedTotal)}',
+                value: '+${MedicalTheme.money(currency, impact.reimbursedTotal)}',
                 color: Colors.green,
               ),
             const Divider(height: 24),
@@ -577,7 +583,7 @@ class _BudgetImpactCard extends ConsumerWidget {
                   ),
                 ),
                 Text(
-                  MedicalTheme.money(symbol, impact.netOutOfPocket),
+                  MedicalTheme.money(currency, impact.netOutOfPocket),
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -631,7 +637,7 @@ class _BillsSliver extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final billsAsync = ref.watch(medicalBillsProvider);
-    final symbol = ref.watch(medicalCurrencySymbolProvider);
+    final currency = ref.watch(medicalDisplayCurrencyProvider);
 
     return billsAsync.when(
       data: (bills) {
@@ -646,7 +652,7 @@ class _BillsSliver extends ConsumerWidget {
           itemCount: bills.length,
           itemBuilder: (context, index) => _BillTile(
             bill: bills[index],
-            currencySymbol: symbol,
+            currency: currency,
           ),
         );
       },
@@ -701,10 +707,10 @@ class _EmptyState extends StatelessWidget {
 }
 
 class _BillTile extends ConsumerWidget {
-  const _BillTile({required this.bill, required this.currencySymbol});
+  const _BillTile({required this.bill, required this.currency});
 
   final MedicalBill bill;
-  final String currencySymbol;
+  final CurrencyCode currency;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -721,11 +727,15 @@ class _BillTile extends ConsumerWidget {
       key: ValueKey('bill-${bill.id}'),
       direction: DismissDirection.endToStart,
       confirmDismiss: (direction) async {
-        final picked = await ReminderPickerSheet.show(context, initialDate: bill.followUpDate);
+        final picked = await ReminderPickerSheet.show(context,
+            initialDate: bill.followUpDate);
         if (picked != null) {
-          await ref.read(medicalRepositoryProvider).setFollowUpDate(bill, picked);
+          await ref
+              .read(medicalRepositoryProvider)
+              .setFollowUpDate(bill, picked);
           if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Reminder set')));
+            ScaffoldMessenger.of(context)
+                .showSnackBar(const SnackBar(content: Text('Reminder set')));
           }
         }
         return false;
@@ -737,7 +747,9 @@ class _BillTile extends ConsumerWidget {
         child: const Row(
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
-            Text('Remind me', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            Text('Remind me',
+                style: TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.bold)),
             SizedBox(width: 8),
             Icon(Icons.access_time, color: Colors.white),
           ],
@@ -768,9 +780,10 @@ class _BillTile extends ConsumerWidget {
                 final diff = bill.followUpDate!.difference(now);
                 String statusText;
                 Color statusColor;
-                
+
                 if (diff.inHours < -1) {
-                  statusText = 'Overdue since ${DateFormat.MMMd().format(bill.followUpDate!)}';
+                  statusText =
+                      'Overdue since ${DateFormat.MMMd().format(bill.followUpDate!)}';
                   statusColor = Colors.red;
                 } else if (diff.isNegative || diff.inMinutes < 60) {
                   statusText = 'Due now';
@@ -781,13 +794,17 @@ class _BillTile extends ConsumerWidget {
                   statusText = 'In ${hours}h ${mins}m';
                   statusColor = Colors.orange;
                 } else {
-                  statusText = 'Follow up ${DateFormat('MMM d').format(bill.followUpDate!)}';
+                  statusText =
+                      'Follow up ${DateFormat('MMM d').format(bill.followUpDate!)}';
                   statusColor = Colors.orange;
                 }
-                
+
                 return Text(
                   statusText,
-                  style: TextStyle(fontSize: 12, color: statusColor, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                      fontSize: 12,
+                      color: statusColor,
+                      fontWeight: FontWeight.bold),
                 );
               }(),
             ],
@@ -798,12 +815,20 @@ class _BillTile extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Text(
-              MedicalTheme.money(currencySymbol, bill.billedAmount),
+              MedicalTheme.moneyMinor(bill.currencyCode ?? currency, bill.billedAmount),
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
             if (bill.paymentMethod == MedicalPaymentMethod.insurerPaid)
               Text(
-                '${MedicalTheme.money(currencySymbol, bill.patientShareAmount)} you',
+                '${MedicalTheme.moneyMinor(bill.currencyCode ?? currency, bill.patientShareAmount)} you',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: MedicalTheme.subtleText(context),
+                ),
+              ),
+            if (bill.currencyCode != null && bill.currencyCode != currency)
+              Text(
+                '${MedicalTheme.moneyMinor(currency, bill.fundsImpact)} budget',
                 style: TextStyle(
                   fontSize: 12,
                   color: MedicalTheme.subtleText(context),

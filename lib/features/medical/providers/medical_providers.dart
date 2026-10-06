@@ -1,11 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/database/isar_helper.dart';
+import '../../../core/models/currency_code.dart';
 import '../../../core/models/expense.dart';
 import '../../../core/models/insurance_profile.dart';
 import '../../../core/models/medical_bill.dart';
 import '../../../core/models/medical_service_type.dart';
-import '../../../core/models/user_profile.dart';
 import '../../../core/providers/active_budget_provider.dart';
 import '../../../core/providers/active_profile_provider.dart';
 import '../../../core/providers/selected_month_provider.dart';
@@ -96,16 +96,12 @@ final medicalBillContextProvider = Provider<MedicalBillContext?>((ref) {
   );
 });
 
-/// Currency symbol for the active budget, matching the dashboard's convention.
-final medicalCurrencySymbolProvider = Provider<String>((ref) {
+/// Display currency for the active budget, as the single [CurrencyCode] the
+/// medical screens format through (FR-018) instead of a hardcoded symbol.
+final medicalDisplayCurrencyProvider = Provider<CurrencyCode>((ref) {
   final budget = ref.watch(activeBudgetProvider).value;
-  if (budget == null) return r'$';
-  return switch (budget.currency) {
-    PrimaryCurrency.usd => r'$',
-    PrimaryCurrency.eur => '€',
-    PrimaryCurrency.cad => r'C$',
-    PrimaryCurrency.huf => 'Ft',
-  };
+  if (budget == null) return CurrencyCode.usd;
+  return budget.currency.code;
 });
 
 // -----------------------------------------------------------------------------

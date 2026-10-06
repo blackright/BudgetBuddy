@@ -1,5 +1,7 @@
 import 'package:isar/isar.dart';
 
+import 'currency_code.dart';
+
 part 'medical_bill.g.dart';
 
 /// A medical service the user paid for (or plans to pay for).
@@ -53,8 +55,22 @@ class MedicalBill {
   @Index()
   DateTime? serviceDate;
 
-  /// Full charge.
-  double billedAmount = 0.0;
+  /// Full charge, in whole minor units of [currency] (FR-015, data-model §4.3).
+  int billedAmount = 0;
+
+  /// The bill's own currency (`huf`/`usd`/`cad`/`eur`), added by schema step 8.
+  ///
+  /// `''` means "legacy bill — follow the linked expense's currency", which is
+  /// how bills behaved before this field existed (they inherited it with the
+  /// rate forced to 1.0). New bills always record their own currency so share
+  /// math runs in the original unit (FR-016, data-model §4.3).
+  String currency = '';
+
+  /// The parsed bill currency, or `null` when the bill follows its linked
+  /// expense (`''`) or carries a legacy code (FR-016, FR-021).
+  @ignore
+  CurrencyCode? get currencyCode =>
+      currency.isEmpty ? null : CurrencyCode.tryParse(currency);
 
   /// The bill itself. Optional for either payment method (FR-047).
   String? billPhotoPath;
@@ -69,16 +85,19 @@ class MedicalBill {
   /// Calendar event ID if added to device calendar.
   String? calendarEventId;
 
-  /// Denormalised copy of the linked reimbursement; `0` when none.
-  double reimbursedAmount = 0.0;
+  /// Denormalised copy of the linked reimbursement, in the bill's minor units;
+  /// `0` when none.
+  int reimbursedAmount = 0;
 
-  /// What the user owes the hospital before any reimbursement (FR-048).
+  /// What the user owes the hospital before any reimbursement, in the bill's
+  /// own currency, rounded once to whole minor units (FR-048, §4.3).
   @ignore
-  double get patientShareAmount => billedAmount * patientSharePercent / 100;
+  int get patientShareAmount =>
+      (billedAmount * patientSharePercent / 100).round();
 
-  /// The insurer's portion of the charge.
+  /// The insurer's portion of the charge, in the bill's own currency.
   @ignore
-  double get insurerPaidAmount => billedAmount - patientShareAmount;
+  int get insurerPaidAmount => billedAmount - patientShareAmount;
 
   /// How much this bill removes from available funds.
   ///
@@ -94,8 +113,8 @@ class MedicalBill {
   /// `Expense.amount` is always set from this, so the bill and the budget can
   /// never disagree about what a bill cost (R07).
   @ignore
-  double get fundsImpact {
-    if (state == MedicalBillState.planned) return 0.0;
+  int get fundsImpact {
+    if (state == MedicalBillState.planned) return 0;
     if (state == MedicalBillState.rejected) return billedAmount;
     return switch (paymentMethod) {
       MedicalPaymentMethod.insurerPaid => patientShareAmount,
@@ -113,10 +132,10 @@ class MedicalBill {
   /// billed amount; a self-paid bill started at the full charge and is reduced
   /// by what came back. Never negative.
   @ignore
-  double get netOutOfPocket => switch (paymentMethod) {
+  int get netOutOfPocket => switch (paymentMethod) {
         MedicalPaymentMethod.insurerPaid => patientShareAmount,
         MedicalPaymentMethod.selfPaid =>
-          (billedAmount - reimbursedAmount).clamp(0.0, double.infinity),
+          (billedAmount - reimbursedAmount).clamp(0, billedAmount),
       };
 
   /// A self-paid bill is the only kind that can be reimbursed (FR-044).

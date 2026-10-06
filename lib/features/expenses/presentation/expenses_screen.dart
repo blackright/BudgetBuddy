@@ -3,12 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import '../../../core/models/currency_code.dart';
 import '../../../core/models/expense.dart';
-import '../../../core/providers/active_budget_provider.dart';
+import '../../../core/models/money.dart';
 import '../../../core/providers/active_profile_provider.dart';
 import '../../../core/providers/selected_month_provider.dart';
-import '../../../core/models/user_profile.dart';
-import '../../medical/providers/medical_providers.dart';
+import '../../../shared/presentation/money_format.dart';
 import '../models/reimbursement.dart';
 import '../providers/expenses_provider.dart';
 import '../providers/expense_filter_provider.dart';
@@ -21,26 +21,7 @@ class ExpensesScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final expensesAsync = ref.watch(filteredExpensesProvider);
-    final activeBudget = ref.watch(activeBudgetProvider).value;
     final categoriesAsync = ref.watch(categoriesProvider);
-
-    String currencySymbol = '\$';
-    if (activeBudget != null) {
-      switch (activeBudget.currency) {
-        case PrimaryCurrency.huf:
-          currencySymbol = 'Ft';
-          break;
-        case PrimaryCurrency.usd:
-          currencySymbol = '\$';
-          break;
-        case PrimaryCurrency.cad:
-          currencySymbol = 'C\$';
-          break;
-        case PrimaryCurrency.eur:
-          currencySymbol = '€';
-          break;
-      }
-    }
 
     return Scaffold(
       appBar: AppBar(
@@ -129,9 +110,13 @@ class ExpensesScreen extends ConsumerWidget {
         onHorizontalDragEnd: (details) {
           if (details.primaryVelocity != null) {
             if (details.primaryVelocity! < -300) {
-              ref.read(selectedYearMonthProvider.notifier).update((state) => nextMonth(state));
+              ref
+                  .read(selectedYearMonthProvider.notifier)
+                  .update((state) => nextMonth(state));
             } else if (details.primaryVelocity! > 300) {
-              ref.read(selectedYearMonthProvider.notifier).update((state) => previousMonth(state));
+              ref
+                  .read(selectedYearMonthProvider.notifier)
+                  .update((state) => previousMonth(state));
             }
           }
         },
@@ -142,7 +127,12 @@ class ExpensesScreen extends ConsumerWidget {
                 await Future.delayed(const Duration(milliseconds: 500));
               },
               child: expenses.isEmpty
-                  ? ListView(children: const [Center(child: Padding(padding: EdgeInsets.all(32), child: Text('No expenses found.')))])
+                  ? ListView(children: const [
+                      Center(
+                          child: Padding(
+                              padding: EdgeInsets.all(32),
+                              child: Text('No expenses found.')))
+                    ])
                   : SlidableAutoCloseBehavior(
                       child: ListView.builder(
                         itemCount: expenses.length,
@@ -151,7 +141,6 @@ class ExpensesScreen extends ConsumerWidget {
                           return _ExpenseTile(
                             key: ValueKey(expense.id),
                             expense: expense,
-                            currencySymbol: currencySymbol,
                           );
                         },
                       ),
@@ -203,7 +192,6 @@ class _OrphanBannerButton extends ConsumerWidget {
   ) async {
     final repository = ref.read(expenseRepositoryProvider);
     final profileId = ref.read(activeProfileProvider).value?.id;
-    final currencySymbol = ref.read(medicalCurrencySymbolProvider);
     final yearMonth = ref.read(selectedYearMonthProvider);
 
     await showDialog<void>(
@@ -239,7 +227,7 @@ class _OrphanBannerButton extends ConsumerWidget {
                         key: ValueKey('orphan-${orphan.id}'),
                         contentPadding: EdgeInsets.zero,
                         title: Text(
-                          '$currencySymbol${orphan.amount.toStringAsFixed(2)}'
+                          '${formatMoney(Money(orphan.amount, orphan.currencyCode ?? CurrencyCode.huf))}'
                           ' received ${DateFormat.yMMMd().format(orphan.date)}',
                         ),
                         trailing: Row(
@@ -333,7 +321,7 @@ class _OrphanBannerButton extends ConsumerWidget {
               key: ValueKey('restore-target-${expense.id}'),
               onPressed: () => Navigator.pop(pickerContext, expense.id),
               child: Text(
-                '${expense.title} - ${expense.amount.toStringAsFixed(2)}',
+                '${expense.title} - ${formatMoney(Money(expense.amount, expense.currencyCode ?? CurrencyCode.huf))}',
               ),
             ),
         ],
@@ -348,12 +336,10 @@ class _OrphanBannerButton extends ConsumerWidget {
 /// - Tap: open the full edit screen.
 class _ExpenseTile extends ConsumerWidget {
   final Expense expense;
-  final String currencySymbol;
 
   const _ExpenseTile({
     super.key,
     required this.expense,
-    required this.currencySymbol,
   });
 
   void _openEdit(BuildContext context) =>
@@ -404,7 +390,8 @@ class _ExpenseTile extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final isPaid = expense.status == ExpenseStatus.paid;
     final isReimbursed = expense.status == ExpenseStatus.reimbursed;
-    final isPartiallyReimbursed = expense.status == ExpenseStatus.partiallyReimbursed;
+    final isPartiallyReimbursed =
+        expense.status == ExpenseStatus.partiallyReimbursed;
 
     IconData statusIcon;
     Color statusColor;
@@ -442,7 +429,9 @@ class _ExpenseTile extends ConsumerWidget {
         children: [
           SlidableAction(
             onPressed: (_) {
-              if (!isReimbursed && !isPartiallyReimbursed) _toggle(context, ref);
+              if (!isReimbursed && !isPartiallyReimbursed) {
+                _toggle(context, ref);
+              }
             },
             backgroundColor: isPaid ? Colors.orange : Colors.green,
             foregroundColor: Colors.white,
@@ -492,7 +481,9 @@ class _ExpenseTile extends ConsumerWidget {
           '${expense.status.name.toUpperCase()} • ${expense.guiltLevel.name}',
         ),
         trailing: Text(
-          '$currencySymbol ${NumberFormat('#,##0.00').format(expense.amount)}',
+          formatMoney(
+            Money(expense.amount, expense.currencyCode ?? CurrencyCode.huf),
+          ),
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
         ),
       ),

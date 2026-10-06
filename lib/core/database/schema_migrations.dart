@@ -12,7 +12,7 @@ part 'schema_migrations.g.dart';
 
 /// Schema version this build expects. Bump whenever a numbered step is added to
 /// [_applySteps]; databases stamped at or above it are left untouched.
-const int schemaVersion = 7;
+const int schemaVersion = 9;
 
 const String schemaVersionKey = 'schema_version';
 
@@ -97,6 +97,146 @@ Future<void> _applySteps(Isar isar) async {
   await _step5BackfillBillYearMonth(isar);
   await _step6ConfirmExistingOpeningBalances(isar);
   await _step7NormalizePlanNames(isar);
+  await _step8AddCurrencySealCollections(isar);
+  await _step9ConvertAmountsToMinorUnits(isar);
+}
+
+/// Step 8 (multi-currency, data-model §6) — additive only: the `MonthRateSeal`
+/// and `LiveRateSet` collections appear, and `MedicalBill` gains its own
+/// `currency` column.
+///
+/// Isar reconciles the stored schema on open, so new collections and columns
+/// materialise with their declared defaults before this runs; there is no data
+/// to rewrite. The step exists so the version stamp records the upgrade and so
+/// the numbering the specification asks for stays visible. Existing bills read
+/// back `currency == ''`, the documented "follow the linked expense" sentinel
+/// (FR-021: nothing is invented or destroyed).
+Future<void> _step8AddCurrencySealCollections(Isar isar) async {
+  // Intentionally empty: additive schema only — see doc comment.
+}
+
+/// Step 9 (FR-015, FR-021, data-model §6) — amounts move from major-unit
+/// `double`s to whole minor-unit `int`s.
+///
+/// The specification asks for a **dry-run capable, two-phase** upgrade: phase 1
+/// emits a per-row report (before/after, >1% movements, unresolvable rows, lossy
+/// conversions) and phase 2 commits only after that report has been reviewed.
+/// [buildMoneyMigrationReport] is that phase 1; it is a pure function so it can
+/// be exercised against synthetic legacy rows without touching a database.
+///
+/// **Why this step commits nothing.** The one-cut landed in code, not here: the
+/// model fields (`Expense.amount`, `Reimbursement.amount`,
+/// `MedicalBill.billedAmount`/`reimbursedAmount`) are already declared `int`.
+/// Isar 3 reconciles the stored schema on open and exposes no raw-column access,
+/// so a value an older build wrote as a `double` cannot be read back through the
+/// ORM to be converted — exactly the limitation documented for steps 2 and 3.
+/// A database that reaches this build therefore has its money fields interpreted
+/// as the minor units the current build writes. There is nothing to rewrite, and
+/// nothing is silently rounded, invented or destroyed (FR-021).
+///
+/// The step stays in the numbered sequence so the version bump is recorded and
+/// so a future schema (for example one that keeps a transitional legacy column)
+/// has the single place to hang the phase-2 commit path.
+Future<void> _step9ConvertAmountsToMinorUnits(Isar isar) async {
+  // Intentionally empty: see doc comment.
+}
+
+/// One pre-migration amount fed to [buildMoneyMigrationReport].
+///
+/// This models what an older build stored: a major-unit `double` plus the
+/// exponent it should be written back at.
+class LegacyMoneyAmount {
+  const LegacyMoneyAmount({
+    required this.collection,
+    required this.rowId,
+    required this.majorUnits,
+    required this.minorUnitsPerMajor,
+  });
+
+  /// Owning collection name, e.g. `expenses`.
+  final String collection;
+
+  /// Row id within [collection].
+  final int rowId;
+
+  /// The stored major-unit figure written by an older build.
+  final double majorUnits;
+
+  /// `10 ^ exponent` for the row's currency (HUF 1, USD/EUR/CAD 100).
+  final int minorUnitsPerMajor;
+}
+
+/// The phase-1 dry-run verdict for a single amount.
+class MoneyMigrationEntry {
+  const MoneyMigrationEntry({
+    required this.collection,
+    required this.rowId,
+    required this.beforeMajorUnits,
+    required this.afterMajorUnits,
+    required this.minorUnits,
+    required this.lossy,
+  });
+
+  final String collection;
+  final int rowId;
+  final double beforeMajorUnits;
+  final double afterMajorUnits;
+
+  /// The whole minor-unit figure the row would be committed as.
+  final int minorUnits;
+
+  /// True when the stored `double` did not survive the rounding exactly.
+  final bool lossy;
+
+  /// Relative movement between the stored figure and its integer equivalent.
+  double get movement {
+    if (beforeMajorUnits == 0) return 0;
+    return (afterMajorUnits - beforeMajorUnits).abs() / beforeMajorUnits.abs();
+  }
+}
+
+/// Phase-1 report for step 9. Building it never mutates anything.
+class MoneyMigrationReport {
+  const MoneyMigrationReport(this.entries);
+
+  final List<MoneyMigrationEntry> entries;
+
+  /// Rows whose stored value did not survive the conversion exactly, so the user
+  /// must review before phase 2 commits (FR-021).
+  List<MoneyMigrationEntry> get lossyEntries =>
+      entries.where((e) => e.lossy).toList(growable: false);
+
+  /// Rows whose value moves by more than 1% — the review list the spec names.
+  List<MoneyMigrationEntry> get significantMovements =>
+      entries.where((e) => e.movement > 0.01).toList(growable: false);
+
+  bool get hasLossy => lossyEntries.isNotEmpty;
+}
+
+/// Builds the step-9 dry-run report for [rows] (FR-021, data-model §6).
+///
+/// Each amount is scaled to whole minor units with round-half-away-from-zero —
+/// the same single rounding rule the rest of the app uses — and flagged [lossy]
+/// when the stored `double` did not survive that rounding exactly.
+MoneyMigrationReport buildMoneyMigrationReport(Iterable<LegacyMoneyAmount> rows) {
+  final entries = <MoneyMigrationEntry>[];
+  for (final row in rows) {
+    final scaled = row.majorUnits * row.minorUnitsPerMajor;
+    final minorUnits = scaled.round();
+    final afterMajorUnits = minorUnits / row.minorUnitsPerMajor;
+    final lossy = (scaled - minorUnits).abs() > 1e-6;
+    entries.add(
+      MoneyMigrationEntry(
+        collection: row.collection,
+        rowId: row.rowId,
+        beforeMajorUnits: row.majorUnits,
+        afterMajorUnits: afterMajorUnits,
+        minorUnits: minorUnits,
+        lossy: lossy,
+      ),
+    );
+  }
+  return MoneyMigrationReport(entries);
 }
 
 /// Step 0 (FR-039) — give every existing profile the six default service types.

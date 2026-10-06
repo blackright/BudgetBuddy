@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../engine/providers/month_summary_provider.dart';
+import '../../../../core/models/currency_code.dart';
 import '../../../medical/presentation/medical_theme.dart';
 
 /// The supporting detail behind the month's headline figures, collapsed by
@@ -18,11 +19,11 @@ import '../../../medical/presentation/medical_theme.dart';
 class MonthSummaryDetails extends ConsumerWidget {
   const MonthSummaryDetails({
     super.key,
-    required this.currencySymbol,
+    required this.currency,
     this.onMedicalTap,
   });
 
-  final String currencySymbol;
+  final CurrencyCode currency;
 
   final VoidCallback? onMedicalTap;
 
@@ -81,7 +82,7 @@ class MonthSummaryDetails extends ConsumerWidget {
     );
   }
 
-  String _money(double amount) => MedicalTheme.money(currencySymbol, amount);
+  String _money(double amount) => MedicalTheme.money(currency, amount);
 }
 
 /// One labelled detail amount, optionally tappable.

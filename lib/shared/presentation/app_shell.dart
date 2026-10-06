@@ -26,12 +26,13 @@ class AppShell extends ConsumerWidget {
     // Check due or overdue bills
     final medicalBillsAsync = ref.watch(medicalBillsProvider);
     final now = ref.watch(clockProvider);
-    
+
     int dueOrOverdueCount = 0;
     if (medicalBillsAsync.value != null) {
       for (final bill in medicalBillsAsync.value!) {
         if (bill.followUpDate != null && bill.state.isPending) {
-          if (bill.followUpDate!.isBefore(now) || bill.followUpDate!.difference(now).inHours < 24) {
+          if (bill.followUpDate!.isBefore(now) ||
+              bill.followUpDate!.difference(now).inHours < 24) {
             dueOrOverdueCount++;
           }
         }

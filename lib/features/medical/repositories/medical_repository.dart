@@ -66,7 +66,7 @@ class ReimbursedBillDeletionException implements Exception {
   const ReimbursedBillDeletionException(this.billId, this.reimbursedAmount);
 
   final int billId;
-  final double reimbursedAmount;
+  final int reimbursedAmount;
 
   @override
   String toString() =>
@@ -255,6 +255,7 @@ class MedicalRepository {
     return ExpenseDelta.between(
       before: before,
       after: ExpenseSnapshot.of(stored),
+      toPrimary: (s) => s.amount.toDouble(),
     );
   }
 
@@ -283,7 +284,7 @@ class MedicalRepository {
     MedicalBill bill,
     MedicalBillState state, {
     MedicalBillContext? context,
-    double? reimbursedAmount,
+    int? reimbursedAmount,
   }) async {
     _validateTransition(bill, state);
 
@@ -305,7 +306,7 @@ class MedicalRepository {
           bill.state == MedicalBillState.finished;
       if (losesReimbursement) {
         await _clearReimbursementFor(bill);
-        bill.reimbursedAmount = 0.0;
+        bill.reimbursedAmount = 0;
       }
 
       bill.state = state;
@@ -340,7 +341,7 @@ class MedicalRepository {
       if (becomesInsurerPaid) {
         await _clearReimbursementFor(bill);
         bill
-          ..reimbursedAmount = 0.0
+          ..reimbursedAmount = 0
           ..insurerReplyPath = null;
         // R-1 — an insurer-paid bill is settled with the provider, so it can
         // never be `finished`.
@@ -359,13 +360,15 @@ class MedicalRepository {
     });
   }
 
-  Future<void> updateMedicalBillReimbursement(MedicalBill bill, double totalReimbursed) async {
+  Future<void> updateMedicalBillReimbursement(
+      MedicalBill bill, int totalReimbursed) async {
     await _isar.writeTxn(() async {
       bill
         ..reimbursedAmount = totalReimbursed
-        ..state = (totalReimbursed >= bill.insurerPaidAmount - 0.01)
+        ..state = (totalReimbursed >= bill.insurerPaidAmount)
             ? MedicalBillState.finished
-            : MedicalBillState.waiting; // or however we want to represent partial
+            : MedicalBillState
+                .waiting; // or however we want to represent partial
       await _isar.medicalBills.put(bill);
     });
   }
@@ -378,7 +381,7 @@ class MedicalRepository {
   /// it was recorded (R-5).
   Future<void> logReimbursement(
     MedicalBill bill, {
-    required double amount,
+    required int amount,
     DateTime? date,
   }) async {
     if (amount <= 0) {
@@ -424,7 +427,8 @@ class MedicalRepository {
             expenseId: expenseId,
             amount: amount,
             currency: expense.currency,
-            originYearMonth: bill.yearMonth.isNotEmpty ? bill.yearMonth : expense.yearMonth,
+            originYearMonth:
+                bill.yearMonth.isNotEmpty ? bill.yearMonth : expense.yearMonth,
             date: date ?? DateTime.now(),
           ),
         );
@@ -514,7 +518,7 @@ class MedicalRepository {
       }
       await _isar.medicalBills.delete(billId);
     });
-    
+
     await ReminderNotificationService().cancelReminder(billId);
   }
 
@@ -846,10 +850,9 @@ class MedicalRepository {
       ..title = title
       // R-007 — the expense amount *is* the money impact.
       ..amount = bill.fundsImpact
-      // Medical bills are always tracked in the budget's primary currency, so
-      // no conversion applies and the rate stays locked at 1.0.
-      ..currency = context.primaryCurrency
-      ..exchangeRateToPrimary = 1.0
+      // Medical bills are tracked in the bill's own currency when it records
+      // one, otherwise the budget's primary currency (FR-016).
+      ..currency = bill.currency.isEmpty ? context.primaryCurrency : bill.currency
       ..categoryId = medicalCategoryId
       ..type = ExpenseType.medical
       // R-1 — only a self-paid bill can be reimbursed, so only a self-paid bill

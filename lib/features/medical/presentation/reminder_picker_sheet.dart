@@ -77,7 +77,9 @@ class _ReminderPickerSheetState extends State<ReminderPickerSheet> {
     final currentFloor = DateTime.now().add(const Duration(minutes: 30));
     if (_selectedDate.isBefore(currentFloor)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Time adjusted to the earliest allowed (30 min from now).')),
+        const SnackBar(
+            content: Text(
+                'Time adjusted to the earliest allowed (30 min from now).')),
       );
       setState(() {
         _selectedDate = currentFloor;
@@ -86,13 +88,14 @@ class _ReminderPickerSheetState extends State<ReminderPickerSheet> {
     }
     Navigator.of(context).pop(_selectedDate);
   }
-  
+
   void _setPreset(Duration duration) {
     var date = DateTime.now().add(duration);
     var minutes = date.minute;
     var nextHalfHour = (minutes < 30) ? 30 : 60;
-    date = DateTime(date.year, date.month, date.day, date.hour).add(Duration(minutes: nextHalfHour));
-    
+    date = DateTime(date.year, date.month, date.day, date.hour)
+        .add(Duration(minutes: nextHalfHour));
+
     if (date.isBefore(_floor)) {
       date = _floor;
     }
@@ -105,13 +108,14 @@ class _ReminderPickerSheetState extends State<ReminderPickerSheet> {
   Widget build(BuildContext context) {
     return SafeArea(
       child: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+          child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Follow-up Reminder', style: Theme.of(context).textTheme.titleLarge),
+            Text('Follow-up Reminder',
+                style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 16),
             Wrap(
               spacing: 8,
@@ -142,14 +146,18 @@ class _ReminderPickerSheetState extends State<ReminderPickerSheet> {
                 final date = await showDatePicker(
                   context: context,
                   initialDate: _selectedDate,
-                  firstDate: DateTime.now(), // Use today as firstDate, floor handles specific time
+                  firstDate: DateTime
+                      .now(), // Use today as firstDate, floor handles specific time
                   lastDate: DateTime(2100),
                 );
                 if (date != null) {
                   setState(() {
                     _selectedDate = DateTime(
-                      date.year, date.month, date.day,
-                      _selectedDate.hour, _selectedDate.minute,
+                      date.year,
+                      date.month,
+                      date.day,
+                      _selectedDate.hour,
+                      _selectedDate.minute,
                     );
                     if (_selectedDate.isBefore(_floor)) {
                       _selectedDate = _floor;
@@ -169,13 +177,17 @@ class _ReminderPickerSheetState extends State<ReminderPickerSheet> {
                 if (time != null) {
                   setState(() {
                     var newDate = DateTime(
-                      _selectedDate.year, _selectedDate.month, _selectedDate.day,
-                      time.hour, time.minute,
+                      _selectedDate.year,
+                      _selectedDate.month,
+                      _selectedDate.day,
+                      time.hour,
+                      time.minute,
                     );
                     if (newDate.isBefore(_floor)) {
                       newDate = _floor;
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Cannot select past time.')),
+                        const SnackBar(
+                            content: Text('Cannot select past time.')),
                       );
                     }
                     _selectedDate = newDate;

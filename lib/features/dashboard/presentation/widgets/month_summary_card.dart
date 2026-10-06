@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../engine/providers/month_summary_provider.dart';
+import '../../../../core/models/currency_code.dart';
 import '../../../medical/presentation/medical_theme.dart';
 
 /// The month's headline figures (FR-018).
@@ -15,9 +16,9 @@ import '../../../medical/presentation/medical_theme.dart';
 /// alive for the expense screens, but the dashboard default view does not show
 /// them (FR-023).
 class MonthSummaryCard extends ConsumerWidget {
-  const MonthSummaryCard({super.key, required this.currencySymbol});
+  const MonthSummaryCard({super.key, required this.currency});
 
-  final String currencySymbol;
+  final CurrencyCode currency;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -94,7 +95,7 @@ class MonthSummaryCard extends ConsumerWidget {
     );
   }
 
-  String _money(double amount) => MedicalTheme.money(currencySymbol, amount);
+  String _money(double amount) => MedicalTheme.money(currency, amount);
 }
 
 /// One labelled amount. The key sits on the value alone so a test can read its

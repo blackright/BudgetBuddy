@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import '../../../../core/models/currency_code.dart';
+import '../../../../core/models/money.dart';
+import '../../../../shared/presentation/money_format.dart';
 import '../../providers/reimbursement_provider.dart';
 
 class ReimbursementHistoryList extends ConsumerWidget {
@@ -13,7 +16,8 @@ class ReimbursementHistoryList extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final reimbursementsAsync = ref.watch(reimbursementsByExpenseProvider(expenseId));
+    final reimbursementsAsync =
+        ref.watch(reimbursementsByExpenseProvider(expenseId));
 
     return reimbursementsAsync.when(
       data: (reimbursements) {
@@ -45,10 +49,16 @@ class ReimbursementHistoryList extends ConsumerWidget {
                   contentPadding: EdgeInsets.zero,
                   leading: CircleAvatar(
                     backgroundColor: Colors.blue.withValues(alpha: 0.1),
-                    child: const Icon(Icons.currency_exchange, color: Colors.blue),
+                    child:
+                        const Icon(Icons.currency_exchange, color: Colors.blue),
                   ),
                   title: Text(
-                    '${reimb.currency} ${NumberFormat('#,##0.00').format(reimb.amount)}',
+                    formatMoney(
+                      Money(
+                        reimb.amount,
+                        reimb.currencyCode ?? CurrencyCode.huf,
+                      ),
+                    ),
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                   subtitle: Column(

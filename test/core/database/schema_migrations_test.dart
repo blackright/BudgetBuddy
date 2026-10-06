@@ -1,4 +1,7 @@
 import 'package:budget_buddy/core/database/schema_migrations.dart';
+import 'package:budget_buddy/core/models/live_rate_set.dart';
+import 'package:budget_buddy/core/models/medical_bill.dart';
+import 'package:budget_buddy/core/models/month_rate_seal.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../features/medical/repositories/medical_test_harness.dart';
@@ -98,6 +101,90 @@ void main() {
 
       expect(await readSchemaVersion(harness.isar), schemaVersion);
       expect(await harness.budgetCount(), 0);
+    });
+
+    test('step 8 makes the new seal collections usable', () async {
+      await harness.runMigrations();
+
+      final seal = MonthRateSeal()
+        ..yearMonth = '2026-01'
+        ..status = SealStatus.sealed
+        ..ratesUsd = 1.0
+        ..ratesHuf = 345.0
+        ..ratesEur = 0.86
+        ..ratesCad = 1.36
+        ..asOf = DateTime(2026, 1, 31)
+        ..fetchedAt = DateTime(2026, 2, 1)
+        ..closedAt = DateTime(2026, 2, 1)
+        ..updatedAt = DateTime(2026, 2, 1);
+      final live = LiveRateSet()
+        ..ratesUsd = 1.0
+        ..ratesHuf = 350.0
+        ..ratesEur = 0.85
+        ..ratesCad = 1.35
+        ..fetchedAt = DateTime(2026, 2, 1);
+
+      await harness.isar.writeTxn(() async {
+        await harness.isar.monthRateSeals.put(seal);
+        await harness.isar.liveRateSets.put(live);
+      });
+
+      final readSeal =
+          await harness.isar.monthRateSeals.getByYearMonth('2026-01');
+      expect(readSeal, isNotNull);
+      expect(readSeal!.status, SealStatus.sealed);
+      expect(readSeal.toRateTable(), isNotNull);
+
+      // Singleton semantics: a second put overwrites, never appends.
+      await harness.isar.writeTxn(() async {
+        await harness.isar.liveRateSets
+            .put(LiveRateSet()..fetchedAt = DateTime(2026, 3, 1));
+      });
+      expect(await harness.isar.liveRateSets.count(), 1);
+    });
+
+    test(
+        'step 8 gives legacy bills the "follow linked expense" currency sentinel',
+        () async {
+      await harness.runMigrations();
+
+      // A bill written without an explicit currency (the pre-step-8 shape)
+      // reads back as the sentinel once the new column exists.
+      final bill = MedicalBill()..billedAmount = 100;
+      await harness.isar.writeTxn(() async {
+        await harness.isar.medicalBills.put(bill);
+      });
+
+      final read = await harness.isar.medicalBills.get(bill.id);
+      expect(read, isNotNull);
+      expect(read!.currency, isEmpty);
+    });
+
+    test('step 8 is idempotent and leaves written seals untouched', () async {
+      await harness.runMigrations();
+
+      final seal = MonthRateSeal()
+        ..yearMonth = '2026-02'
+        ..status = SealStatus.provisional
+        ..ratesUsd = 1.0
+        ..ratesHuf = 400.0
+        ..ratesEur = 0.9
+        ..ratesCad = 1.4
+        ..asOf = DateTime(2026, 2, 28)
+        ..fetchedAt = DateTime(2026, 3, 1)
+        ..updatedAt = DateTime(2026, 3, 1);
+      await harness.isar.writeTxn(() async {
+        await harness.isar.monthRateSeals.put(seal);
+      });
+
+      await harness.runMigrations();
+
+      final after = await harness.isar.monthRateSeals.getByYearMonth('2026-02');
+      expect(after, isNotNull);
+      expect(after!.status, SealStatus.provisional);
+      expect(after.ratesHuf, 400.0);
+      expect(await harness.isar.monthRateSeals.count(), 1);
+      expect(await readSchemaVersion(harness.isar), schemaVersion);
     });
   });
 }

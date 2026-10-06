@@ -42,10 +42,22 @@ Future<TimeOfDay?> showSafeTimePicker({
     initialTime: initialTime,
     builder: (BuildContext context, Widget? child) {
       final MediaQueryData data = MediaQuery.of(context);
+      
+      // TimePickerDialog requires at least ~216px of height, but calculates
+      // availableHeight = size.height - viewInsets.bottom. If the keyboard
+      // is very tall, this becomes smaller than the minHeight and crashes
+      // with non-normalized BoxConstraints. We clamp the bottom inset to ensure
+      // there is always at least 250px available for the dialog.
+      final double maxSafeInset = (data.size.height - 250.0).clamp(0.0, double.infinity);
+      final double safeBottomInset = data.viewInsets.bottom > maxSafeInset 
+          ? maxSafeInset 
+          : data.viewInsets.bottom;
+
       return MediaQuery(
         data: data.copyWith(
-          textScaler:
-              data.textScaler.clamp(minScaleFactor: _kMinSafeTimePickerTextScale),
+          textScaler: data.textScaler
+              .clamp(minScaleFactor: _kMinSafeTimePickerTextScale),
+          viewInsets: data.viewInsets.copyWith(bottom: safeBottomInset),
         ),
         child: child!,
       );

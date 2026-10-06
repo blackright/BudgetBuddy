@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/database/isar_helper.dart';
+import '../../../core/models/currency_code.dart';
 import '../../../core/models/monthly_budget.dart';
 import '../../../core/models/user_profile.dart';
 import '../../../core/providers/active_budget_provider.dart';
@@ -25,6 +26,7 @@ class DashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final activeBudget = ref.watch(activeBudgetProvider).value;
     final symbol = currencySymbol(activeBudget);
+    final currency = activeBudget?.currency.code ?? CurrencyCode.usd;
 
     return Scaffold(
       appBar: AppBar(
@@ -61,9 +63,13 @@ class DashboardScreen extends ConsumerWidget {
         onHorizontalDragEnd: (details) {
           if (details.primaryVelocity != null) {
             if (details.primaryVelocity! < -300) {
-              ref.read(selectedYearMonthProvider.notifier).update((state) => nextMonth(state));
+              ref
+                  .read(selectedYearMonthProvider.notifier)
+                  .update((state) => nextMonth(state));
             } else if (details.primaryVelocity! > 300) {
-              ref.read(selectedYearMonthProvider.notifier).update((state) => previousMonth(state));
+              ref
+                  .read(selectedYearMonthProvider.notifier)
+                  .update((state) => previousMonth(state));
             }
           }
         },
@@ -75,10 +81,10 @@ class DashboardScreen extends ConsumerWidget {
             padding: const EdgeInsets.all(16),
             children: [
               MonthIncompleteBanner(currencySymbol: symbol),
-              MonthSummaryCard(currencySymbol: symbol),
+              MonthSummaryCard(currency: currency),
               const SizedBox(height: 12),
               MonthSummaryDetails(
-                currencySymbol: symbol,
+                currency: currency,
                 // The selected month lives in a provider, so the Medical tab opens
                 // on the same month with no route parameter to carry (FR-022,
                 // FR-027).
@@ -99,7 +105,8 @@ class DashboardScreen extends ConsumerWidget {
                   ),
                   InkWell(
                     onTap: () => context.go('/medical'),
-                    child: _buildActionButton(Icons.medical_services, 'Medical'),
+                    child:
+                        _buildActionButton(Icons.medical_services, 'Medical'),
                   ),
                   _buildActionButton(Icons.history, 'History'),
                 ],

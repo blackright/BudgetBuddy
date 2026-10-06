@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
+import '../../../core/models/currency_code.dart';
 import '../../../core/models/medical_bill.dart';
+import '../../../shared/presentation/money_format.dart';
 
 /// Shared visual tokens for the medical screens.
 ///
@@ -108,10 +109,13 @@ class MedicalTheme {
     }
   }
 
-  /// Money rendered the way the rest of the app does it. [currencySymbol]
-  /// comes from the active budget so amounts follow the primary currency.
-  static String money(String currencySymbol, double amount) {
-    final formatter = NumberFormat('#,##0.00', 'en_US');
-    return '$currencySymbol ${formatter.format(amount)}';
-  }
+  /// Money rendered through the app's single formatter (FR-018), so medical
+  /// figures obey the same exponent rules — HUF has no decimals, the rest two —
+  /// and never hardcode a symbol (defect D10).
+  static String money(CurrencyCode currency, num amount) =>
+      formatMajorUnits(amount, currency);
+
+  /// Renders money stored in minor units.
+  static String moneyMinor(CurrencyCode currency, int minorUnits) =>
+      formatMinorUnits(minorUnits, currency);
 }

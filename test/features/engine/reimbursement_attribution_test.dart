@@ -2,15 +2,14 @@ import 'dart:io';
 
 import 'package:budget_buddy/core/database/schema_migrations.dart';
 import 'package:budget_buddy/core/models/category.dart';
+import 'package:budget_buddy/core/models/currency_code.dart';
 import 'package:budget_buddy/core/models/expense.dart';
+import 'package:budget_buddy/core/models/money.dart';
 import 'package:budget_buddy/core/models/monthly_budget.dart';
 import 'package:budget_buddy/core/models/user_profile.dart';
 import 'package:budget_buddy/features/engine/month_summary.dart';
 import 'package:budget_buddy/features/expenses/models/reimbursement.dart';
 import 'package:budget_buddy/features/expenses/repositories/expense_repository.dart';
-import 'package:budget_buddy/core/network/exchange_rate_cache.dart';
-import 'package:budget_buddy/core/network/exchange_rate_client.dart';
-import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:isar/isar.dart';
 
@@ -208,7 +207,7 @@ void main() {
 
       final orphans = await fixture.repository.getOrphanedReimbursements();
       expect(orphans, hasLength(1));
-      expect(orphans.single.amount, 260);
+      expect(orphans.single.amount, Money.fromMajor(260, CurrencyCode.usd).minorUnits);
       expect(orphans.single.orphaned, isTrue);
       // FR-032: the money still came back, so the month still reports it.
       expect((await fixture.summary(origin)).moneyReturned, 260);
@@ -271,7 +270,7 @@ void main() {
         Reimbursement(
           profileId: 1,
           expenseId: 999999,
-          amount: 75,
+          amount: Money.fromMajor(75, CurrencyCode.usd).minorUnits,
           currency: 'USD',
           originYearMonth: '2026-04',
           date: DateTime(2026, 4, 2),
@@ -280,7 +279,7 @@ void main() {
 
       expect((await fixture.summary('2026-04')).moneyReturned, 75.0);
       final stored = await fixture.isar.reimbursements.where().findAll();
-      expect(stored.single.amount, 75);
+      expect(stored.single.amount, Money.fromMajor(75, CurrencyCode.usd).minorUnits);
     });
   });
 
@@ -328,12 +327,7 @@ void main() {
 class _AttributionFixture {
   _AttributionFixture._(
       this.isar, this.directory, this.profileId, this.budgetId)
-      // Every currency here is USD, so the cache short-circuits to 1.0 and never
-      // touches the network or the documents directory.
-      : repository = ExpenseRepository(
-          isar,
-          ExchangeRateCache(ExchangeRateClient(Dio())),
-        );
+      : repository = ExpenseRepository(isar);
 
   static bool _coreReady = false;
   static int _nextInstance = 0;
@@ -410,7 +404,7 @@ class _AttributionFixture {
       profileId: profileId,
       yearMonth: yearMonth,
       title: 'Reimbursable',
-      amount: amount,
+      amount: Money.fromMajor(amount, CurrencyCode.usd).minorUnits,
       currency: 'USD',
       categoryId: 'medical',
       date: DateTime(
@@ -453,7 +447,7 @@ class _AttributionFixture {
       Reimbursement(
         profileId: 1,
         expenseId: targetId,
-        amount: amount,
+        amount: Money.fromMajor(amount, CurrencyCode.usd).minorUnits,
         currency: 'USD',
         originYearMonth: againstYearMonth ?? '',
         date: date,
@@ -475,6 +469,9 @@ class _AttributionFixture {
     final budget = await _budget(yearMonth);
     final income = budget.netSalaryOverride ?? 0.0;
 
+    Money toUsd(Expense expense) =>
+        Money(expense.amount, expense.currencyCode ?? CurrencyCode.usd);
+
     return MonthSummary.from(
       yearMonth: yearMonth,
       income: income,
@@ -482,10 +479,13 @@ class _AttributionFixture {
       expenses: expenses,
       reimbursements: reimbursements,
       openingBalance: budget.baseAvailableAmount,
+      convertExpense: toUsd,
+      convertReimbursement: (r) =>
+          Money(r.amount, r.currencyCode ?? CurrencyCode.usd),
       targetPaidAmounts: {
         for (final expense in expenses)
           if (expense.status == ExpenseStatus.paid)
-            expense.id: expense.amount * expense.exchangeRateToPrimary,
+            expense.id: toUsd(expense).majorValue,
       },
     );
   }

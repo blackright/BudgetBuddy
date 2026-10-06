@@ -1,30 +1,22 @@
 import 'package:isar/isar.dart';
 
-import '../../../core/network/exchange_rate_cache.dart';
 import '../models/reimbursement.dart';
 
 class ReimbursementRepository {
   final Isar _isar;
-  final ExchangeRateCache _cache;
 
-  ReimbursementRepository(this._isar, this._cache);
+  ReimbursementRepository(this._isar);
 
-  /// Adds a new reimbursement. 
+  /// Adds a new reimbursement.
   /// Supports multiple reimbursements per expense (Partial Reimbursements).
-  Future<void> addReimbursement(Reimbursement reimbursement, String primaryCurrency) async {
-    final rate = await _cache.getRate(reimbursement.currency, primaryCurrency);
-    reimbursement.exchangeRateToPrimary = rate;
-
+  Future<void> addReimbursement(Reimbursement reimbursement) async {
     await _isar.writeTxn(() async {
       await _isar.reimbursements.put(reimbursement);
     });
   }
 
   /// Updates an existing reimbursement.
-  Future<void> updateReimbursement(Reimbursement reimbursement, String primaryCurrency) async {
-    final rate = await _cache.getRate(reimbursement.currency, primaryCurrency);
-    reimbursement.exchangeRateToPrimary = rate;
-
+  Future<void> updateReimbursement(Reimbursement reimbursement) async {
     await _isar.writeTxn(() async {
       await _isar.reimbursements.put(reimbursement);
     });

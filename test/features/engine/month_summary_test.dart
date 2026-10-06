@@ -1,4 +1,6 @@
+import 'package:budget_buddy/core/models/currency_code.dart';
 import 'package:budget_buddy/core/models/expense.dart';
+import 'package:budget_buddy/core/models/money.dart';
 import 'package:budget_buddy/features/engine/month_summary.dart';
 import 'package:budget_buddy/features/expenses/models/reimbursement.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -13,17 +15,16 @@ void main() {
     String yearMonth = '2026-01',
     String categoryId = 'general',
     ExpenseType type = ExpenseType.standard,
-    double rate = 1.0,
+    CurrencyCode currency = CurrencyCode.usd,
   }) {
     return Expense(
       id: id,
       profileId: 1,
       yearMonth: yearMonth,
-      exchangeRateToPrimary: rate,
       type: type,
       title: 'Test expense',
-      amount: amount,
-      currency: 'USD',
+      amount: Money.fromMajor(amount, currency).minorUnits,
+      currency: currency.code,
       categoryId: categoryId,
       status: status,
       date: DateTime(2026, 1, 15),
@@ -42,8 +43,8 @@ void main() {
       profileId: 1, // Add mock profileId
       expenseId: expenseId,
       originYearMonth: originYearMonth,
-      amount: amount,
-      currency: 'USD', // Add mock currency
+      amount: Money.fromMajor(amount, CurrencyCode.usd).minorUnits,
+      currency: 'usd', // Add mock currency
       date: DateTime(2026, 4, 2),
     );
   }
@@ -56,6 +57,8 @@ void main() {
     List<Expense> expenses = const [],
     List<Reimbursement> reimbursements = const [],
     Map<int, double> targetPaidAmounts = const {},
+    Money Function(Expense)? convertExpense,
+    Money Function(Reimbursement)? convertReimbursement,
   }) {
     return MonthSummary.from(
       yearMonth: yearMonth,
@@ -65,6 +68,10 @@ void main() {
       reimbursements: reimbursements,
       openingBalance: openingBalance,
       targetPaidAmounts: targetPaidAmounts,
+      convertExpense: convertExpense ??
+          (e) => Money(e.amount, e.currencyCode ?? CurrencyCode.usd),
+      convertReimbursement: convertReimbursement ??
+          (r) => Money(r.amount, r.currencyCode ?? CurrencyCode.usd),
     );
   }
 
@@ -250,9 +257,13 @@ void main() {
       final summary = build(
         income: 4000,
         expenses: [
-          expense(amount: 1000, id: 1, rate: 1.0),
-          expense(amount: 100, id: 2, rate: 4.0),
+          expense(amount: 1000, id: 1),
+          expense(amount: 100, id: 2, currency: CurrencyCode.eur),
         ],
+        convertExpense: (e) => Money(
+          e.amount,
+          e.currencyCode ?? CurrencyCode.usd,
+        ).scaledBy(4.0, CurrencyCode.usd),
       );
 
       expect(summary.paymentsMade, 1400);

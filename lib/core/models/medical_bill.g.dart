@@ -25,77 +25,82 @@ const MedicalBillSchema = CollectionSchema(
     r'billedAmount': PropertySchema(
       id: 1,
       name: r'billedAmount',
-      type: IsarType.double,
+      type: IsarType.long,
     ),
     r'calendarEventId': PropertySchema(
       id: 2,
       name: r'calendarEventId',
       type: IsarType.string,
     ),
-    r'familyMemberId': PropertySchema(
+    r'currency': PropertySchema(
       id: 3,
+      name: r'currency',
+      type: IsarType.string,
+    ),
+    r'familyMemberId': PropertySchema(
+      id: 4,
       name: r'familyMemberId',
       type: IsarType.long,
     ),
     r'followUpDate': PropertySchema(
-      id: 4,
+      id: 5,
       name: r'followUpDate',
       type: IsarType.dateTime,
     ),
     r'insurerReplyPath': PropertySchema(
-      id: 5,
+      id: 6,
       name: r'insurerReplyPath',
       type: IsarType.string,
     ),
     r'linkedExpenseId': PropertySchema(
-      id: 6,
+      id: 7,
       name: r'linkedExpenseId',
       type: IsarType.long,
     ),
     r'patientSharePercent': PropertySchema(
-      id: 7,
+      id: 8,
       name: r'patientSharePercent',
       type: IsarType.double,
     ),
     r'paymentMethod': PropertySchema(
-      id: 8,
+      id: 9,
       name: r'paymentMethod',
       type: IsarType.byte,
       enumMap: _MedicalBillpaymentMethodEnumValueMap,
     ),
     r'profileId': PropertySchema(
-      id: 9,
+      id: 10,
       name: r'profileId',
       type: IsarType.long,
     ),
     r'providerId': PropertySchema(
-      id: 10,
+      id: 11,
       name: r'providerId',
       type: IsarType.long,
     ),
     r'reimbursedAmount': PropertySchema(
-      id: 11,
+      id: 12,
       name: r'reimbursedAmount',
-      type: IsarType.double,
+      type: IsarType.long,
     ),
     r'serviceDate': PropertySchema(
-      id: 12,
+      id: 13,
       name: r'serviceDate',
       type: IsarType.dateTime,
     ),
     r'serviceTypeId': PropertySchema(
-      id: 13,
+      id: 14,
       name: r'serviceTypeId',
       type: IsarType.long,
     ),
     r'state': PropertySchema(
-      id: 14,
+      id: 15,
       name: r'state',
       type: IsarType.byte,
       enumMap: _MedicalBillstateEnumValueMap,
     ),
     r'yearMonth': PropertySchema(
-      id: 15,
+      id: 16,
       name: r'yearMonth',
       type: IsarType.string,
     )
@@ -237,6 +242,7 @@ int _medicalBillEstimateSize(
       bytesCount += 3 + value.length * 3;
     }
   }
+  bytesCount += 3 + object.currency.length * 3;
   {
     final value = object.insurerReplyPath;
     if (value != null) {
@@ -254,21 +260,22 @@ void _medicalBillSerialize(
   Map<Type, List<int>> allOffsets,
 ) {
   writer.writeString(offsets[0], object.billPhotoPath);
-  writer.writeDouble(offsets[1], object.billedAmount);
+  writer.writeLong(offsets[1], object.billedAmount);
   writer.writeString(offsets[2], object.calendarEventId);
-  writer.writeLong(offsets[3], object.familyMemberId);
-  writer.writeDateTime(offsets[4], object.followUpDate);
-  writer.writeString(offsets[5], object.insurerReplyPath);
-  writer.writeLong(offsets[6], object.linkedExpenseId);
-  writer.writeDouble(offsets[7], object.patientSharePercent);
-  writer.writeByte(offsets[8], object.paymentMethod.index);
-  writer.writeLong(offsets[9], object.profileId);
-  writer.writeLong(offsets[10], object.providerId);
-  writer.writeDouble(offsets[11], object.reimbursedAmount);
-  writer.writeDateTime(offsets[12], object.serviceDate);
-  writer.writeLong(offsets[13], object.serviceTypeId);
-  writer.writeByte(offsets[14], object.state.index);
-  writer.writeString(offsets[15], object.yearMonth);
+  writer.writeString(offsets[3], object.currency);
+  writer.writeLong(offsets[4], object.familyMemberId);
+  writer.writeDateTime(offsets[5], object.followUpDate);
+  writer.writeString(offsets[6], object.insurerReplyPath);
+  writer.writeLong(offsets[7], object.linkedExpenseId);
+  writer.writeDouble(offsets[8], object.patientSharePercent);
+  writer.writeByte(offsets[9], object.paymentMethod.index);
+  writer.writeLong(offsets[10], object.profileId);
+  writer.writeLong(offsets[11], object.providerId);
+  writer.writeLong(offsets[12], object.reimbursedAmount);
+  writer.writeDateTime(offsets[13], object.serviceDate);
+  writer.writeLong(offsets[14], object.serviceTypeId);
+  writer.writeByte(offsets[15], object.state.index);
+  writer.writeString(offsets[16], object.yearMonth);
 }
 
 MedicalBill _medicalBillDeserialize(
@@ -279,26 +286,27 @@ MedicalBill _medicalBillDeserialize(
 ) {
   final object = MedicalBill();
   object.billPhotoPath = reader.readStringOrNull(offsets[0]);
-  object.billedAmount = reader.readDouble(offsets[1]);
+  object.billedAmount = reader.readLong(offsets[1]);
   object.calendarEventId = reader.readStringOrNull(offsets[2]);
-  object.familyMemberId = reader.readLongOrNull(offsets[3]);
-  object.followUpDate = reader.readDateTimeOrNull(offsets[4]);
+  object.currency = reader.readString(offsets[3]);
+  object.familyMemberId = reader.readLongOrNull(offsets[4]);
+  object.followUpDate = reader.readDateTimeOrNull(offsets[5]);
   object.id = id;
-  object.insurerReplyPath = reader.readStringOrNull(offsets[5]);
-  object.linkedExpenseId = reader.readLongOrNull(offsets[6]);
-  object.patientSharePercent = reader.readDouble(offsets[7]);
+  object.insurerReplyPath = reader.readStringOrNull(offsets[6]);
+  object.linkedExpenseId = reader.readLongOrNull(offsets[7]);
+  object.patientSharePercent = reader.readDouble(offsets[8]);
   object.paymentMethod = _MedicalBillpaymentMethodValueEnumMap[
-          reader.readByteOrNull(offsets[8])] ??
+          reader.readByteOrNull(offsets[9])] ??
       MedicalPaymentMethod.insurerPaid;
-  object.profileId = reader.readLongOrNull(offsets[9]);
-  object.providerId = reader.readLongOrNull(offsets[10]);
-  object.reimbursedAmount = reader.readDouble(offsets[11]);
-  object.serviceDate = reader.readDateTimeOrNull(offsets[12]);
-  object.serviceTypeId = reader.readLongOrNull(offsets[13]);
+  object.profileId = reader.readLongOrNull(offsets[10]);
+  object.providerId = reader.readLongOrNull(offsets[11]);
+  object.reimbursedAmount = reader.readLong(offsets[12]);
+  object.serviceDate = reader.readDateTimeOrNull(offsets[13]);
+  object.serviceTypeId = reader.readLongOrNull(offsets[14]);
   object.state =
-      _MedicalBillstateValueEnumMap[reader.readByteOrNull(offsets[14])] ??
+      _MedicalBillstateValueEnumMap[reader.readByteOrNull(offsets[15])] ??
           MedicalBillState.planned;
-  object.yearMonth = reader.readString(offsets[15]);
+  object.yearMonth = reader.readString(offsets[16]);
   return object;
 }
 
@@ -312,37 +320,39 @@ P _medicalBillDeserializeProp<P>(
     case 0:
       return (reader.readStringOrNull(offset)) as P;
     case 1:
-      return (reader.readDouble(offset)) as P;
+      return (reader.readLong(offset)) as P;
     case 2:
       return (reader.readStringOrNull(offset)) as P;
     case 3:
-      return (reader.readLongOrNull(offset)) as P;
+      return (reader.readString(offset)) as P;
     case 4:
-      return (reader.readDateTimeOrNull(offset)) as P;
-    case 5:
-      return (reader.readStringOrNull(offset)) as P;
-    case 6:
       return (reader.readLongOrNull(offset)) as P;
+    case 5:
+      return (reader.readDateTimeOrNull(offset)) as P;
+    case 6:
+      return (reader.readStringOrNull(offset)) as P;
     case 7:
-      return (reader.readDouble(offset)) as P;
+      return (reader.readLongOrNull(offset)) as P;
     case 8:
+      return (reader.readDouble(offset)) as P;
+    case 9:
       return (_MedicalBillpaymentMethodValueEnumMap[
               reader.readByteOrNull(offset)] ??
           MedicalPaymentMethod.insurerPaid) as P;
-    case 9:
-      return (reader.readLongOrNull(offset)) as P;
     case 10:
       return (reader.readLongOrNull(offset)) as P;
     case 11:
-      return (reader.readDouble(offset)) as P;
-    case 12:
-      return (reader.readDateTimeOrNull(offset)) as P;
-    case 13:
       return (reader.readLongOrNull(offset)) as P;
+    case 12:
+      return (reader.readLong(offset)) as P;
+    case 13:
+      return (reader.readDateTimeOrNull(offset)) as P;
     case 14:
+      return (reader.readLongOrNull(offset)) as P;
+    case 15:
       return (_MedicalBillstateValueEnumMap[reader.readByteOrNull(offset)] ??
           MedicalBillState.planned) as P;
-    case 15:
+    case 16:
       return (reader.readString(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -1496,58 +1506,49 @@ extension MedicalBillQueryFilter
   }
 
   QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
-      billedAmountEqualTo(
-    double value, {
-    double epsilon = Query.epsilon,
-  }) {
+      billedAmountEqualTo(int value) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
         property: r'billedAmount',
         value: value,
-        epsilon: epsilon,
       ));
     });
   }
 
   QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
       billedAmountGreaterThan(
-    double value, {
+    int value, {
     bool include = false,
-    double epsilon = Query.epsilon,
   }) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.greaterThan(
         include: include,
         property: r'billedAmount',
         value: value,
-        epsilon: epsilon,
       ));
     });
   }
 
   QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
       billedAmountLessThan(
-    double value, {
+    int value, {
     bool include = false,
-    double epsilon = Query.epsilon,
   }) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.lessThan(
         include: include,
         property: r'billedAmount',
         value: value,
-        epsilon: epsilon,
       ));
     });
   }
 
   QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
       billedAmountBetween(
-    double lower,
-    double upper, {
+    int lower,
+    int upper, {
     bool includeLower = true,
     bool includeUpper = true,
-    double epsilon = Query.epsilon,
   }) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.between(
@@ -1556,7 +1557,6 @@ extension MedicalBillQueryFilter
         includeLower: includeLower,
         upper: upper,
         includeUpper: includeUpper,
-        epsilon: epsilon,
       ));
     });
   }
@@ -1710,6 +1710,141 @@ extension MedicalBillQueryFilter
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.greaterThan(
         property: r'calendarEventId',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition> currencyEqualTo(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'currency',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      currencyGreaterThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'currency',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      currencyLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'currency',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition> currencyBetween(
+    String lower,
+    String upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'currency',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      currencyStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'currency',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      currencyEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'currency',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      currencyContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'currency',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition> currencyMatches(
+      String pattern,
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'currency',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      currencyIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'currency',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      currencyIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'currency',
         value: '',
       ));
     });
@@ -2415,58 +2550,49 @@ extension MedicalBillQueryFilter
   }
 
   QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
-      reimbursedAmountEqualTo(
-    double value, {
-    double epsilon = Query.epsilon,
-  }) {
+      reimbursedAmountEqualTo(int value) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
         property: r'reimbursedAmount',
         value: value,
-        epsilon: epsilon,
       ));
     });
   }
 
   QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
       reimbursedAmountGreaterThan(
-    double value, {
+    int value, {
     bool include = false,
-    double epsilon = Query.epsilon,
   }) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.greaterThan(
         include: include,
         property: r'reimbursedAmount',
         value: value,
-        epsilon: epsilon,
       ));
     });
   }
 
   QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
       reimbursedAmountLessThan(
-    double value, {
+    int value, {
     bool include = false,
-    double epsilon = Query.epsilon,
   }) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.lessThan(
         include: include,
         property: r'reimbursedAmount',
         value: value,
-        epsilon: epsilon,
       ));
     });
   }
 
   QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
       reimbursedAmountBetween(
-    double lower,
-    double upper, {
+    int lower,
+    int upper, {
     bool includeLower = true,
     bool includeUpper = true,
-    double epsilon = Query.epsilon,
   }) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.between(
@@ -2475,7 +2601,6 @@ extension MedicalBillQueryFilter
         includeLower: includeLower,
         upper: upper,
         includeUpper: includeUpper,
-        epsilon: epsilon,
       ));
     });
   }
@@ -2866,6 +2991,18 @@ extension MedicalBillQuerySortBy
     });
   }
 
+  QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy> sortByCurrency() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'currency', Sort.asc);
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy> sortByCurrencyDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'currency', Sort.desc);
+    });
+  }
+
   QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy> sortByFamilyMemberId() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'familyMemberId', Sort.asc);
@@ -3075,6 +3212,18 @@ extension MedicalBillQuerySortThenBy
     });
   }
 
+  QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy> thenByCurrency() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'currency', Sort.asc);
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy> thenByCurrencyDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'currency', Sort.desc);
+    });
+  }
+
   QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy> thenByFamilyMemberId() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'familyMemberId', Sort.asc);
@@ -3279,6 +3428,13 @@ extension MedicalBillQueryWhereDistinct
     });
   }
 
+  QueryBuilder<MedicalBill, MedicalBill, QDistinct> distinctByCurrency(
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'currency', caseSensitive: caseSensitive);
+    });
+  }
+
   QueryBuilder<MedicalBill, MedicalBill, QDistinct> distinctByFamilyMemberId() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'familyMemberId');
@@ -3378,7 +3534,7 @@ extension MedicalBillQueryProperty
     });
   }
 
-  QueryBuilder<MedicalBill, double, QQueryOperations> billedAmountProperty() {
+  QueryBuilder<MedicalBill, int, QQueryOperations> billedAmountProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'billedAmount');
     });
@@ -3388,6 +3544,12 @@ extension MedicalBillQueryProperty
       calendarEventIdProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'calendarEventId');
+    });
+  }
+
+  QueryBuilder<MedicalBill, String, QQueryOperations> currencyProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'currency');
     });
   }
 
@@ -3443,8 +3605,7 @@ extension MedicalBillQueryProperty
     });
   }
 
-  QueryBuilder<MedicalBill, double, QQueryOperations>
-      reimbursedAmountProperty() {
+  QueryBuilder<MedicalBill, int, QQueryOperations> reimbursedAmountProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'reimbursedAmount');
     });

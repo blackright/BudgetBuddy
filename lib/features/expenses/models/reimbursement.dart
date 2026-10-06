@@ -1,5 +1,7 @@
 import 'package:isar/isar.dart';
 
+import '../../../core/models/currency_code.dart';
+
 part 'reimbursement.g.dart';
 
 @collection
@@ -24,9 +26,11 @@ class Reimbursement {
   @Index()
   bool orphaned;
 
-  double amount;
+  /// Amount in whole minor units of [currency] (FR-015, data-model §4.3).
+  int amount;
+
+  /// Persisted currency code; resolve via [currencyCode] (FR-021, §4.4).
   String currency;
-  double exchangeRateToPrimary;
 
   /// When the user recorded the reimbursement. Display and audit only; never
   /// used for attribution.
@@ -42,8 +46,11 @@ class Reimbursement {
     this.orphaned = false,
     required this.amount,
     required this.currency,
-    this.exchangeRateToPrimary = 1.0,
     required this.date,
     this.note,
   });
+
+  /// The parsed currency, or `null` for a legacy/unsupported code (FR-021).
+  @ignore
+  CurrencyCode? get currencyCode => CurrencyCode.tryParse(currency);
 }

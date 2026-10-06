@@ -2,37 +2,25 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:isar/isar.dart';
 
 import '../../../core/database/isar_helper.dart';
-import '../../../core/network/exchange_rate_cache.dart';
 import '../../../core/models/expense.dart';
 import '../models/reimbursement.dart';
 
 final expenseRepositoryProvider = Provider<ExpenseRepository>((ref) {
-  return ExpenseRepository(
-    IsarHelper.instance,
-    ref.watch(exchangeRateCacheProvider),
-  );
+  return ExpenseRepository(IsarHelper.instance);
 });
 
 class ExpenseRepository {
   final Isar _isar;
-  final ExchangeRateCache _cache;
 
-  ExpenseRepository(this._isar, this._cache);
+  ExpenseRepository(this._isar);
 
-  Future<void> addExpense(Expense expense, String primaryCurrency) async {
-    final rate = await _cache.getRate(expense.currency, primaryCurrency);
-    expense.exchangeRateToPrimary = rate;
-
+  Future<void> addExpense(Expense expense) async {
     await _isar.writeTxn(() async {
       await _isar.expenses.put(expense);
     });
   }
 
-  Future<void> updateExpense(Expense expense, String primaryCurrency) async {
-    // Usually exchange rate is locked in at creation, but if currency changes, we update it.
-    final rate = await _cache.getRate(expense.currency, primaryCurrency);
-    expense.exchangeRateToPrimary = rate;
-
+  Future<void> updateExpense(Expense expense) async {
     await _isar.writeTxn(() async {
       await _isar.expenses.put(expense);
     });

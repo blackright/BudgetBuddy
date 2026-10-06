@@ -14,7 +14,7 @@ import 'core/services/reminder_notification_service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await IsarHelper.init();
-  
+
   await ReminderNotificationService().init();
 
   final container = ProviderContainer();
@@ -36,7 +36,8 @@ class MyApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(routerProvider);
     final activeProfileAsync = ref.watch(activeProfileProvider);
-    final AppFontFamily familySelection = activeProfileAsync.valueOrNull?.fontFamily ?? AppFontFamily.system;
+    final AppFontFamily familySelection =
+        activeProfileAsync.valueOrNull?.fontFamily ?? AppFontFamily.system;
 
     String? fontFamily;
     switch (familySelection) {

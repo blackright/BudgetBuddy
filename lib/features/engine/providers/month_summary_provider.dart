@@ -5,7 +5,9 @@ import '../../../core/providers/active_profile_provider.dart';
 import '../../../core/providers/selected_month_provider.dart';
 import '../../expenses/repositories/expense_repository.dart';
 import '../../finance/providers/finance_providers.dart';
+import '../currency_resolution.dart';
 import '../month_summary.dart';
+import 'rate_registry_provider.dart';
 import 'true_available_provider.dart';
 
 /// Reimbursements belonging to the selected month.
@@ -29,7 +31,10 @@ final monthlyOriginReimbursementsProvider = StreamProvider((ref) {
 final monthSummaryProvider = Provider<MonthSummary>((ref) {
   final yearMonth = ref.watch(selectedYearMonthProvider);
   final month = ref.watch(monthFinanceProvider).value;
+  final profile = ref.watch(activeProfileProvider).value;
   final income = ref.watch(resolvedIncomeProvider);
+  final table = ref.watch(rateRegistryProvider).tableFor(yearMonth);
+  final display = resolveDisplayCurrency(month: month, profile: profile);
   final expenses =
       ref.watch(monthlyExpensesProvider).value ?? const <Expense>[];
   final reimbursements =
@@ -42,7 +47,7 @@ final monthSummaryProvider = Provider<MonthSummary>((ref) {
   final targetPaidAmounts = <int, double>{
     for (final expense in expenses)
       if (expense.status == ExpenseStatus.paid)
-        expense.id: expense.amount * expense.exchangeRateToPrimary,
+        expense.id: expenseToDisplay(expense, display, table).majorValue,
   };
 
   return MonthSummary.from(
@@ -51,6 +56,8 @@ final monthSummaryProvider = Provider<MonthSummary>((ref) {
     usesOverriddenIncome: income.usesOverride,
     expenses: expenses,
     reimbursements: reimbursements,
+    convertExpense: (e) => expenseToDisplay(e, display, table),
+    convertReimbursement: (r) => reimbursementToDisplay(r, display, table),
     openingBalance: month != null && month.openingBalanceConfirmed
         ? month.baseAvailableAmount
         : null,

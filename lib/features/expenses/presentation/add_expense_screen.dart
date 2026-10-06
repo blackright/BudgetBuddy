@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/models/currency_code.dart';
 import '../../../../core/models/expense.dart';
+import '../../../../core/models/money.dart';
 import '../../../../core/providers/active_budget_provider.dart';
 import '../../../../core/providers/active_profile_provider.dart';
 import '../providers/expenses_provider.dart';
@@ -41,11 +43,12 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
 
       if (profile == null || budget == null) return;
 
+      final code = CurrencyCode.tryParse(_currency) ?? CurrencyCode.huf;
       final expense = Expense(
         profileId: profile.id,
         yearMonth: budget.yearMonth,
         title: _titleController.text,
-        amount: amount,
+        amount: Money.fromMajor(amount, code).minorUnits,
         currency: _currency,
         categoryId: _categoryId,
         status: _status,
@@ -119,7 +122,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                         labelText: 'Currency',
                         border: OutlineInputBorder(),
                       ),
-                      items: ['USD', 'EUR', 'GBP', 'HUF', 'CAD']
+                      items: ['USD', 'EUR', 'HUF', 'CAD']
                           .map(
                               (c) => DropdownMenuItem(value: c, child: Text(c)))
                           .toList(),

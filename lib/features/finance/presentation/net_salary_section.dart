@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/models/currency_code.dart';
 import '../../../core/providers/active_profile_provider.dart';
 import '../../../core/providers/selected_month_provider.dart';
 import '../../medical/presentation/medical_theme.dart';
@@ -27,6 +28,7 @@ class NetSalarySection extends ConsumerWidget {
     final resolved = ref.watch(resolvedIncomeProvider);
     final profile = ref.watch(activeProfileProvider).valueOrNull;
     final currencySymbol = profile?.currencySymbol ?? '\$';
+    final currency = profile?.primaryCurrency.code ?? CurrencyCode.usd;
 
     return Card(
       child: Padding(
@@ -64,7 +66,7 @@ class NetSalarySection extends ConsumerWidget {
             ),
             const SizedBox(height: 12),
             Text(
-              'Income used for this month: ${MedicalTheme.money(currencySymbol, resolved.amount)}'
+              'Income used for this month: ${MedicalTheme.money(currency, resolved.amount)}'
               '${resolved.usesOverride ? ' (override)' : ' (default)'}',
               style: Theme.of(context).textTheme.bodySmall,
             ),

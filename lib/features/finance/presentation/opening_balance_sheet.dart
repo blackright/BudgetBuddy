@@ -11,7 +11,8 @@ class OpeningBalanceSheet extends ConsumerStatefulWidget {
   final MonthlyBudget? initialBudget;
 
   @override
-  ConsumerState<OpeningBalanceSheet> createState() => _OpeningBalanceSheetState();
+  ConsumerState<OpeningBalanceSheet> createState() =>
+      _OpeningBalanceSheetState();
 }
 
 class _OpeningBalanceSheetState extends ConsumerState<OpeningBalanceSheet> {
@@ -23,7 +24,9 @@ class _OpeningBalanceSheetState extends ConsumerState<OpeningBalanceSheet> {
     super.initState();
     final initial = widget.initialBudget?.baseAvailableAmount ?? 0.0;
     _balanceController = TextEditingController(
-      text: widget.initialBudget?.openingBalanceConfirmed == true ? initial.toStringAsFixed(2) : '',
+      text: widget.initialBudget?.openingBalanceConfirmed == true
+          ? initial.toStringAsFixed(2)
+          : '',
     );
   }
 
@@ -59,7 +62,8 @@ class _OpeningBalanceSheetState extends ConsumerState<OpeningBalanceSheet> {
               TextFormField(
                 key: const Key('openingBalanceField'),
                 controller: _balanceController,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
                 decoration: const InputDecoration(
                   labelText: 'Amount',
                   border: OutlineInputBorder(),
@@ -88,7 +92,9 @@ class _OpeningBalanceSheetState extends ConsumerState<OpeningBalanceSheet> {
     if (!_formKey.currentState!.validate()) return;
     final amount = double.parse(_balanceController.text.trim());
     final yearMonth = ref.read(selectedYearMonthProvider);
-    await ref.read(monthFinanceRepositoryProvider).saveOpeningBalance(yearMonth, amount);
+    await ref
+        .read(monthFinanceRepositoryProvider)
+        .saveOpeningBalance(yearMonth, amount);
     if (mounted) {
       Navigator.of(context).pop();
     }

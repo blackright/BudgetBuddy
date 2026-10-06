@@ -6,13 +6,15 @@ import 'package:flutter_timezone/flutter_timezone.dart';
 import 'dart:io';
 
 class ReminderNotificationService {
-  static final ReminderNotificationService _instance = ReminderNotificationService._();
+  static final ReminderNotificationService _instance =
+      ReminderNotificationService._();
   factory ReminderNotificationService() => _instance;
   ReminderNotificationService._();
 
   bool get _isTest => Platform.environment.containsKey('FLUTTER_TEST');
 
-  final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
+  final FlutterLocalNotificationsPlugin _plugin =
+      FlutterLocalNotificationsPlugin();
 
   Future<void> init() async {
     tz.initializeTimeZones();
@@ -27,10 +29,11 @@ class ReminderNotificationService {
             requestAlertPermission: false,
             requestBadgePermission: false,
             requestSoundPermission: false);
-    const InitializationSettings initializationSettings = InitializationSettings(
-        android: initializationSettingsAndroid,
-        iOS: initializationSettingsDarwin);
-        
+    const InitializationSettings initializationSettings =
+        InitializationSettings(
+            android: initializationSettingsAndroid,
+            iOS: initializationSettingsDarwin);
+
     await _plugin.initialize(
       settings: initializationSettings,
       onDidReceiveNotificationResponse: (NotificationResponse response) {
@@ -44,7 +47,8 @@ class ReminderNotificationService {
         _plugin.resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>();
 
-    bool? granted = await androidImplementation?.requestNotificationsPermission();
+    bool? granted =
+        await androidImplementation?.requestNotificationsPermission();
     await androidImplementation?.requestExactAlarmsPermission();
     return granted ?? false;
   }

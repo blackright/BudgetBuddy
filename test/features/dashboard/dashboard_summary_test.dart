@@ -1,3 +1,4 @@
+import 'package:budget_buddy/core/models/currency_code.dart';
 import 'package:budget_buddy/core/models/monthly_budget.dart';
 import 'package:budget_buddy/core/models/user_profile.dart';
 import 'package:budget_buddy/core/providers/active_budget_provider.dart';
@@ -71,7 +72,7 @@ void main() {
   Future<void> pumpCard(WidgetTester tester, {MonthSummary? value}) async {
     await tester.pumpWidget(
       wrap(
-        const MonthSummaryCard(currencySymbol: r'$'),
+        const MonthSummaryCard(currency: CurrencyCode.usd),
         value: value,
       ),
     );
@@ -118,7 +119,7 @@ void main() {
       // hardcoded string, so this stays a test of the arithmetic rather than of
       // MedicalTheme's display policy.
       const kept = 4000.0 - 1200 + 300;
-      expect(find.textContaining(MedicalTheme.money(r'$', kept)), findsWidgets);
+      expect(find.textContaining(MedicalTheme.money(CurrencyCode.usd, kept)), findsWidgets);
     });
 
     testWidgets('the four supporting lines are labelled', (tester) async {
@@ -152,7 +153,7 @@ void main() {
   group('FR-021: collapsed detail group', () {
     testWidgets('the detail group starts collapsed', (tester) async {
       await tester.pumpWidget(
-        wrap(const MonthSummaryDetails(currencySymbol: r'$')),
+        wrap(const MonthSummaryDetails(currency: CurrencyCode.usd)),
       );
       await tester.pumpAndSettle();
 
@@ -162,7 +163,7 @@ void main() {
 
     testWidgets('expanding reveals the bank and medical lines', (tester) async {
       await tester.pumpWidget(
-        wrap(const MonthSummaryDetails(currencySymbol: r'$')),
+        wrap(const MonthSummaryDetails(currency: CurrencyCode.usd)),
       );
       await tester.pumpAndSettle();
 
@@ -173,12 +174,10 @@ void main() {
       expect(find.byKey(const Key('cancelledLine')), findsOneWidget);
     });
 
-
-
     testWidgets('the override marker appears only for an overridden month',
         (tester) async {
       await tester.pumpWidget(
-        wrap(const MonthSummaryDetails(currencySymbol: r'$'),
+        wrap(const MonthSummaryDetails(currency: CurrencyCode.usd),
             value: makeSummary()),
       );
       await tester.pumpAndSettle();
@@ -188,7 +187,7 @@ void main() {
 
       await tester.pumpWidget(
         wrap(
-          const MonthSummaryDetails(currencySymbol: r'$'),
+          const MonthSummaryDetails(currency: CurrencyCode.usd),
           value: makeSummary(usesOverriddenIncome: true),
         ),
       );
@@ -203,7 +202,7 @@ void main() {
       await tester.pumpWidget(
         wrap(
           MonthSummaryDetails(
-            currencySymbol: r'$',
+            currency: CurrencyCode.usd,
             onMedicalTap: () => taps++,
           ),
         ),
@@ -222,7 +221,7 @@ void main() {
         (tester) async {
       await tester.pumpWidget(
         wrap(
-          const MonthSummaryDetails(currencySymbol: r'$'),
+          const MonthSummaryDetails(currency: CurrencyCode.usd),
           value: makeSummary(excessReturned: 100),
         ),
       );
@@ -237,7 +236,7 @@ void main() {
     testWidgets('the medical figure matches the summary', (tester) async {
       await tester.pumpWidget(
         wrap(
-          const MonthSummaryDetails(currencySymbol: r'$'),
+          const MonthSummaryDetails(currency: CurrencyCode.usd),
           value: makeSummary(medicalPaid: 450),
         ),
       );
@@ -250,7 +249,7 @@ void main() {
       expect(
         find.descendant(
           of: medicalLine,
-          matching: find.textContaining(MedicalTheme.money(r'$', 450)),
+          matching: find.textContaining(MedicalTheme.money(CurrencyCode.usd, 450)),
         ),
         findsOneWidget,
       );
@@ -293,8 +292,6 @@ void main() {
       expect(await colorOfKey(tester, const Key('returnedLine')),
           MedicalTheme.moneyIn);
     });
-
-
   });
 
   group('FR-025: incomplete month', () {

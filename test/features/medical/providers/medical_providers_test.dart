@@ -11,9 +11,9 @@ void main() {
   /// most tests only vary what they actually care about.
   MedicalBill bill({
     int id = 1,
-    required double billed,
+    required int billed,
     double patientShare = 20,
-    double reimbursed = 0,
+    int reimbursed = 0,
     MedicalPaymentMethod method = MedicalPaymentMethod.insurerPaid,
     MedicalBillState state = MedicalBillState.waiting,
     int? familyMemberId,

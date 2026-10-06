@@ -11,6 +11,8 @@ import '../models/category.dart';
 import '../models/medical_bill.dart';
 import '../models/insurance_profile.dart';
 import '../models/medical_service_type.dart';
+import '../models/month_rate_seal.dart';
+import '../models/live_rate_set.dart';
 import 'schema_migrations.dart';
 
 class IsarHelper {
@@ -35,6 +37,8 @@ class IsarHelper {
         MedicalProviderSchema,
         MedicalServiceTypeSchema,
         SchemaMigrationStampSchema,
+        MonthRateSealSchema,
+        LiveRateSetSchema,
       ],
       directory: dir.path,
     );

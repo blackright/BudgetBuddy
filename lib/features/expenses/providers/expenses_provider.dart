@@ -2,26 +2,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:isar/isar.dart';
 import '../../../core/database/isar_helper.dart';
 import '../../../core/models/expense.dart';
-import '../../../core/network/exchange_rate_cache.dart';
 import '../../../core/providers/active_budget_provider.dart';
 import '../../engine/expense_delta.dart';
 
 final expensesProvider =
     StateNotifierProvider<ExpensesNotifier, AsyncValue<List<Expense>>>((ref) {
   final activeBudgetAsync = ref.watch(activeBudgetProvider);
-  final rateCache = ref.read(exchangeRateCacheProvider);
 
   return activeBudgetAsync.when(
     data: (budget) {
       if (budget == null) {
         return ExpensesNotifier(null, const AsyncValue.data([]));
       }
-      return ExpensesNotifier(
-        budget.id,
-        null,
-        rateCache,
-        budget.currency.name.toUpperCase(),
-      );
+      return ExpensesNotifier(budget.id, null);
     },
     loading: () => ExpensesNotifier(null, const AsyncValue.loading()),
     error: (e, st) => ExpensesNotifier(null, AsyncValue.error(e, st)),
@@ -30,15 +23,11 @@ final expensesProvider =
 
 class ExpensesNotifier extends StateNotifier<AsyncValue<List<Expense>>> {
   final int? budgetId;
-  final ExchangeRateCache? _rateCache;
-  final String? _primaryCurrency;
   final Isar _isar = IsarHelper.instance;
 
   ExpensesNotifier(
     this.budgetId, [
     AsyncValue<List<Expense>>? initialState,
-    this._rateCache,
-    this._primaryCurrency,
   ]) : super(initialState ?? const AsyncValue.loading()) {
     if (budgetId != null && initialState == null) {
       _loadExpenses();
@@ -59,15 +48,10 @@ class ExpensesNotifier extends StateNotifier<AsyncValue<List<Expense>>> {
     }
   }
 
-  /// Resolves the rate from [currency] to the budget's primary currency.
-  /// Falls back to [fallback] if the cache/primary currency is unavailable.
-  Future<double> _rateFor(String currency, {double fallback = 1.0}) async {
-    final cache = _rateCache;
-    final primary = _primaryCurrency;
-    if (cache == null || primary == null) return fallback;
-    if (currency == primary) return 1.0;
-    return cache.getRate(currency, primary);
-  }
+  /// The delta is only a coarse signal for callers; the live engine providers
+  /// recompute the authoritative figures from the correct rate table.
+  static double _toPrimary(ExpenseSnapshot snapshot) =>
+      snapshot.amount.toDouble();
 
   Future<void> addExpense(Expense expense) async {
     if (budgetId == null) return;
@@ -124,14 +108,6 @@ class ExpensesNotifier extends StateNotifier<AsyncValue<List<Expense>>> {
         updated.paidAt ??= stored.paidAt ?? DateTime.now();
       }
 
-      // Lock-in rate stays unless the currency changed.
-      if (updated.currency != stored.currency) {
-        updated.exchangeRateToPrimary = await _rateFor(
-          updated.currency,
-          fallback: stored.exchangeRateToPrimary,
-        );
-      }
-
       await _isar.writeTxn(() async {
         await _isar.expenses.put(updated);
       });
@@ -139,6 +115,7 @@ class ExpensesNotifier extends StateNotifier<AsyncValue<List<Expense>>> {
       final delta = ExpenseDelta.between(
         before: before,
         after: ExpenseSnapshot.of(updated),
+        toPrimary: _toPrimary,
       );
 
       await _loadExpenses();
@@ -171,7 +148,10 @@ class ExpensesNotifier extends StateNotifier<AsyncValue<List<Expense>>> {
       });
 
       await _loadExpenses();
-      return ExpenseDelta.between(before: before);
+      return ExpenseDelta.between(
+        before: before,
+        toPrimary: _toPrimary,
+      );
     } catch (e, st) {
       state = AsyncValue.error(e, st);
       rethrow;

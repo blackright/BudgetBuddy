@@ -4,8 +4,10 @@ import 'package:budget_buddy/core/database/schema_migrations.dart';
 import 'package:budget_buddy/core/models/category.dart';
 import 'package:budget_buddy/core/models/expense.dart';
 import 'package:budget_buddy/core/models/insurance_profile.dart';
+import 'package:budget_buddy/core/models/live_rate_set.dart';
 import 'package:budget_buddy/core/models/medical_bill.dart';
 import 'package:budget_buddy/core/models/medical_service_type.dart';
+import 'package:budget_buddy/core/models/month_rate_seal.dart';
 import 'package:budget_buddy/core/models/monthly_budget.dart';
 import 'package:budget_buddy/core/models/user_profile.dart';
 import 'package:budget_buddy/features/expenses/models/reimbursement.dart';
@@ -71,6 +73,8 @@ class MedicalTestHarness {
         MedicalProviderSchema,
         MedicalServiceTypeSchema,
         SchemaMigrationStampSchema,
+        MonthRateSealSchema,
+        LiveRateSetSchema,
       ],
       directory: directory.path,
       name: 'medical_${_nextInstance++}',
@@ -157,7 +161,7 @@ class MedicalTestHarness {
     var totalPaid = 0.0;
     for (final expense in expenses) {
       if (expense.status == ExpenseStatus.paid) {
-        totalPaid += expense.amount * expense.exchangeRateToPrimary;
+        totalPaid += expense.amount.toDouble();
       }
     }
 
@@ -165,8 +169,7 @@ class MedicalTestHarness {
     for (final reimbursement in await isar.reimbursements.where().findAll()) {
       final expense = byId[reimbursement.expenseId];
       if (expense != null) {
-        totalReimbursements +=
-            reimbursement.amount * expense.exchangeRateToPrimary;
+        totalReimbursements += reimbursement.amount.toDouble();
       }
     }
 

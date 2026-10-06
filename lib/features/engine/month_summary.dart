@@ -1,4 +1,5 @@
 import '../../core/models/expense.dart';
+import '../../core/models/money.dart';
 import '../../features/expenses/models/reimbursement.dart';
 
 /// The financial verdict for exactly one calendar month.
@@ -46,6 +47,8 @@ class MonthSummary {
     required bool usesOverriddenIncome,
     required List<Expense> expenses,
     required List<Reimbursement> reimbursements,
+    required Money Function(Expense expense) convertExpense,
+    required Money Function(Reimbursement reimbursement) convertReimbursement,
     double? openingBalance,
     Map<int, double> targetPaidAmounts = const {},
   }) {
@@ -55,7 +58,7 @@ class MonthSummary {
     var medicalPaid = 0.0;
 
     for (final expense in expenses) {
-      final converted = expense.amount * expense.exchangeRateToPrimary;
+      final converted = convertExpense(expense).majorValue;
       switch (expense.status) {
         case ExpenseStatus.paid:
         case ExpenseStatus.reimbursed:
@@ -72,11 +75,12 @@ class MonthSummary {
     var moneyReturned = 0.0;
     var excessReturned = 0.0;
     for (final reimbursement in reimbursements) {
-      moneyReturned += reimbursement.amount;
+      final converted = convertReimbursement(reimbursement).majorValue;
+      moneyReturned += converted;
       final target = reimbursement.expenseId;
       if (target == null) continue;
       final targetPaid = targetPaidAmounts[target] ?? 0.0;
-      final excess = reimbursement.amount - targetPaid;
+      final excess = converted - targetPaid;
       if (excess > 0) excessReturned += excess;
     }
 

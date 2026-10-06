@@ -16,7 +16,8 @@ class MonthNavigator extends ConsumerWidget {
         IconButton(
           icon: const Icon(Icons.chevron_left),
           onPressed: () {
-            ref.read(selectedYearMonthProvider.notifier).state = previousMonth(yearMonth);
+            ref.read(selectedYearMonthProvider.notifier).state =
+                previousMonth(yearMonth);
           },
           tooltip: 'Previous Month',
         ),
@@ -27,7 +28,8 @@ class MonthNavigator extends ConsumerWidget {
         IconButton(
           icon: const Icon(Icons.chevron_right),
           onPressed: () {
-            ref.read(selectedYearMonthProvider.notifier).state = nextMonth(yearMonth);
+            ref.read(selectedYearMonthProvider.notifier).state =
+                nextMonth(yearMonth);
           },
           tooltip: 'Next Month',
         ),

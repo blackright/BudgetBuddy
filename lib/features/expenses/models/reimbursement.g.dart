@@ -20,7 +20,7 @@ const ReimbursementSchema = CollectionSchema(
     r'amount': PropertySchema(
       id: 0,
       name: r'amount',
-      type: IsarType.double,
+      type: IsarType.long,
     ),
     r'currency': PropertySchema(
       id: 1,
@@ -32,33 +32,28 @@ const ReimbursementSchema = CollectionSchema(
       name: r'date',
       type: IsarType.dateTime,
     ),
-    r'exchangeRateToPrimary': PropertySchema(
-      id: 3,
-      name: r'exchangeRateToPrimary',
-      type: IsarType.double,
-    ),
     r'expenseId': PropertySchema(
-      id: 4,
+      id: 3,
       name: r'expenseId',
       type: IsarType.long,
     ),
     r'note': PropertySchema(
-      id: 5,
+      id: 4,
       name: r'note',
       type: IsarType.string,
     ),
     r'originYearMonth': PropertySchema(
-      id: 6,
+      id: 5,
       name: r'originYearMonth',
       type: IsarType.string,
     ),
     r'orphaned': PropertySchema(
-      id: 7,
+      id: 6,
       name: r'orphaned',
       type: IsarType.bool,
     ),
     r'profileId': PropertySchema(
-      id: 8,
+      id: 7,
       name: r'profileId',
       type: IsarType.long,
     )
@@ -153,15 +148,14 @@ void _reimbursementSerialize(
   List<int> offsets,
   Map<Type, List<int>> allOffsets,
 ) {
-  writer.writeDouble(offsets[0], object.amount);
+  writer.writeLong(offsets[0], object.amount);
   writer.writeString(offsets[1], object.currency);
   writer.writeDateTime(offsets[2], object.date);
-  writer.writeDouble(offsets[3], object.exchangeRateToPrimary);
-  writer.writeLong(offsets[4], object.expenseId);
-  writer.writeString(offsets[5], object.note);
-  writer.writeString(offsets[6], object.originYearMonth);
-  writer.writeBool(offsets[7], object.orphaned);
-  writer.writeLong(offsets[8], object.profileId);
+  writer.writeLong(offsets[3], object.expenseId);
+  writer.writeString(offsets[4], object.note);
+  writer.writeString(offsets[5], object.originYearMonth);
+  writer.writeBool(offsets[6], object.orphaned);
+  writer.writeLong(offsets[7], object.profileId);
 }
 
 Reimbursement _reimbursementDeserialize(
@@ -171,16 +165,15 @@ Reimbursement _reimbursementDeserialize(
   Map<Type, List<int>> allOffsets,
 ) {
   final object = Reimbursement(
-    amount: reader.readDouble(offsets[0]),
+    amount: reader.readLong(offsets[0]),
     currency: reader.readString(offsets[1]),
     date: reader.readDateTime(offsets[2]),
-    exchangeRateToPrimary: reader.readDoubleOrNull(offsets[3]) ?? 1.0,
-    expenseId: reader.readLongOrNull(offsets[4]),
+    expenseId: reader.readLongOrNull(offsets[3]),
     id: id,
-    note: reader.readStringOrNull(offsets[5]),
-    originYearMonth: reader.readString(offsets[6]),
-    orphaned: reader.readBoolOrNull(offsets[7]) ?? false,
-    profileId: reader.readLong(offsets[8]),
+    note: reader.readStringOrNull(offsets[4]),
+    originYearMonth: reader.readString(offsets[5]),
+    orphaned: reader.readBoolOrNull(offsets[6]) ?? false,
+    profileId: reader.readLong(offsets[7]),
   );
   return object;
 }
@@ -193,22 +186,20 @@ P _reimbursementDeserializeProp<P>(
 ) {
   switch (propertyId) {
     case 0:
-      return (reader.readDouble(offset)) as P;
+      return (reader.readLong(offset)) as P;
     case 1:
       return (reader.readString(offset)) as P;
     case 2:
       return (reader.readDateTime(offset)) as P;
     case 3:
-      return (reader.readDoubleOrNull(offset) ?? 1.0) as P;
-    case 4:
       return (reader.readLongOrNull(offset)) as P;
-    case 5:
+    case 4:
       return (reader.readStringOrNull(offset)) as P;
-    case 6:
+    case 5:
       return (reader.readString(offset)) as P;
-    case 7:
+    case 6:
       return (reader.readBoolOrNull(offset) ?? false) as P;
-    case 8:
+    case 7:
       return (reader.readLong(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -634,58 +625,49 @@ extension ReimbursementQueryWhere
 extension ReimbursementQueryFilter
     on QueryBuilder<Reimbursement, Reimbursement, QFilterCondition> {
   QueryBuilder<Reimbursement, Reimbursement, QAfterFilterCondition>
-      amountEqualTo(
-    double value, {
-    double epsilon = Query.epsilon,
-  }) {
+      amountEqualTo(int value) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
         property: r'amount',
         value: value,
-        epsilon: epsilon,
       ));
     });
   }
 
   QueryBuilder<Reimbursement, Reimbursement, QAfterFilterCondition>
       amountGreaterThan(
-    double value, {
+    int value, {
     bool include = false,
-    double epsilon = Query.epsilon,
   }) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.greaterThan(
         include: include,
         property: r'amount',
         value: value,
-        epsilon: epsilon,
       ));
     });
   }
 
   QueryBuilder<Reimbursement, Reimbursement, QAfterFilterCondition>
       amountLessThan(
-    double value, {
+    int value, {
     bool include = false,
-    double epsilon = Query.epsilon,
   }) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.lessThan(
         include: include,
         property: r'amount',
         value: value,
-        epsilon: epsilon,
       ));
     });
   }
 
   QueryBuilder<Reimbursement, Reimbursement, QAfterFilterCondition>
       amountBetween(
-    double lower,
-    double upper, {
+    int lower,
+    int upper, {
     bool includeLower = true,
     bool includeUpper = true,
-    double epsilon = Query.epsilon,
   }) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.between(
@@ -694,7 +676,6 @@ extension ReimbursementQueryFilter
         includeLower: includeLower,
         upper: upper,
         includeUpper: includeUpper,
-        epsilon: epsilon,
       ));
     });
   }
@@ -886,72 +867,6 @@ extension ReimbursementQueryFilter
         includeLower: includeLower,
         upper: upper,
         includeUpper: includeUpper,
-      ));
-    });
-  }
-
-  QueryBuilder<Reimbursement, Reimbursement, QAfterFilterCondition>
-      exchangeRateToPrimaryEqualTo(
-    double value, {
-    double epsilon = Query.epsilon,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'exchangeRateToPrimary',
-        value: value,
-        epsilon: epsilon,
-      ));
-    });
-  }
-
-  QueryBuilder<Reimbursement, Reimbursement, QAfterFilterCondition>
-      exchangeRateToPrimaryGreaterThan(
-    double value, {
-    bool include = false,
-    double epsilon = Query.epsilon,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.greaterThan(
-        include: include,
-        property: r'exchangeRateToPrimary',
-        value: value,
-        epsilon: epsilon,
-      ));
-    });
-  }
-
-  QueryBuilder<Reimbursement, Reimbursement, QAfterFilterCondition>
-      exchangeRateToPrimaryLessThan(
-    double value, {
-    bool include = false,
-    double epsilon = Query.epsilon,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.lessThan(
-        include: include,
-        property: r'exchangeRateToPrimary',
-        value: value,
-        epsilon: epsilon,
-      ));
-    });
-  }
-
-  QueryBuilder<Reimbursement, Reimbursement, QAfterFilterCondition>
-      exchangeRateToPrimaryBetween(
-    double lower,
-    double upper, {
-    bool includeLower = true,
-    bool includeUpper = true,
-    double epsilon = Query.epsilon,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.between(
-        property: r'exchangeRateToPrimary',
-        lower: lower,
-        includeLower: includeLower,
-        upper: upper,
-        includeUpper: includeUpper,
-        epsilon: epsilon,
       ));
     });
   }
@@ -1485,20 +1400,6 @@ extension ReimbursementQuerySortBy
     });
   }
 
-  QueryBuilder<Reimbursement, Reimbursement, QAfterSortBy>
-      sortByExchangeRateToPrimary() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'exchangeRateToPrimary', Sort.asc);
-    });
-  }
-
-  QueryBuilder<Reimbursement, Reimbursement, QAfterSortBy>
-      sortByExchangeRateToPrimaryDesc() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'exchangeRateToPrimary', Sort.desc);
-    });
-  }
-
   QueryBuilder<Reimbursement, Reimbursement, QAfterSortBy> sortByExpenseId() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'expenseId', Sort.asc);
@@ -1604,20 +1505,6 @@ extension ReimbursementQuerySortThenBy
     });
   }
 
-  QueryBuilder<Reimbursement, Reimbursement, QAfterSortBy>
-      thenByExchangeRateToPrimary() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'exchangeRateToPrimary', Sort.asc);
-    });
-  }
-
-  QueryBuilder<Reimbursement, Reimbursement, QAfterSortBy>
-      thenByExchangeRateToPrimaryDesc() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'exchangeRateToPrimary', Sort.desc);
-    });
-  }
-
   QueryBuilder<Reimbursement, Reimbursement, QAfterSortBy> thenByExpenseId() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'expenseId', Sort.asc);
@@ -1717,13 +1604,6 @@ extension ReimbursementQueryWhereDistinct
     });
   }
 
-  QueryBuilder<Reimbursement, Reimbursement, QDistinct>
-      distinctByExchangeRateToPrimary() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addDistinctBy(r'exchangeRateToPrimary');
-    });
-  }
-
   QueryBuilder<Reimbursement, Reimbursement, QDistinct> distinctByExpenseId() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'expenseId');
@@ -1766,7 +1646,7 @@ extension ReimbursementQueryProperty
     });
   }
 
-  QueryBuilder<Reimbursement, double, QQueryOperations> amountProperty() {
+  QueryBuilder<Reimbursement, int, QQueryOperations> amountProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'amount');
     });
@@ -1781,13 +1661,6 @@ extension ReimbursementQueryProperty
   QueryBuilder<Reimbursement, DateTime, QQueryOperations> dateProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'date');
-    });
-  }
-
-  QueryBuilder<Reimbursement, double, QQueryOperations>
-      exchangeRateToPrimaryProperty() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addPropertyName(r'exchangeRateToPrimary');
     });
   }
 

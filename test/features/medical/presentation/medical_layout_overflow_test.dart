@@ -169,7 +169,7 @@ void main() {
         (i) => Reimbursement(
           id: i + 1,
           profileId: 1,
-          amount: 100 + i.toDouble(),
+          amount: 100 + i,
           currency: 'USD',
           originYearMonth: '2026-01',
           date: DateTime(2026, 1, i + 1),
@@ -397,7 +397,7 @@ void main() {
         ),
       );
       await tester.pump(const Duration(seconds: 1));
-      
+
       await tester.runAsync(() async {
         await tester.tap(find.byKey(const Key('billDefaultsButton')));
         await tester.pump(const Duration(seconds: 1));

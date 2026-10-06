@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
+import '../../../core/models/currency_code.dart';
 import '../../../core/models/expense.dart';
-import '../../../core/models/user_profile.dart';
-import '../../../core/network/exchange_rate_cache.dart';
+import '../../../core/models/money.dart';
+import '../../../core/network/rate_types.dart';
 import '../../../core/providers/active_budget_provider.dart';
+import '../../../core/providers/active_profile_provider.dart';
+import '../../../core/providers/selected_month_provider.dart';
+import '../../../shared/presentation/money_format.dart';
+import '../../engine/currency_resolution.dart';
 import '../../engine/expense_delta.dart';
+import '../../engine/providers/rate_registry_provider.dart';
 import '../../engine/providers/safe_to_spend_provider.dart';
 import '../providers/expenses_provider.dart';
 import '../providers/category_provider.dart';
@@ -24,8 +29,7 @@ class EditExpenseScreen extends ConsumerStatefulWidget {
 }
 
 class _EditExpenseScreenState extends ConsumerState<EditExpenseScreen> {
-  static const _currencies = ['USD', 'EUR', 'GBP', 'HUF', 'CAD'];
-  static final _money = NumberFormat('#,##0.00');
+  static const _currencies = ['USD', 'EUR', 'HUF', 'CAD'];
 
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _titleController;
@@ -38,9 +42,6 @@ class _EditExpenseScreenState extends ConsumerState<EditExpenseScreen> {
   late GuiltLevel _guiltLevel;
   late String _categoryId;
 
-  /// Rate for the currently selected currency → primary. Starts as the
-  /// expense's locked-in rate and is refreshed if the currency changes.
-  late double _rate;
   bool _saving = false;
 
   @override
@@ -49,15 +50,17 @@ class _EditExpenseScreenState extends ConsumerState<EditExpenseScreen> {
     final e = widget.expense;
     _original = ExpenseSnapshot.of(e);
     _titleController = TextEditingController(text: e.title);
-    _amountController = TextEditingController(text: _formatEditable(e.amount))
-      ..addListener(() => setState(() {}));
+    _amountController = TextEditingController(
+      text: _formatEditable(
+        Money(e.amount, e.currencyCode ?? CurrencyCode.huf).majorValue,
+      ),
+    )..addListener(() => setState(() {}));
     _currency = _currencies.contains(e.currency) ? e.currency : 'USD';
     _status =
         e.status == ExpenseStatus.cancelled ? ExpenseStatus.planned : e.status;
     _isReimbursable = e.isReimbursable;
     _guiltLevel = e.guiltLevel;
     _categoryId = e.categoryId;
-    _rate = e.exchangeRateToPrimary;
   }
 
   @override
@@ -73,45 +76,29 @@ class _EditExpenseScreenState extends ConsumerState<EditExpenseScreen> {
   static double? _parseAmount(String? raw) =>
       double.tryParse((raw ?? '').replaceAll(RegExp(r'[,\s]'), ''));
 
-  String _symbol(PrimaryCurrency? c) {
-    switch (c) {
-      case PrimaryCurrency.huf:
-        return 'Ft';
-      case PrimaryCurrency.cad:
-        return 'C\$';
-      case PrimaryCurrency.eur:
-        return '€';
-      case PrimaryCurrency.usd:
-      case null:
-        return '\$';
-    }
-  }
-
   Future<void> _onCurrencyChanged(String currency) async {
     setState(() => _currency = currency);
-    if (currency == widget.expense.currency) {
-      setState(() => _rate = widget.expense.exchangeRateToPrimary);
-      return;
-    }
-    final budget = ref.read(activeBudgetProvider).value;
-    if (budget == null) return;
-    final rate = await ref
-        .read(exchangeRateCacheProvider)
-        .getRate(currency, budget.currency.name.toUpperCase());
-    if (mounted && _currency == currency) setState(() => _rate = rate);
   }
 
   // ---- T013: live delta vs. the stored expense --------------------------
-  ExpenseDelta _currentDelta() {
+  ExpenseDelta _currentDelta(CurrencyCode display, RateTable? table) {
     final amount = _parseAmount(_amountController.text);
     if (amount == null || amount <= 0) return ExpenseDelta.zero;
+    final code = CurrencyCode.tryParse(_currency) ?? display;
+    double toPrimary(ExpenseSnapshot s) {
+      final from = s.currency;
+      if (from == null) return 0.0;
+      return toDisplay(Money(s.amount, from), display, table).majorValue;
+    }
+
     return ExpenseDelta.between(
       before: _original,
       after: ExpenseSnapshot(
-        amount: amount,
-        exchangeRateToPrimary: _rate,
+        amount: Money.fromMajor(amount, code).minorUnits,
+        currency: code,
         status: _status,
       ),
+      toPrimary: toPrimary,
     );
   }
 
@@ -120,9 +107,11 @@ class _EditExpenseScreenState extends ConsumerState<EditExpenseScreen> {
     if (_saving || !_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
 
+    final code = CurrencyCode.tryParse(_currency) ?? CurrencyCode.huf;
     final e = widget.expense
       ..title = _titleController.text.trim()
-      ..amount = _parseAmount(_amountController.text)!
+      ..amount = Money.fromMajor(_parseAmount(_amountController.text)!, code)
+          .minorUnits
       ..currency = _currency
       ..categoryId = _categoryId
       ..status = _status
@@ -154,13 +143,14 @@ class _EditExpenseScreenState extends ConsumerState<EditExpenseScreen> {
 
     final src = widget.expense;
     final now = DateTime.now();
+    final code = CurrencyCode.tryParse(_currency) ?? CurrencyCode.huf;
     final clone = Expense(
       profileId: src.profileId,
       yearMonth: budget.yearMonth,
-      exchangeRateToPrimary: _rate,
       type: src.type,
       title: _titleController.text.trim(),
-      amount: _parseAmount(_amountController.text)!,
+      amount: Money.fromMajor(_parseAmount(_amountController.text)!, code)
+          .minorUnits,
       currency: _currency,
       categoryId: _categoryId,
       status: _status,
@@ -183,9 +173,13 @@ class _EditExpenseScreenState extends ConsumerState<EditExpenseScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final budget = ref.watch(activeBudgetProvider).value;
+    final profile = ref.watch(activeProfileProvider).value;
+    final yearMonth = ref.watch(selectedYearMonthProvider);
+    final table = ref.watch(rateRegistryProvider).tableFor(yearMonth);
+    final display = resolveDisplayCurrency(month: budget, profile: profile);
     final safeToSpend = ref.watch(safeToSpendProvider);
-    final symbol = _symbol(ref.watch(activeBudgetProvider).value?.currency);
-    final delta = _currentDelta();
+    final delta = _currentDelta(display, table);
     final overspend = delta.wouldOverspend(safeToSpend);
 
     return Scaffold(
@@ -210,8 +204,8 @@ class _EditExpenseScreenState extends ConsumerState<EditExpenseScreen> {
               _OverspendWarning(
                 visible: overspend,
                 message: overspend
-                    ? 'This change puts you $symbol '
-                        '${_money.format((safeToSpend + delta.safeToSpendDelta).abs())} '
+                    ? 'This change puts you '
+                        '${formatMoney(Money.fromMajor((safeToSpend + delta.safeToSpendDelta).abs(), display))} '
                         'over your safe-to-spend.'
                     : '',
               ),

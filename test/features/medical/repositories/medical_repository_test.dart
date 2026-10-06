@@ -27,7 +27,7 @@ void main() {
       );
 
   MedicalBill bill({
-    double amount = 1000,
+    int amount = 1000,
     double patientShare = 20,
     int month = 1,
     int? providerId,
@@ -287,7 +287,7 @@ void main() {
   group('state transitions (FR-054 / M5)', () {
     Future<MedicalBill> liveBill({
       MedicalPaymentMethod method = MedicalPaymentMethod.insurerPaid,
-      double amount = 1000,
+      int amount = 1000,
     }) =>
         harness.repository.saveBill(
           bill(amount: amount, method: method, state: MedicalBillState.waiting),
@@ -476,7 +476,7 @@ void main() {
   });
 
   group('reimbursement (FR-034 / FR-044)', () {
-    Future<MedicalBill> selfPaidBill({double amount = 1000}) =>
+    Future<MedicalBill> selfPaidBill({int amount = 1000}) =>
         harness.repository.saveBill(
           bill(
             amount: amount,

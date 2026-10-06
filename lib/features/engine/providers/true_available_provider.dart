@@ -3,8 +3,12 @@ import '../../expenses/repositories/expense_repository.dart';
 import '../../expenses/providers/reimbursement_provider.dart';
 import '../../../core/providers/active_budget_provider.dart';
 import '../../../core/providers/active_profile_provider.dart';
+import '../../../core/providers/selected_month_provider.dart';
 import '../../../core/models/expense.dart';
+import '../../../core/models/money.dart';
 import '../../expenses/models/reimbursement.dart';
+import '../currency_resolution.dart';
+import 'rate_registry_provider.dart';
 
 final monthlyExpensesProvider = StreamProvider<List<Expense>>((ref) {
   final profile = ref.watch(activeProfileProvider).value;
@@ -31,29 +35,32 @@ final monthlyReimbursementsProvider =
   return repository.watchReimbursementsForMonth(budget.yearMonth);
 });
 
+/// Money in the bank minus what has actually left, converted to the month's
+/// display currency through the registry table (FR-011, FR-013).
 final trueAvailableProvider = Provider<double>((ref) {
   final budget = ref.watch(activeBudgetProvider).value;
+  final profile = ref.watch(activeProfileProvider).value;
+  final yearMonth = ref.watch(selectedYearMonthProvider);
+  final table = ref.watch(rateRegistryProvider).tableFor(yearMonth);
   final expenses = ref.watch(monthlyExpensesProvider).value ?? [];
   final reimbursements = ref.watch(monthlyReimbursementsProvider).value ?? [];
 
   if (budget == null) return 0.0;
 
-  double baseAmount = budget.baseAvailableAmount;
+  final display = resolveDisplayCurrency(month: budget, profile: profile);
+  var total = Money.fromMajor(budget.baseAvailableAmount, display);
 
-  double totalPaid = 0.0;
   for (final exp in expenses) {
     if (exp.status == ExpenseStatus.paid ||
         exp.status == ExpenseStatus.reimbursed ||
         exp.status == ExpenseStatus.partiallyReimbursed) {
-      // Amount is converted to primary currency
-      totalPaid += exp.amount * exp.exchangeRateToPrimary;
+      total = total - expenseToDisplay(exp, display, table);
     }
   }
 
-  double totalReimbursements = 0.0;
   for (final reimb in reimbursements) {
-    totalReimbursements += reimb.amount * reimb.exchangeRateToPrimary;
+    total = total + reimbursementToDisplay(reimb, display, table);
   }
 
-  return baseAmount - totalPaid + totalReimbursements;
+  return total.majorValue;
 });

@@ -2,8 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/models/currency_code.dart';
 import '../../../core/models/expense.dart';
+import '../../../core/models/money.dart';
 import '../../../core/models/category.dart';
+import '../../../core/providers/active_budget_provider.dart';
+import '../../../core/providers/active_profile_provider.dart';
+import '../../../core/providers/selected_month_provider.dart';
+import '../../../shared/presentation/money_format.dart';
+import '../../engine/currency_resolution.dart';
+import '../../engine/providers/rate_registry_provider.dart';
 import '../../engine/providers/safe_to_spend_provider.dart';
 import '../providers/category_provider.dart';
 import '../providers/expenses_provider.dart';
@@ -38,7 +46,7 @@ class ExpenseDetailScreen extends ConsumerWidget {
             const SizedBox(height: 24),
             _VisualTimeline(expense: expense),
             const SizedBox(height: 24),
-            if (expense.status == ExpenseStatus.reimbursed || 
+            if (expense.status == ExpenseStatus.reimbursed ||
                 expense.status == ExpenseStatus.partiallyReimbursed ||
                 expense.status == ExpenseStatus.paid)
               history.ReimbursementHistoryList(
@@ -90,21 +98,33 @@ class _ActionBar extends ConsumerWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
-            if (expense.status == ExpenseStatus.planned || expense.status == ExpenseStatus.paid)
+            if (expense.status == ExpenseStatus.planned ||
+                expense.status == ExpenseStatus.paid)
               FilledButton.icon(
                 onPressed: () async {
-                  await ref.read(expensesProvider.notifier).toggleStatus(expense);
+                  await ref
+                      .read(expensesProvider.notifier)
+                      .toggleStatus(expense);
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(expense.status == ExpenseStatus.paid ? 'Marked as Planned' : 'Marked as Paid')),
+                      SnackBar(
+                          content: Text(expense.status == ExpenseStatus.paid
+                              ? 'Marked as Planned'
+                              : 'Marked as Paid')),
                     );
                     context.pop();
                   }
                 },
-                icon: Icon(expense.status == ExpenseStatus.paid ? Icons.schedule : Icons.check_circle),
-                label: Text(expense.status == ExpenseStatus.paid ? 'Mark Planned' : 'Mark Paid'),
+                icon: Icon(expense.status == ExpenseStatus.paid
+                    ? Icons.schedule
+                    : Icons.check_circle),
+                label: Text(expense.status == ExpenseStatus.paid
+                    ? 'Mark Planned'
+                    : 'Mark Paid'),
                 style: FilledButton.styleFrom(
-                  backgroundColor: expense.status == ExpenseStatus.paid ? Colors.orange : Colors.green,
+                  backgroundColor: expense.status == ExpenseStatus.paid
+                      ? Colors.orange
+                      : Colors.green,
                 ),
               ),
             OutlinedButton.icon(
@@ -113,22 +133,29 @@ class _ActionBar extends ConsumerWidget {
                   context: context,
                   builder: (ctx) => AlertDialog(
                     title: const Text('Delete Expense?'),
-                    content: const Text('Are you sure you want to delete this expense?'),
+                    content: const Text(
+                        'Are you sure you want to delete this expense?'),
                     actions: [
-                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                      TextButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          child: const Text('Cancel')),
                       FilledButton(
                         onPressed: () => Navigator.pop(ctx, true),
-                        style: FilledButton.styleFrom(backgroundColor: Colors.red),
+                        style:
+                            FilledButton.styleFrom(backgroundColor: Colors.red),
                         child: const Text('Delete'),
                       ),
                     ],
                   ),
                 );
                 if (confirmed == true && context.mounted) {
-                  await ref.read(expensesProvider.notifier).deleteExpense(expense.id);
+                  await ref
+                      .read(expensesProvider.notifier)
+                      .deleteExpense(expense.id);
                   if (context.mounted) {
                     context.pop();
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Expense deleted')));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Expense deleted')));
                   }
                 }
               },
@@ -177,7 +204,9 @@ class _HeroSection extends ConsumerWidget {
         ),
         const SizedBox(height: 8),
         Text(
-          '${expense.currency.toUpperCase()} ${NumberFormat('#,##0.00').format(expense.amount)}',
+          formatMoney(
+            Money(expense.amount, expense.currencyCode ?? CurrencyCode.huf),
+          ),
           style: Theme.of(context)
               .textTheme
               .headlineSmall
@@ -196,6 +225,11 @@ class _ImpactCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final safeToSpend = ref.watch(safeToSpendProvider);
+    final budget = ref.watch(activeBudgetProvider).value;
+    final profile = ref.watch(activeProfileProvider).value;
+    final yearMonth = ref.watch(selectedYearMonthProvider);
+    final table = ref.watch(rateRegistryProvider).tableFor(yearMonth);
+    final display = resolveDisplayCurrency(month: budget, profile: profile);
 
     // Impact is approximate based on current safe to spend + expense amount (if we were to revert it)
     return Card(
@@ -210,7 +244,7 @@ class _ImpactCard extends ConsumerWidget {
             Builder(builder: (context) {
               // Approximate total before this expense
               final amountInPrimary =
-                  expense.amount * expense.exchangeRateToPrimary;
+                  expenseToDisplay(expense, display, table).majorValue;
               final totalBefore = safeToSpend + amountInPrimary;
               final percent = totalBefore > 0
                   ? (amountInPrimary / totalBefore * 100).clamp(0, 100)
