@@ -418,11 +418,14 @@ Future<void> _seedReimbursement(
 
   await harness.isar.writeTxn(() async {
     await harness.isar.reimbursements.put(
-      Reimbursement()
-        ..expenseId = expenseId
-        ..amount = 200
-        ..date = date
-        ..originYearMonth = originYearMonth,
+      Reimbursement(
+        profileId: 1,
+        expenseId: expenseId,
+        amount: 200,
+        currency: 'USD',
+        date: date,
+        originYearMonth: originYearMonth,
+      ),
     );
   });
 }

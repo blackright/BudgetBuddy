@@ -58,6 +58,8 @@ class MonthSummary {
       final converted = expense.amount * expense.exchangeRateToPrimary;
       switch (expense.status) {
         case ExpenseStatus.paid:
+        case ExpenseStatus.reimbursed:
+        case ExpenseStatus.partiallyReimbursed:
           paymentsMade += converted;
           if (_isMedical(expense)) medicalPaid += converted;
         case ExpenseStatus.planned:

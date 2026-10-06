@@ -66,6 +66,9 @@ class MedicalBill {
   /// Reminder date to chase a pending claim (FR-009).
   DateTime? followUpDate;
 
+  /// Calendar event ID if added to device calendar.
+  String? calendarEventId;
+
   /// Denormalised copy of the linked reimbursement; `0` when none.
   double reimbursedAmount = 0.0;
 

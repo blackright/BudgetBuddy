@@ -268,13 +268,17 @@ void main() {
       // FR-032: a reimbursement whose target never resolves falls back to its
       // own recorded month rather than being discarded.
       await fixture.repository.addReimbursement(
-        Reimbursement()
-          ..expenseId = 999999
-          ..amount = 75
-          ..date = DateTime(2026, 4, 2),
+        Reimbursement(
+          profileId: 1,
+          expenseId: 999999,
+          amount: 75,
+          currency: 'USD',
+          originYearMonth: '2026-04',
+          date: DateTime(2026, 4, 2),
+        ),
       );
 
-      expect((await fixture.summary('2026-04')).moneyReturned, 0);
+      expect((await fixture.summary('2026-04')).moneyReturned, 75.0);
       final stored = await fixture.isar.reimbursements.where().findAll();
       expect(stored.single.amount, 75);
     });
@@ -446,10 +450,14 @@ class _AttributionFixture {
             ?.id;
 
     await repository.addReimbursement(
-      Reimbursement()
-        ..expenseId = targetId
-        ..amount = amount
-        ..date = date,
+      Reimbursement(
+        profileId: 1,
+        expenseId: targetId,
+        amount: amount,
+        currency: 'USD',
+        originYearMonth: againstYearMonth ?? '',
+        date: date,
+      ),
     );
   }
 

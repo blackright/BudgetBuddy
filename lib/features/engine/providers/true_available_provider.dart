@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../expenses/repositories/expense_repository.dart';
+import '../../expenses/providers/reimbursement_provider.dart';
 import '../../../core/providers/active_budget_provider.dart';
 import '../../../core/providers/active_profile_provider.dart';
 import '../../../core/models/expense.dart';
@@ -26,7 +27,7 @@ final monthlyReimbursementsProvider =
   final budget = ref.watch(activeBudgetProvider).value;
   if (budget == null) return Stream.value([]);
 
-  final repository = ref.watch(expenseRepositoryProvider);
+  final repository = ref.watch(reimbursementRepositoryProvider);
   return repository.watchReimbursementsForMonth(budget.yearMonth);
 });
 
@@ -41,7 +42,9 @@ final trueAvailableProvider = Provider<double>((ref) {
 
   double totalPaid = 0.0;
   for (final exp in expenses) {
-    if (exp.status == ExpenseStatus.paid) {
+    if (exp.status == ExpenseStatus.paid ||
+        exp.status == ExpenseStatus.reimbursed ||
+        exp.status == ExpenseStatus.partiallyReimbursed) {
       // Amount is converted to primary currency
       totalPaid += exp.amount * exp.exchangeRateToPrimary;
     }
@@ -49,13 +52,7 @@ final trueAvailableProvider = Provider<double>((ref) {
 
   double totalReimbursements = 0.0;
   for (final reimb in reimbursements) {
-    // The origin month is the target expense's own month, so the target expense
-    // is in `expenses` unless it was deleted. A reimbursement with no surviving
-    // expense (FR-035) contributes nothing rather than guessing a rate.
-    final expense = expenses.where((e) => e.id == reimb.expenseId).firstOrNull;
-    if (expense != null) {
-      totalReimbursements += reimb.amount * expense.exchangeRateToPrimary;
-    }
+    totalReimbursements += reimb.amount * reimb.exchangeRateToPrimary;
   }
 
   return baseAmount - totalPaid + totalReimbursements;

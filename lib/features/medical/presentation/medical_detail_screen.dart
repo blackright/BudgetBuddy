@@ -2,11 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:device_calendar/device_calendar.dart' as dc;
+import 'package:timezone/timezone.dart' as tz;
+import 'package:add_2_calendar/add_2_calendar.dart' as a2c;
 
 import '../../../core/models/medical_bill.dart';
+import '../../../core/providers/clock_provider.dart';
 import '../providers/medical_providers.dart';
 import '../repositories/medical_repository.dart';
 import 'medical_theme.dart';
+
+import '../../expenses/presentation/widgets/reimbursement_entry_sheet.dart' as entry;
+import '../../expenses/presentation/widgets/reimbursement_history_list.dart';
+import '../../expenses/repositories/expense_repository.dart';
+import 'reminder_picker_sheet.dart';
 
 /// Detail + lifecycle view for a single medical bill (T017).
 ///
@@ -85,12 +94,21 @@ class _DetailScaffold extends ConsumerWidget {
             _PaymentMethodSection(bill: bill),
             const SizedBox(height: 16),
             _BillStateSection(bill: bill),
-            const SizedBox(height: 16),
-            _FollowUpSection(bill: bill),
+            // A paid or finished claim has nothing left to chase, so the
+            // reminder would only be noise.
+            if (bill.state != MedicalBillState.paid &&
+                bill.state != MedicalBillState.finished) ...[
+              const SizedBox(height: 16),
+              _FollowUpSection(bill: bill),
+            ],
             if (bill.billPhotoPath != null ||
                 bill.insurerReplyPath != null) ...[
               const SizedBox(height: 16),
               _DocumentsCard(bill: bill),
+            ],
+            if (bill.linkedExpenseId != null) ...[
+              const SizedBox(height: 16),
+              ReimbursementHistoryList(expenseId: bill.linkedExpenseId!),
             ],
           ],
         ),
@@ -530,94 +548,19 @@ class _BillStateSection extends ConsumerWidget {
 
   /// FR-034: the payout is injected into the budget via a reimbursement row.
   Future<void> _logReimbursement(BuildContext context, WidgetRef ref) async {
-    final symbol = ref.read(medicalCurrencySymbolProvider);
-    // Pre-fill with the last payout, or the patient share as the best estimate
-    // of what the insurer will return.
-    final controller = TextEditingController(
-      text: bill.reimbursedAmount > 0
-          ? bill.reimbursedAmount.toStringAsFixed(2)
-          : bill.patientShareAmount.toStringAsFixed(2),
-    );
+    final expenseRepo = ref.read(expenseRepositoryProvider);
+    final expense = await expenseRepo.getExpense(bill.linkedExpenseId!);
+    
+    if (expense == null || !context.mounted) return;
 
-    final amount = await showDialog<double>(
+    await showModalBottomSheet(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Log Reimbursement'),
-        // An AlertDialog sizes itself to its content's intrinsic height and never
-        // subtracts the keyboard inset, so a text field inside one overflows the
-        // Column as soon as the soft keyboard covers the lower half of the screen.
-        // Consuming the inset here and letting the content scroll keeps the field
-        // reachable instead of clipping it.
-        content: Builder(
-          builder: (contentContext) => SingleChildScrollView(
-            child: Padding(
-              padding: EdgeInsets.only(
-                top: 24,
-                bottom: 24 + MediaQuery.viewInsetsOf(contentContext).bottom,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'How much did insurance pay you? This amount is added back '
-                    'to your available budget.',
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: controller,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
-                    decoration: InputDecoration(
-                      labelText: 'Amount',
-                      prefixText: '$symbol ',
-                      border: const OutlineInputBorder(),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final parsed = double.tryParse(controller.text.trim());
-              Navigator.pop(dialogContext, parsed);
-            },
-            child: const Text('Save'),
-          ),
-        ],
+      isScrollControlled: true,
+      builder: (ctx) => entry.ReimbursementEntrySheet(
+        expense: expense,
+        medicalBill: bill,
       ),
     );
-    controller.dispose();
-
-    if (amount == null || amount <= 0) return;
-    if (!context.mounted) return;
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      await ref
-          .read(medicalRepositoryProvider)
-          .logReimbursement(bill, amount: amount);
-      if (!context.mounted) return;
-      messenger
-        ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(
-          content: Text(
-            'Reimbursement logged. Available up by '
-            '${MedicalTheme.money(symbol, amount)} 💰',
-          ),
-        ));
-    } catch (error) {
-      if (!context.mounted) return;
-      messenger
-        ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text('Could not log it: $error')));
-    }
   }
 }
 
@@ -632,7 +575,31 @@ class _FollowUpSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final now = ref.watch(clockProvider);
     final hasFollowUp = bill.followUpDate != null;
+
+    String statusText = 'No reminder set for this claim yet.';
+    Color? statusColor = MedicalTheme.subtleText(context);
+    bool isOverdue = false;
+
+    if (hasFollowUp) {
+      final diff = bill.followUpDate!.difference(now);
+      if (diff.inHours < -1) {
+        statusText = 'Overdue since ${DateFormat.MMMd().format(bill.followUpDate!)}';
+        statusColor = Colors.red;
+        isOverdue = true;
+      } else if (diff.isNegative || diff.inMinutes < 60) {
+        statusText = 'Due now';
+        statusColor = Theme.of(context).colorScheme.primary;
+      } else if (diff.inHours < 24) {
+        final hours = diff.inHours;
+        final mins = diff.inMinutes % 60;
+        statusText = 'In ${hours}h ${mins}m';
+        statusColor = Colors.orange;
+      } else {
+        statusText = 'Check back ${DateFormat.MMMEd().format(bill.followUpDate!)} · ${DateFormat.jm().format(bill.followUpDate!)}';
+      }
+    }
 
     return _SectionCard(
       title: 'Follow-up Reminder',
@@ -640,10 +607,11 @@ class _FollowUpSection extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            hasFollowUp
-                ? 'Check back ${DateFormat.yMMMd().format(bill.followUpDate!)}.'
-                : 'No reminder set for this claim yet.',
-            style: TextStyle(color: MedicalTheme.subtleText(context)),
+            statusText,
+            style: TextStyle(
+              color: statusColor,
+              fontWeight: isOverdue ? FontWeight.bold : FontWeight.normal,
+            ),
           ),
           const SizedBox(height: 12),
           Row(
@@ -652,11 +620,16 @@ class _FollowUpSection extends ConsumerWidget {
                 child: OutlinedButton.icon(
                   onPressed: () => _pick(context, ref),
                   icon: const Icon(Icons.event_available_outlined, size: 18),
-                  label: Text(hasFollowUp ? 'Change date' : 'Set reminder'),
+                  label: Text(hasFollowUp ? (isOverdue ? 'Reschedule' : 'Change time') : 'Set reminder'),
                 ),
               ),
               if (hasFollowUp) ...[
                 const SizedBox(width: 8),
+                IconButton(
+                  tooltip: 'Add to calendar',
+                  icon: const Icon(Icons.edit_calendar_outlined),
+                  onPressed: () => _addToCalendar(context, ref),
+                ),
                 IconButton(
                   tooltip: 'Clear reminder',
                   icon: const Icon(Icons.close),
@@ -673,15 +646,54 @@ class _FollowUpSection extends ConsumerWidget {
   }
 
   Future<void> _pick(BuildContext context, WidgetRef ref) async {
-    final now = DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: bill.followUpDate ?? now.add(const Duration(days: 14)),
-      firstDate: now.subtract(const Duration(days: 30)),
-      lastDate: now.add(const Duration(days: 365)),
-    );
+    final picked = await ReminderPickerSheet.show(context, initialDate: bill.followUpDate);
     if (picked == null) return;
     await ref.read(medicalRepositoryProvider).setFollowUpDate(bill, picked);
+  }
+
+  Future<void> _addToCalendar(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final deviceCalendarPlugin = dc.DeviceCalendarPlugin();
+    
+    var permissionsGranted = await deviceCalendarPlugin.hasPermissions();
+    if (permissionsGranted.isSuccess && !(permissionsGranted.data ?? false)) {
+      permissionsGranted = await deviceCalendarPlugin.requestPermissions();
+    }
+    
+    if (permissionsGranted.isSuccess && (permissionsGranted.data ?? false)) {
+      final calendars = await deviceCalendarPlugin.retrieveCalendars();
+      if (calendars.isSuccess && calendars.data != null && calendars.data!.isNotEmpty) {
+        final defaultCalendar = calendars.data!.firstWhere(
+          (c) => c.isDefault ?? false,
+          orElse: () => calendars.data!.first,
+        );
+        
+        final event = dc.Event(
+          defaultCalendar.id,
+          eventId: bill.calendarEventId,
+          title: 'Claim Follow-up',
+          description: 'Follow up on medical bill',
+          start: tz.TZDateTime.from(bill.followUpDate!, tz.local),
+          end: tz.TZDateTime.from(bill.followUpDate!.add(const Duration(minutes: 30)), tz.local),
+        );
+        
+        final result = await deviceCalendarPlugin.createOrUpdateEvent(event);
+        if (result?.isSuccess ?? false) {
+          await ref.read(medicalRepositoryProvider).setCalendarEventId(bill, result!.data);
+          messenger.showSnackBar(const SnackBar(content: Text('Added to calendar')));
+          return;
+        }
+      }
+    }
+    
+    // Fallback to add_2_calendar
+    final event = a2c.Event(
+      title: 'Claim Follow-up',
+      description: 'Follow up on medical bill',
+      startDate: bill.followUpDate!,
+      endDate: bill.followUpDate!.add(const Duration(minutes: 30)),
+    );
+    a2c.Add2Calendar.addEvent2Cal(event);
   }
 }
 

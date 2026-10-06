@@ -75,6 +75,10 @@ class ExpenseRepository {
         .findAll();
   }
 
+  Future<Expense?> getExpense(int id) {
+    return _isar.expenses.get(id);
+  }
+
   /// Records a reimbursement for a non-medical expense.
   ///
   /// Two guarantees beyond a plain insert (FR-034):

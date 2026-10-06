@@ -787,7 +787,7 @@ void main() {
   group('follow-up reminders (FR-009)', () {
     test('a reminder date can be set and cleared', () async {
       final saved = await harness.repository.saveBill(bill(), context);
-      final when = DateTime(2026, 2, 1);
+      final when = DateTime(2036, 2, 1);
 
       await harness.repository.setFollowUpDate(saved, when);
       expect(saved.followUpDate, when);

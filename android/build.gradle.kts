@@ -28,10 +28,10 @@ subprojects {
                     }
                 } catch (e: Exception) {}
                 try {
-                    androidExt.javaClass.getMethod("setCompileSdk", Int::class.java).invoke(androidExt, 36)
+                    androidExt.javaClass.getMethod("setCompileSdk", Int::class.java).invoke(androidExt, 37)
                 } catch (e: Exception) {
                     try {
-                        androidExt.javaClass.getMethod("setCompileSdkVersion", Int::class.java).invoke(androidExt, 36)
+                        androidExt.javaClass.getMethod("setCompileSdkVersion", Int::class.java).invoke(androidExt, 37)
                     } catch (e2: Exception) {}
                 }
             }

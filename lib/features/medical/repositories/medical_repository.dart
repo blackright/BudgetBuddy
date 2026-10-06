@@ -4,6 +4,7 @@ import '../../../core/models/expense.dart';
 import '../../../core/models/insurance_profile.dart';
 import '../../../core/models/medical_bill.dart';
 import '../../../core/models/medical_service_type.dart';
+import '../../../core/services/reminder_notification_service.dart';
 import '../../engine/expense_delta.dart';
 import '../../expenses/models/reimbursement.dart';
 
@@ -315,6 +316,10 @@ class MedicalRepository {
         await _syncLinkedExpense(bill, syncContext);
       }
     });
+
+    if (state == MedicalBillState.paid || state == MedicalBillState.finished) {
+      await _clearReminder(bill);
+    }
   }
 
   /// Switches a bill between insurer-paid and self-paid (FR-041).
@@ -351,6 +356,17 @@ class MedicalRepository {
       if (syncContext != null) {
         await _syncLinkedExpense(bill, syncContext);
       }
+    });
+  }
+
+  Future<void> updateMedicalBillReimbursement(MedicalBill bill, double totalReimbursed) async {
+    await _isar.writeTxn(() async {
+      bill
+        ..reimbursedAmount = totalReimbursed
+        ..state = (totalReimbursed >= bill.insurerPaidAmount - 0.01)
+            ? MedicalBillState.finished
+            : MedicalBillState.waiting; // or however we want to represent partial
+      await _isar.medicalBills.put(bill);
     });
   }
 
@@ -403,13 +419,14 @@ class MedicalRepository {
 
       if (existing.isEmpty) {
         await _isar.reimbursements.put(
-          Reimbursement()
-            ..expenseId = expenseId
-            ..amount = amount
-            // R-5 — credited to the bill's month, never the recording date.
-            ..originYearMonth =
-                bill.yearMonth.isNotEmpty ? bill.yearMonth : expense.yearMonth
-            ..date = date ?? DateTime.now(),
+          Reimbursement(
+            profileId: bill.profileId ?? expense.profileId,
+            expenseId: expenseId,
+            amount: amount,
+            currency: expense.currency,
+            originYearMonth: bill.yearMonth.isNotEmpty ? bill.yearMonth : expense.yearMonth,
+            date: date ?? DateTime.now(),
+          ),
         );
       } else {
         // Collapse to a single row so the engine never sees a doubled payout.
@@ -435,10 +452,44 @@ class MedicalRepository {
 
   /// Sets or clears the follow-up reminder date for a pending claim (FR-009).
   Future<void> setFollowUpDate(MedicalBill bill, DateTime? date) async {
+    if (date != null && date.isBefore(DateTime.now())) {
+      throw ArgumentError('Follow up date must be in the future.');
+    }
     await _isar.writeTxn(() async {
       bill.followUpDate = date;
       await _isar.medicalBills.put(bill);
     });
+
+    if (date != null) {
+      await ReminderNotificationService().scheduleReminder(
+        id: bill.id,
+        title: 'Claim Follow-up',
+        body: 'Follow up on your pending medical bill',
+        scheduledDate: date,
+      );
+    } else {
+      await ReminderNotificationService().cancelReminder(bill.id);
+    }
+  }
+
+  Future<void> setCalendarEventId(MedicalBill bill, String? eventId) async {
+    await _isar.writeTxn(() async {
+      bill.calendarEventId = eventId;
+      await _isar.medicalBills.put(bill);
+    });
+  }
+
+  Future<void> _clearReminder(MedicalBill bill) async {
+    if (bill.followUpDate != null) {
+      await _isar.writeTxn(() async {
+        bill.followUpDate = null;
+        // Optionally, clear calendarEventId here if we are removing the event too,
+        // but removing device_calendar event requires device_calendar plugin.
+        // The UI or a dedicated service should probably handle device_calendar deletion.
+        await _isar.medicalBills.put(bill);
+      });
+      await ReminderNotificationService().cancelReminder(bill.id);
+    }
   }
 
   /// Deletes the bill, its linked expense and any reimbursement.
@@ -463,6 +514,8 @@ class MedicalRepository {
       }
       await _isar.medicalBills.delete(billId);
     });
+    
+    await ReminderNotificationService().cancelReminder(billId);
   }
 
   // ---------------------------------------------------------------------------

@@ -62,6 +62,8 @@ enum ExpenseStatus {
   planned,
   paid,
   cancelled,
+  reimbursed,
+  partiallyReimbursed,
 }
 
 enum ExpenseType {

@@ -284,11 +284,15 @@ const _ExpensestatusEnumValueMap = {
   'planned': 0,
   'paid': 1,
   'cancelled': 2,
+  'reimbursed': 3,
+  'partiallyReimbursed': 4,
 };
 const _ExpensestatusValueEnumMap = {
   0: ExpenseStatus.planned,
   1: ExpenseStatus.paid,
   2: ExpenseStatus.cancelled,
+  3: ExpenseStatus.reimbursed,
+  4: ExpenseStatus.partiallyReimbursed,
 };
 const _ExpensetypeEnumValueMap = {
   'standard': 0,

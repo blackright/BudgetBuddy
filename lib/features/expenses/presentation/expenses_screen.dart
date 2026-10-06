@@ -125,27 +125,42 @@ class ExpensesScreen extends ConsumerWidget {
           ),
         ),
       ),
-      body: expensesAsync.when(
-        data: (expenses) {
-          if (expenses.isEmpty) {
-            return const Center(child: Text('No expenses found.'));
+      body: GestureDetector(
+        onHorizontalDragEnd: (details) {
+          if (details.primaryVelocity != null) {
+            if (details.primaryVelocity! < -300) {
+              ref.read(selectedYearMonthProvider.notifier).update((state) => nextMonth(state));
+            } else if (details.primaryVelocity! > 300) {
+              ref.read(selectedYearMonthProvider.notifier).update((state) => previousMonth(state));
+            }
           }
-          return SlidableAutoCloseBehavior(
-            child: ListView.builder(
-              itemCount: expenses.length,
-              itemBuilder: (context, index) {
-                final expense = expenses[index];
-                return _ExpenseTile(
-                  key: ValueKey(expense.id),
-                  expense: expense,
-                  currencySymbol: currencySymbol,
-                );
-              },
-            ),
-          );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, stack) => Center(child: Text('Error: $err')),
+        child: expensesAsync.when(
+          data: (expenses) {
+            return RefreshIndicator(
+              onRefresh: () async {
+                await Future.delayed(const Duration(milliseconds: 500));
+              },
+              child: expenses.isEmpty
+                  ? ListView(children: const [Center(child: Padding(padding: EdgeInsets.all(32), child: Text('No expenses found.')))])
+                  : SlidableAutoCloseBehavior(
+                      child: ListView.builder(
+                        itemCount: expenses.length,
+                        itemBuilder: (context, index) {
+                          final expense = expenses[index];
+                          return _ExpenseTile(
+                            key: ValueKey(expense.id),
+                            expense: expense,
+                            currencySymbol: currencySymbol,
+                          );
+                        },
+                      ),
+                    ),
+            );
+          },
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (err, stack) => Center(child: Text('Error: $err')),
+        ),
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => context.push('/add_expense'),
@@ -388,6 +403,24 @@ class _ExpenseTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isPaid = expense.status == ExpenseStatus.paid;
+    final isReimbursed = expense.status == ExpenseStatus.reimbursed;
+    final isPartiallyReimbursed = expense.status == ExpenseStatus.partiallyReimbursed;
+
+    IconData statusIcon;
+    Color statusColor;
+    if (isReimbursed) {
+      statusIcon = Icons.currency_exchange;
+      statusColor = Colors.blue;
+    } else if (isPartiallyReimbursed) {
+      statusIcon = Icons.change_circle;
+      statusColor = Colors.lightBlue;
+    } else if (isPaid) {
+      statusIcon = Icons.check;
+      statusColor = Colors.green;
+    } else {
+      statusIcon = Icons.schedule;
+      statusColor = Colors.orange;
+    }
 
     return Slidable(
       key: ValueKey('slidable-${expense.id}'),
@@ -399,14 +432,18 @@ class _ExpenseTile extends ConsumerWidget {
         dismissible: DismissiblePane(
           closeOnCancel: true,
           confirmDismiss: () async {
-            await _toggle(context, ref);
+            if (!isReimbursed && !isPartiallyReimbursed) {
+              await _toggle(context, ref);
+            }
             return false; // keep the row; it just changes status
           },
           onDismissed: () {},
         ),
         children: [
           SlidableAction(
-            onPressed: (_) => _toggle(context, ref),
+            onPressed: (_) {
+              if (!isReimbursed && !isPartiallyReimbursed) _toggle(context, ref);
+            },
             backgroundColor: isPaid ? Colors.orange : Colors.green,
             foregroundColor: Colors.white,
             icon: isPaid ? Icons.schedule : Icons.check_circle,
@@ -443,12 +480,10 @@ class _ExpenseTile extends ConsumerWidget {
               ScaleTransition(scale: anim, child: child),
           child: CircleAvatar(
             key: ValueKey(expense.status),
-            backgroundColor: isPaid
-                ? Colors.green.withValues(alpha: 0.2)
-                : Colors.orange.withValues(alpha: 0.2),
+            backgroundColor: statusColor.withValues(alpha: 0.2),
             child: Icon(
-              isPaid ? Icons.check : Icons.schedule,
-              color: isPaid ? Colors.green : Colors.orange,
+              statusIcon,
+              color: statusColor,
             ),
           ),
         ),

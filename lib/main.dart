@@ -9,9 +9,13 @@ import 'core/database/isar_helper.dart';
 import 'core/routing/router_providers.dart';
 import 'features/engine/providers/sweep_provider.dart';
 
+import 'core/services/reminder_notification_service.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await IsarHelper.init();
+  
+  await ReminderNotificationService().init();
 
   final container = ProviderContainer();
   // Execute end of month sweep check on startup

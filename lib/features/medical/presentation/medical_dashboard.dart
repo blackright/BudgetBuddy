@@ -7,8 +7,11 @@ import '../../../core/models/insurance_profile.dart';
 import '../../../core/models/medical_bill.dart';
 import '../../../core/providers/active_profile_provider.dart';
 import '../../../core/providers/selected_month_provider.dart';
+import '../../../core/providers/clock_provider.dart';
 import '../providers/medical_providers.dart';
+import '../repositories/medical_repository.dart';
 import 'medical_theme.dart';
+import 'reminder_picker_sheet.dart';
 
 class MedicalDashboard extends ConsumerWidget {
   const MedicalDashboard({super.key});
@@ -37,14 +40,25 @@ class MedicalDashboard extends ConsumerWidget {
           ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          ref
-            ..invalidate(medicalBillsProvider)
-            ..invalidate(insuranceProfileProvider)
-            ..invalidate(familyMembersProvider)
-            ..invalidate(medicalProvidersProvider);
+      body: GestureDetector(
+        onHorizontalDragEnd: (details) {
+          if (details.primaryVelocity != null) {
+            if (details.primaryVelocity! < -300) {
+              ref.read(selectedYearMonthProvider.notifier).update((state) => nextMonth(state));
+            } else if (details.primaryVelocity! > 300) {
+              ref.read(selectedYearMonthProvider.notifier).update((state) => previousMonth(state));
+            }
+          }
         },
+        child: RefreshIndicator(
+          onRefresh: () async {
+            await Future.delayed(const Duration(milliseconds: 500));
+            ref
+              ..invalidate(medicalBillsProvider)
+              ..invalidate(insuranceProfileProvider)
+              ..invalidate(familyMembersProvider)
+              ..invalidate(medicalProvidersProvider);
+          },
         child: CustomScrollView(
           slivers: [
             SliverToBoxAdapter(
@@ -90,6 +104,7 @@ class MedicalDashboard extends ConsumerWidget {
             const _BillsSliver(),
           ],
         ),
+      ),
       ),
     );
   }
@@ -694,6 +709,7 @@ class _BillTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final directory = ref.watch(medicalDirectoryProvider);
+    final now = ref.watch(clockProvider);
     final provider = directory.providerName(bill.providerId);
     final patient = directory.memberName(bill.familyMemberId);
 
@@ -701,54 +717,102 @@ class _BillTile extends ConsumerWidget {
     // and the wording, so it replaces the old claim-status + paid/planned pair.
     final stateColor = MedicalTheme.billStateColor(context, bill.state);
 
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: CircleAvatar(
-        backgroundColor: stateColor.withValues(alpha: 0.2),
-        child: Icon(
-          MedicalTheme.billStateIcon(bill.state),
-          color: stateColor,
+    return Dismissible(
+      key: ValueKey('bill-${bill.id}'),
+      direction: DismissDirection.endToStart,
+      confirmDismiss: (direction) async {
+        final picked = await ReminderPickerSheet.show(context, initialDate: bill.followUpDate);
+        if (picked != null) {
+          await ref.read(medicalRepositoryProvider).setFollowUpDate(bill, picked);
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Reminder set')));
+          }
+        }
+        return false;
+      },
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20.0),
+        color: Colors.orange,
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            Text('Remind me', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            SizedBox(width: 8),
+            Icon(Icons.access_time, color: Colors.white),
+          ],
         ),
       ),
-      title: Text(provider ?? 'Medical Bill'),
-      subtitle: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            <String>[
-              if (patient != null) patient,
-              bill.state.label,
-              bill.paymentMethod.label,
-            ].join(' • '),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        leading: CircleAvatar(
+          backgroundColor: stateColor.withValues(alpha: 0.2),
+          child: Icon(
+            MedicalTheme.billStateIcon(bill.state),
+            color: stateColor,
           ),
-          if (bill.followUpDate != null && bill.state.isPending)
+        ),
+        title: Text(provider ?? 'Medical Bill'),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
             Text(
-              'Follow up ${DateFormat('MMM d').format(bill.followUpDate!)}',
-              style: const TextStyle(fontSize: 12, color: Colors.orange),
+              <String>[
+                if (patient != null) patient,
+                bill.state.label,
+                bill.paymentMethod.label,
+              ].join(' • '),
             ),
-        ],
-      ),
-      trailing: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Text(
-            MedicalTheme.money(currencySymbol, bill.billedAmount),
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-          ),
-          // FR-042: only an insurer-paid bill splits the charge; a self-paid one
-          // is entirely the user's, so a share line would be misleading.
-          if (bill.paymentMethod == MedicalPaymentMethod.insurerPaid)
+            if (bill.followUpDate != null && bill.state.isPending) ...[
+              () {
+                final diff = bill.followUpDate!.difference(now);
+                String statusText;
+                Color statusColor;
+                
+                if (diff.inHours < -1) {
+                  statusText = 'Overdue since ${DateFormat.MMMd().format(bill.followUpDate!)}';
+                  statusColor = Colors.red;
+                } else if (diff.isNegative || diff.inMinutes < 60) {
+                  statusText = 'Due now';
+                  statusColor = Theme.of(context).colorScheme.primary;
+                } else if (diff.inHours < 24) {
+                  final hours = diff.inHours;
+                  final mins = diff.inMinutes % 60;
+                  statusText = 'In ${hours}h ${mins}m';
+                  statusColor = Colors.orange;
+                } else {
+                  statusText = 'Follow up ${DateFormat('MMM d').format(bill.followUpDate!)}';
+                  statusColor = Colors.orange;
+                }
+                
+                return Text(
+                  statusText,
+                  style: TextStyle(fontSize: 12, color: statusColor, fontWeight: FontWeight.bold),
+                );
+              }(),
+            ],
+          ],
+        ),
+        trailing: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
             Text(
-              '${MedicalTheme.money(currencySymbol, bill.patientShareAmount)} you',
-              style: TextStyle(
-                fontSize: 12,
-                color: MedicalTheme.subtleText(context),
+              MedicalTheme.money(currencySymbol, bill.billedAmount),
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            if (bill.paymentMethod == MedicalPaymentMethod.insurerPaid)
+              Text(
+                '${MedicalTheme.money(currencySymbol, bill.patientShareAmount)} you',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: MedicalTheme.subtleText(context),
+                ),
               ),
-            ),
-        ],
+          ],
+        ),
+        onTap: () => context.push('/medical_detail', extra: bill.id),
       ),
-      onTap: () => context.push('/medical_detail', extra: bill.id),
     );
   }
 }

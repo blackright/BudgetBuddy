@@ -6,6 +6,7 @@ import '../../../core/database/isar_helper.dart';
 import '../../../core/models/monthly_budget.dart';
 import '../../../core/models/user_profile.dart';
 import '../../../core/providers/active_budget_provider.dart';
+import '../../../core/providers/selected_month_provider.dart';
 import '../../../shared/presentation/widgets/month_incomplete_banner.dart';
 import 'month_navigator.dart';
 import 'widgets/month_summary_card.dart';
@@ -56,40 +57,56 @@ class DashboardScreen extends ConsumerWidget {
             ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          MonthIncompleteBanner(currencySymbol: symbol),
-          MonthSummaryCard(currencySymbol: symbol),
-          const SizedBox(height: 12),
-          MonthSummaryDetails(
-            currencySymbol: symbol,
-            // The selected month lives in a provider, so the Medical tab opens
-            // on the same month with no route parameter to carry (FR-022,
-            // FR-027).
-            onMedicalTap: () => context.go('/medical'),
-          ),
-          const SizedBox(height: 24),
-          const Text(
-            'Quick Actions',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
+      body: GestureDetector(
+        onHorizontalDragEnd: (details) {
+          if (details.primaryVelocity != null) {
+            if (details.primaryVelocity! < -300) {
+              ref.read(selectedYearMonthProvider.notifier).update((state) => nextMonth(state));
+            } else if (details.primaryVelocity! > 300) {
+              ref.read(selectedYearMonthProvider.notifier).update((state) => previousMonth(state));
+            }
+          }
+        },
+        child: RefreshIndicator(
+          onRefresh: () async {
+            await Future.delayed(const Duration(milliseconds: 500));
+          },
+          child: ListView(
+            padding: const EdgeInsets.all(16),
             children: [
-              InkWell(
-                onTap: () => context.push('/add_expense'),
-                child: _buildActionButton(Icons.add, 'Add Expense'),
+              MonthIncompleteBanner(currencySymbol: symbol),
+              MonthSummaryCard(currencySymbol: symbol),
+              const SizedBox(height: 12),
+              MonthSummaryDetails(
+                currencySymbol: symbol,
+                // The selected month lives in a provider, so the Medical tab opens
+                // on the same month with no route parameter to carry (FR-022,
+                // FR-027).
+                onMedicalTap: () => context.go('/medical'),
               ),
-              InkWell(
-                onTap: () => context.go('/medical'),
-                child: _buildActionButton(Icons.medical_services, 'Medical'),
+              const SizedBox(height: 24),
+              const Text(
+                'Quick Actions',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
-              _buildActionButton(Icons.history, 'History'),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  InkWell(
+                    onTap: () => context.push('/add_expense'),
+                    child: _buildActionButton(Icons.add, 'Add Expense'),
+                  ),
+                  InkWell(
+                    onTap: () => context.go('/medical'),
+                    child: _buildActionButton(Icons.medical_services, 'Medical'),
+                  ),
+                  _buildActionButton(Icons.history, 'History'),
+                ],
+              ),
             ],
           ),
-        ],
+        ),
       ),
     );
   }

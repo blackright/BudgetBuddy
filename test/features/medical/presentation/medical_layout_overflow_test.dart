@@ -166,10 +166,14 @@ void main() {
 
       final orphans = List.generate(
         8,
-        (i) => Reimbursement()
-          ..id = i + 1
-          ..amount = 100 + i.toDouble()
-          ..date = DateTime(2026, 1, i + 1),
+        (i) => Reimbursement(
+          id: i + 1,
+          profileId: 1,
+          amount: 100 + i.toDouble(),
+          currency: 'USD',
+          originYearMonth: '2026-01',
+          date: DateTime(2026, 1, i + 1),
+        ),
       );
 
       await tester.pumpWidget(

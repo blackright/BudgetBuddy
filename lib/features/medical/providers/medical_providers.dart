@@ -321,6 +321,8 @@ class MedicalBudgetImpact {
       final status = expenseId == null ? null : expenseStatuses[expenseId];
       switch (status) {
         case ExpenseStatus.paid:
+        case ExpenseStatus.reimbursed:
+        case ExpenseStatus.partiallyReimbursed:
           // `fundsImpact`, not the billed amount: a rejected insurer-paid bill
           // owes the full charge and an unresolved one owes only the share.
           paid += bill.fundsImpact;

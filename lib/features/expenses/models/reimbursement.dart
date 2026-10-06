@@ -6,6 +6,9 @@ part 'reimbursement.g.dart';
 class Reimbursement {
   Id id = Isar.autoIncrement;
 
+  @Index()
+  int profileId;
+
   /// Target expense or medical bill's linked expense. `null` means the target
   /// was deleted; the row is retained, flagged and surfaced to the user
   /// (FR-035).
@@ -15,20 +18,32 @@ class Reimbursement {
   /// The month the returned money *belongs to* — the target expense's owning
   /// month, never the month it was recorded in (FR-032).
   @Index()
-  String originYearMonth = '';
+  String originYearMonth;
 
   /// Set when the target expense is deleted (FR-035).
-  ///
-  /// The row is deliberately kept: money really did come back, so deleting it
-  /// would quietly rewrite a closed month's history. Flagging it instead lets
-  /// the user decide whether the payout was a mistake or the expense was deleted
-  /// by accident.
   @Index()
-  bool orphaned = false;
+  bool orphaned;
 
-  late double amount;
+  double amount;
+  String currency;
+  double exchangeRateToPrimary;
 
   /// When the user recorded the reimbursement. Display and audit only; never
   /// used for attribution.
-  late DateTime date;
+  DateTime date;
+
+  String? note;
+
+  Reimbursement({
+    this.id = Isar.autoIncrement,
+    required this.profileId,
+    this.expenseId,
+    required this.originYearMonth,
+    this.orphaned = false,
+    required this.amount,
+    required this.currency,
+    this.exchangeRateToPrimary = 1.0,
+    required this.date,
+    this.note,
+  });
 }

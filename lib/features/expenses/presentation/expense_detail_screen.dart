@@ -7,6 +7,8 @@ import '../../../core/models/category.dart';
 import '../../engine/providers/safe_to_spend_provider.dart';
 import '../providers/category_provider.dart';
 import '../providers/expenses_provider.dart';
+import 'widgets/reimbursement_entry_sheet.dart' as entry;
+import 'widgets/reimbursement_history_list.dart' as history;
 
 class ExpenseDetailScreen extends ConsumerWidget {
   final Expense expense;
@@ -35,6 +37,13 @@ class ExpenseDetailScreen extends ConsumerWidget {
             _ImpactCard(expense: expense),
             const SizedBox(height: 24),
             _VisualTimeline(expense: expense),
+            const SizedBox(height: 24),
+            if (expense.status == ExpenseStatus.reimbursed || 
+                expense.status == ExpenseStatus.partiallyReimbursed ||
+                expense.status == ExpenseStatus.paid)
+              history.ReimbursementHistoryList(
+                expenseId: expense.id,
+              ),
             const SizedBox(height: 32),
             _ActionBar(expense: expense),
           ],
@@ -48,65 +57,85 @@ class _ActionBar extends ConsumerWidget {
   final Expense expense;
   const _ActionBar({required this.expense});
 
+  void _showReimbursementSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => entry.ReimbursementEntrySheet(expense: expense),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isPaid = expense.status == ExpenseStatus.paid;
+    final isPaid = expense.status == ExpenseStatus.paid ||
+        expense.status == ExpenseStatus.partiallyReimbursed ||
+        expense.status == ExpenseStatus.reimbursed;
 
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+    return Column(
       children: [
-        FilledButton.icon(
-          onPressed: () async {
-            await ref.read(expensesProvider.notifier).toggleStatus(expense);
-            if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                    content:
-                        Text(isPaid ? 'Marked as Planned' : 'Marked as Paid')),
-              );
-              context
-                  .pop(); // Pop back to see updated list, or stay? We pop for simplicity.
-            }
-          },
-          icon: Icon(isPaid ? Icons.schedule : Icons.check_circle),
-          label: Text(isPaid ? 'Mark Planned' : 'Mark Paid'),
-          style: FilledButton.styleFrom(
-            backgroundColor: isPaid ? Colors.orange : Colors.green,
-          ),
-        ),
-        OutlinedButton.icon(
-          onPressed: () async {
-            final confirmed = await showDialog<bool>(
-              context: context,
-              builder: (ctx) => AlertDialog(
-                title: const Text('Delete Expense?'),
-                content:
-                    const Text('Are you sure you want to delete this expense?'),
-                actions: [
-                  TextButton(
-                      onPressed: () => Navigator.pop(ctx, false),
-                      child: const Text('Cancel')),
-                  FilledButton(
-                    onPressed: () => Navigator.pop(ctx, true),
-                    style: FilledButton.styleFrom(backgroundColor: Colors.red),
-                    child: const Text('Delete'),
-                  ),
-                ],
+        if (isPaid && expense.status != ExpenseStatus.reimbursed) ...[
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: () => _showReimbursementSheet(context),
+              icon: const Icon(Icons.currency_exchange),
+              label: const Text('Add Reimbursement'),
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.blue,
               ),
-            );
-            if (confirmed == true && context.mounted) {
-              await ref
-                  .read(expensesProvider.notifier)
-                  .deleteExpense(expense.id);
-              if (context.mounted) {
-                context.pop();
-                ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Expense deleted')));
-              }
-            }
-          },
-          icon: const Icon(Icons.delete, color: Colors.red),
-          label: const Text('Delete', style: TextStyle(color: Colors.red)),
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            if (expense.status == ExpenseStatus.planned || expense.status == ExpenseStatus.paid)
+              FilledButton.icon(
+                onPressed: () async {
+                  await ref.read(expensesProvider.notifier).toggleStatus(expense);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(expense.status == ExpenseStatus.paid ? 'Marked as Planned' : 'Marked as Paid')),
+                    );
+                    context.pop();
+                  }
+                },
+                icon: Icon(expense.status == ExpenseStatus.paid ? Icons.schedule : Icons.check_circle),
+                label: Text(expense.status == ExpenseStatus.paid ? 'Mark Planned' : 'Mark Paid'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: expense.status == ExpenseStatus.paid ? Colors.orange : Colors.green,
+                ),
+              ),
+            OutlinedButton.icon(
+              onPressed: () async {
+                final confirmed = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('Delete Expense?'),
+                    content: const Text('Are you sure you want to delete this expense?'),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                      FilledButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        style: FilledButton.styleFrom(backgroundColor: Colors.red),
+                        child: const Text('Delete'),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirmed == true && context.mounted) {
+                  await ref.read(expensesProvider.notifier).deleteExpense(expense.id);
+                  if (context.mounted) {
+                    context.pop();
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Expense deleted')));
+                  }
+                }
+              },
+              icon: const Icon(Icons.delete, color: Colors.red),
+              label: const Text('Delete', style: TextStyle(color: Colors.red)),
+            ),
+          ],
         ),
       ],
     );

@@ -37,12 +37,15 @@ void main() {
     int? expenseId = 1,
     String originYearMonth = '2026-01',
   }) {
-    return Reimbursement()
-      ..id = id
-      ..expenseId = expenseId
-      ..originYearMonth = originYearMonth
-      ..amount = amount
-      ..date = DateTime(2026, 4, 2);
+    return Reimbursement(
+      id: id,
+      profileId: 1, // Add mock profileId
+      expenseId: expenseId,
+      originYearMonth: originYearMonth,
+      amount: amount,
+      currency: 'USD', // Add mock currency
+      date: DateTime(2026, 4, 2),
+    );
   }
 
   MonthSummary build({
