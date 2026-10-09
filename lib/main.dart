@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'core/models/user_profile.dart';
+import 'core/presentation/app_themes.dart';
 import 'core/providers/active_profile_provider.dart';
 
 import 'core/database/isar_helper.dart';
@@ -13,6 +14,7 @@ import 'core/providers/database_integrity_provider.dart';
 import 'core/routing/router_providers.dart';
 import 'features/engine/providers/sweep_provider.dart';
 import 'features/engine/seal_coordinator.dart';
+import 'features/settings/providers/settings_provider.dart';
 
 import 'core/services/reminder_notification_service.dart';
 
@@ -98,13 +100,26 @@ class MyApp extends ConsumerWidget {
         fontFamily = null;
     }
 
+    // Phase 9-E (T062): theme follows the profile preference and defaults to
+    // the operating system. Both modes are built from the same seed, so the
+    // Settings font choice applies in light and dark alike.
+    final themeMode = switch (ref.watch(appThemeModeProvider)) {
+      AppThemeMode.system => ThemeMode.system,
+      AppThemeMode.light => ThemeMode.light,
+      AppThemeMode.dark => ThemeMode.dark,
+    };
+
     return MaterialApp.router(
       title: 'BudgetBuddy',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+      theme: buildAppTheme(
+        brightness: Brightness.light,
         fontFamily: fontFamily,
-        useMaterial3: true,
       ),
+      darkTheme: buildAppTheme(
+        brightness: Brightness.dark,
+        fontFamily: fontFamily,
+      ),
+      themeMode: themeMode,
       routerConfig: router,
     );
   }

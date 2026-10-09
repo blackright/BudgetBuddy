@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../finance/presentation/net_salary_section.dart';
 import 'font_setting_section.dart';
+import 'theme_setting_section.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -16,6 +17,8 @@ class SettingsScreen extends StatelessWidget {
           NetSalarySection(),
           SizedBox(height: 16),
           FontSettingSection(),
+          SizedBox(height: 16),
+          ThemeSettingSection(),
         ],
       ),
     );

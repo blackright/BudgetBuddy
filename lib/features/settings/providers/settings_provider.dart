@@ -17,6 +17,16 @@ final mainCurrencyProvider = Provider<CurrencyCode>((ref) {
   return profile?.primaryCurrency.code ?? CurrencyCode.huf;
 });
 
+/// The active profile's theme preference — `system` (follow the operating
+/// system) until the user opts into one mode (Phase 9-E).
+///
+/// Watches the live profile stream, so changing the theme re-renders every
+/// screen within a frame (T059/T062).
+final appThemeModeProvider = Provider<AppThemeMode>((ref) {
+  final profile = ref.watch(activeProfileProvider).valueOrNull;
+  return profile?.themeMode ?? AppThemeMode.system;
+});
+
 /// The single write path for the profile's main currency.
 ///
 /// The previous build let the dashboard mutate `MonthlyBudget.currency`
@@ -41,6 +51,28 @@ class MainCurrencyController {
       final profile = await _isar.userProfiles.where().findFirst();
       if (profile == null) return;
       profile.primaryCurrency = currency;
+      profile.updatedAt = DateTime.now();
+      await _isar.userProfiles.put(profile);
+    });
+  }
+}
+
+/// The single write path for the profile's theme preference (Phase 9-E).
+final appThemeControllerProvider = Provider<AppThemeController>((ref) {
+  return AppThemeController(IsarHelper.instance);
+});
+
+class AppThemeController {
+  AppThemeController(this._isar);
+
+  final Isar _isar;
+
+  /// Persists [mode] as the active profile's theme preference.
+  Future<void> setThemeMode(AppThemeMode mode) {
+    return _isar.writeTxn(() async {
+      final profile = await _isar.userProfiles.where().findFirst();
+      if (profile == null) return;
+      profile.themeMode = mode;
       profile.updatedAt = DateTime.now();
       await _isar.userProfiles.put(profile);
     });

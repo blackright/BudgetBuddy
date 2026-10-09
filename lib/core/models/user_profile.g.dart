@@ -49,8 +49,14 @@ const UserProfileSchema = CollectionSchema(
       type: IsarType.byte,
       enumMap: _UserProfileprimaryCurrencyEnumValueMap,
     ),
-    r'updatedAt': PropertySchema(
+    r'themeMode': PropertySchema(
       id: 6,
+      name: r'themeMode',
+      type: IsarType.byte,
+      enumMap: _UserProfilethemeModeEnumValueMap,
+    ),
+    r'updatedAt': PropertySchema(
+      id: 7,
       name: r'updatedAt',
       type: IsarType.dateTime,
     )
@@ -91,7 +97,8 @@ void _userProfileSerialize(
   writer.writeDouble(offsets[3], object.monthlyAvailableAmount);
   writer.writeString(offsets[4], object.name);
   writer.writeByte(offsets[5], object.primaryCurrency.index);
-  writer.writeDateTime(offsets[6], object.updatedAt);
+  writer.writeByte(offsets[6], object.themeMode.index);
+  writer.writeDateTime(offsets[7], object.updatedAt);
 }
 
 UserProfile _userProfileDeserialize(
@@ -112,7 +119,10 @@ UserProfile _userProfileDeserialize(
   object.primaryCurrency = _UserProfileprimaryCurrencyValueEnumMap[
           reader.readByteOrNull(offsets[5])] ??
       PrimaryCurrency.huf;
-  object.updatedAt = reader.readDateTime(offsets[6]);
+  object.themeMode =
+      _UserProfilethemeModeValueEnumMap[reader.readByteOrNull(offsets[6])] ??
+          AppThemeMode.system;
+  object.updatedAt = reader.readDateTime(offsets[7]);
   return object;
 }
 
@@ -140,6 +150,10 @@ P _userProfileDeserializeProp<P>(
               reader.readByteOrNull(offset)] ??
           PrimaryCurrency.huf) as P;
     case 6:
+      return (_UserProfilethemeModeValueEnumMap[
+              reader.readByteOrNull(offset)] ??
+          AppThemeMode.system) as P;
+    case 7:
       return (reader.readDateTime(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -169,6 +183,16 @@ const _UserProfileprimaryCurrencyValueEnumMap = {
   1: PrimaryCurrency.usd,
   2: PrimaryCurrency.cad,
   3: PrimaryCurrency.eur,
+};
+const _UserProfilethemeModeEnumValueMap = {
+  'system': 0,
+  'light': 1,
+  'dark': 2,
+};
+const _UserProfilethemeModeValueEnumMap = {
+  0: AppThemeMode.system,
+  1: AppThemeMode.light,
+  2: AppThemeMode.dark,
 };
 
 Id _userProfileGetId(UserProfile object) {
@@ -749,6 +773,62 @@ extension UserProfileQueryFilter
   }
 
   QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition>
+      themeModeEqualTo(AppThemeMode value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'themeMode',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition>
+      themeModeGreaterThan(
+    AppThemeMode value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'themeMode',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition>
+      themeModeLessThan(
+    AppThemeMode value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'themeMode',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition>
+      themeModeBetween(
+    AppThemeMode lower,
+    AppThemeMode upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'themeMode',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition>
       updatedAtEqualTo(DateTime value) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
@@ -890,6 +970,18 @@ extension UserProfileQuerySortBy
     });
   }
 
+  QueryBuilder<UserProfile, UserProfile, QAfterSortBy> sortByThemeMode() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'themeMode', Sort.asc);
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterSortBy> sortByThemeModeDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'themeMode', Sort.desc);
+    });
+  }
+
   QueryBuilder<UserProfile, UserProfile, QAfterSortBy> sortByUpdatedAt() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'updatedAt', Sort.asc);
@@ -994,6 +1086,18 @@ extension UserProfileQuerySortThenBy
     });
   }
 
+  QueryBuilder<UserProfile, UserProfile, QAfterSortBy> thenByThemeMode() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'themeMode', Sort.asc);
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterSortBy> thenByThemeModeDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'themeMode', Sort.desc);
+    });
+  }
+
   QueryBuilder<UserProfile, UserProfile, QAfterSortBy> thenByUpdatedAt() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'updatedAt', Sort.asc);
@@ -1049,6 +1153,12 @@ extension UserProfileQueryWhereDistinct
     });
   }
 
+  QueryBuilder<UserProfile, UserProfile, QDistinct> distinctByThemeMode() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'themeMode');
+    });
+  }
+
   QueryBuilder<UserProfile, UserProfile, QDistinct> distinctByUpdatedAt() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'updatedAt');
@@ -1101,6 +1211,13 @@ extension UserProfileQueryProperty
       primaryCurrencyProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'primaryCurrency');
+    });
+  }
+
+  QueryBuilder<UserProfile, AppThemeMode, QQueryOperations>
+      themeModeProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'themeMode');
     });
   }
 

@@ -13,7 +13,7 @@ part 'schema_migrations.g.dart';
 
 /// Schema version this build expects. Bump whenever a numbered step is added to
 /// [_applySteps]; databases stamped at or above it are left untouched.
-const int schemaVersion = 10;
+const int schemaVersion = 11;
 
 const String schemaVersionKey = 'schema_version';
 
@@ -101,6 +101,7 @@ Future<void> _applySteps(Isar isar) async {
   await _step8AddCurrencySealCollections(isar);
   await _step9ConvertAmountsToMinorUnits(isar);
   await _step10ReconcileCurrencyDefaults(isar);
+  await _step11AddThemePreference(isar);
 }
 
 /// Step 10 (FR-009, FR-010, FR-011, data-model §4.2/§6) — reconcile the old,
@@ -142,6 +143,19 @@ Future<void> _step10ReconcileCurrencyDefaults(Isar isar) async {
   }
 
   if (changed) await isar.monthlyBudgets.putAll(budgets);
+}
+
+/// Step 11 (theme, Phase 9-E) — additive only: `UserProfile` gains its own
+/// `themeMode` column.
+///
+/// Isar reconciles the stored schema on open, so new columns materialise with
+/// their declared defaults before this runs; there is no data to rewrite. The
+/// step exists so the version stamp records the upgrade and so the numbering
+/// the specification asks for stays visible. Existing profiles read back
+/// `AppThemeMode.system` — the documented "follow the operating system"
+/// default (T059).
+Future<void> _step11AddThemePreference(Isar isar) async {
+  // Intentionally empty: additive schema only — see doc comment.
 }
 
 /// Step 8 (multi-currency, data-model §6) — additive only: the `MonthRateSeal`

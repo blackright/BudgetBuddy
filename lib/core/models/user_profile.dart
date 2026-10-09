@@ -6,6 +6,9 @@ enum PrimaryCurrency { huf, usd, cad, eur }
 
 enum AppFontFamily { system, roboto, inter, openSans }
 
+/// The app's theme preference: follow the operating system, or force one mode.
+enum AppThemeMode { system, light, dark }
+
 @collection
 class UserProfile {
   Id id = Isar.autoIncrement;
@@ -27,4 +30,9 @@ class UserProfile {
 
   @enumerated
   AppFontFamily fontFamily = AppFontFamily.system;
+
+  /// Follows the system by default so a fresh install matches the user's
+  /// operating-system preference until they opt into one mode (T059/T061).
+  @enumerated
+  AppThemeMode themeMode = AppThemeMode.system;
 }
