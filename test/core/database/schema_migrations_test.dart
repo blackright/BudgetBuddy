@@ -2,6 +2,7 @@ import 'package:budget_buddy/core/database/schema_migrations.dart';
 import 'package:budget_buddy/core/models/live_rate_set.dart';
 import 'package:budget_buddy/core/models/medical_bill.dart';
 import 'package:budget_buddy/core/models/month_rate_seal.dart';
+import 'package:budget_buddy/core/models/monthly_budget.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../features/medical/repositories/medical_test_harness.dart';
@@ -185,6 +186,56 @@ void main() {
       expect(after.ratesHuf, 400.0);
       expect(await harness.isar.monthRateSeals.count(), 1);
       expect(await readSchemaVersion(harness.isar), schemaVersion);
+    });
+
+    test(
+        'step 10 clears unrecognised convert-to values and keeps canonical ones',
+        () async {
+      final garbage = MonthlyBudget()
+        ..yearMonth = '2026-05'
+        ..baseAvailableAmount = 0
+        ..currency = 'GBP'
+        ..createdAt = DateTime(2026)
+        ..updatedAt = DateTime(2026);
+      final canonical = MonthlyBudget()
+        ..yearMonth = '2026-06'
+        ..baseAvailableAmount = 0
+        ..currency = 'EUR'
+        ..createdAt = DateTime(2026)
+        ..updatedAt = DateTime(2026);
+      await harness.isar.writeTxn(() async {
+        await harness.isar.monthlyBudgets.put(garbage);
+        await harness.isar.monthlyBudgets.put(canonical);
+      });
+
+      await harness.runMigrations();
+
+      expect((await harness.budgetFor('2026-05'))!.currency, isNull,
+          reason: 'an unsupported code is cleared so the month follows main');
+      expect((await harness.budgetFor('2026-06'))!.currency, 'eur',
+          reason: 'a supported choice survives, normalised to its code');
+    });
+
+    test('step 10 is idempotent', () async {
+      final budget = MonthlyBudget()
+        ..yearMonth = '2026-07'
+        ..baseAvailableAmount = 0
+        ..currency = 'USD'
+        ..createdAt = DateTime(2026)
+        ..updatedAt = DateTime(2026);
+      await harness.isar.writeTxn(() async {
+        await harness.isar.monthlyBudgets.put(budget);
+      });
+
+      await harness.runMigrations();
+      final afterFirst = await harness.budgetFor('2026-07');
+
+      await harness.runMigrations();
+      final afterSecond = await harness.budgetFor('2026-07');
+
+      expect(afterFirst!.currency, 'usd');
+      expect(afterSecond!.currency, 'usd');
+      expect(await harness.schemaStamps(), hasLength(1));
     });
   });
 }

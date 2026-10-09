@@ -6,9 +6,16 @@ import 'package:intl/intl.dart';
 import '../../../core/models/currency_code.dart';
 import '../../../core/models/expense.dart';
 import '../../../core/models/money.dart';
+import '../../../core/providers/active_budget_provider.dart';
 import '../../../core/providers/active_profile_provider.dart';
 import '../../../core/providers/selected_month_provider.dart';
 import '../../../shared/presentation/money_format.dart';
+import '../../../shared/presentation/widgets/conversion_footnote.dart';
+import '../../dashboard/presentation/widgets/month_convert_to_menu.dart';
+import '../../engine/currency_conversion.dart';
+import '../../engine/currency_resolution.dart';
+import '../../engine/providers/rate_registry_provider.dart';
+import '../../settings/providers/settings_provider.dart';
 import '../models/reimbursement.dart';
 import '../providers/expenses_provider.dart';
 import '../providers/expense_filter_provider.dart';
@@ -29,7 +36,10 @@ class ExpensesScreen extends ConsumerWidget {
         // FR-035: money really did come back, so the return is kept. The user
         // decides whether to move it to another expense or drop it, rather than
         // having the app silently discard it with the target.
-        actions: const [_OrphanBannerButton()],
+        actions: const [
+          MonthConvertToMenu(),
+          _OrphanBannerButton(),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(110),
           child: Column(
@@ -128,6 +138,7 @@ class ExpensesScreen extends ConsumerWidget {
               },
               child: expenses.isEmpty
                   ? ListView(children: const [
+                      _MonthRateFootnote(),
                       Center(
                           child: Padding(
                               padding: EdgeInsets.all(32),
@@ -135,9 +146,12 @@ class ExpensesScreen extends ConsumerWidget {
                     ])
                   : SlidableAutoCloseBehavior(
                       child: ListView.builder(
-                        itemCount: expenses.length,
+                        itemCount: expenses.length + 1,
                         itemBuilder: (context, index) {
-                          final expense = expenses[index];
+                          if (index == 0) {
+                            return const _MonthRateFootnote();
+                          }
+                          final expense = expenses[index - 1];
                           return _ExpenseTile(
                             key: ValueKey(expense.id),
                             expense: expense,
@@ -154,6 +168,34 @@ class ExpensesScreen extends ConsumerWidget {
       floatingActionButton: FloatingActionButton(
         onPressed: () => context.push('/add_expense'),
         child: const Icon(Icons.add),
+      ),
+    );
+  }
+}
+
+/// The month's conversion caption at the top of the list (T054).
+///
+/// Names the rate the month's figures convert at when the display currency
+/// differs from the profile main, and the Expenses app bar gains the same
+/// convert-to control as the dashboard (T055); a single-currency month renders
+/// nothing.
+class _MonthRateFootnote extends ConsumerWidget {
+  const _MonthRateFootnote();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final display = resolveDisplayCurrency(
+      month: ref.watch(activeBudgetProvider).value,
+      profile: ref.watch(activeProfileProvider).value,
+    );
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      child: ConversionFootnote(
+        main: ref.watch(mainCurrencyProvider),
+        display: display,
+        table: ref.watch(rateRegistryProvider).tableFor(
+              ref.watch(selectedYearMonthProvider),
+            ),
       ),
     );
   }
@@ -393,6 +435,27 @@ class _ExpenseTile extends ConsumerWidget {
     final isPartiallyReimbursed =
         expense.status == ExpenseStatus.partiallyReimbursed;
 
+    // T055: each row converts to the month's display currency so the list
+    // reads in one currency. Hides when the expense already is the display
+    // currency or the pair is degraded (never invents a figure, FR-014).
+    final from = expense.currencyCode;
+    final budget = ref.watch(activeBudgetProvider).value;
+    final profile = ref.watch(activeProfileProvider).value;
+    final display = resolveDisplayCurrency(month: budget, profile: profile);
+    String? convertedCaption;
+    if (from != null && from != display && expense.amount > 0) {
+      final result = convert(
+        Money(expense.amount, from),
+        display,
+        ref
+            .watch(rateRegistryProvider)
+            .tableFor(ref.watch(selectedYearMonthProvider)),
+      );
+      if (!result.isDegraded) {
+        convertedCaption = '≈ ${formatMoney(result.amount)}';
+      }
+    }
+
     IconData statusIcon;
     Color statusColor;
     if (isReimbursed) {
@@ -480,11 +543,25 @@ class _ExpenseTile extends ConsumerWidget {
         subtitle: Text(
           '${expense.status.name.toUpperCase()} • ${expense.guiltLevel.name}',
         ),
-        trailing: Text(
-          formatMoney(
-            Money(expense.amount, expense.currencyCode ?? CurrencyCode.huf),
-          ),
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+        trailing: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(
+              formatMoney(
+                Money(expense.amount, expense.currencyCode ?? CurrencyCode.huf),
+              ),
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            if (convertedCaption != null)
+              Text(
+                convertedCaption,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+          ],
         ),
       ),
     );

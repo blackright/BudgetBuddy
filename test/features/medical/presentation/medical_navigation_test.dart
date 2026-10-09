@@ -1,11 +1,14 @@
+import 'package:budget_buddy/core/models/currency_code.dart';
 import 'package:budget_buddy/core/models/medical_bill.dart';
 import 'package:budget_buddy/core/providers/active_budget_provider.dart';
 import 'package:budget_buddy/core/routing/app_router.dart';
 import 'package:budget_buddy/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:budget_buddy/features/engine/month_summary.dart';
 import 'package:budget_buddy/features/engine/providers/month_summary_provider.dart';
+import 'package:budget_buddy/features/engine/providers/rate_registry_provider.dart';
 import 'package:budget_buddy/features/engine/providers/true_available_provider.dart';
 import 'package:budget_buddy/features/medical/providers/medical_providers.dart';
+import 'package:budget_buddy/features/settings/providers/settings_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -54,6 +57,10 @@ void main() {
           insuranceProfileProvider.overrideWith((ref) => Stream.value(null)),
           medicalBillsProvider
               .overrideWith((ref) => Stream.value(<MedicalBill>[])),
+          rateRegistryProvider.overrideWithValue(RateTableRegistry()),
+          // The conversion captions read the profile main currency (T054);
+          // HUF pairs with the real user profile semantics.
+          mainCurrencyProvider.overrideWithValue(CurrencyCode.huf),
         ],
         child: MaterialApp.router(routerConfig: router),
       ),

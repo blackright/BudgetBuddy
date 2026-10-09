@@ -1,11 +1,16 @@
 import 'package:isar/isar.dart';
 
+import '../../../core/models/currency_code.dart';
 import '../../../core/models/expense.dart';
 import '../../../core/models/insurance_profile.dart';
 import '../../../core/models/medical_bill.dart';
 import '../../../core/models/medical_service_type.dart';
+import '../../../core/models/money.dart';
+import '../../../core/network/rate_types.dart';
 import '../../../core/services/reminder_notification_service.dart';
+import '../../engine/currency_resolution.dart';
 import '../../engine/expense_delta.dart';
+import '../../engine/providers/rate_registry_provider.dart';
 import '../../expenses/models/reimbursement.dart';
 
 /// Budget-scoped inputs needed to keep a [MedicalBill] and its linked [Expense]
@@ -16,6 +21,7 @@ class MedicalBillContext {
     required this.budgetId,
     required this.yearMonth,
     required this.primaryCurrency,
+    this.rateTable,
   });
 
   final int profileId;
@@ -25,6 +31,11 @@ class MedicalBillContext {
   /// engine's `trueAvailable` picks the bill up in the right month.
   final String yearMonth;
   final String primaryCurrency;
+
+  /// Rates for [yearMonth], so deltas convert minor→primary instead of casting
+  /// the stored minor unit as if it were major (T-R05). Optional for callers
+  /// that only need linkage and never compute a money delta.
+  final RateTable? rateTable;
 }
 
 /// Thrown when a state change would produce an impossible bill.
@@ -82,12 +93,17 @@ class ReimbursedBillDeletionException implements Exception {
 /// - Injects/removes the [Reimbursement] row that moves `trueAvailable`
 ///   (FR-004, FR-005).
 class MedicalRepository {
-  MedicalRepository(this._isar);
+  MedicalRepository(this._isar, {RateTableRegistry? rateRegistry})
+      : _rateRegistry = rateRegistry;
 
   /// Matches the seeded `Category` with `categoryId == 'health'`.
   static const String medicalCategoryId = 'health';
 
   final Isar _isar;
+
+  /// Optional rates so expense deltas convert correctly. When absent, the
+  /// bundled fallback is used via a registry built from nothing.
+  final RateTableRegistry? _rateRegistry;
 
   // ---------------------------------------------------------------------------
   // Reactive reads
@@ -255,7 +271,13 @@ class MedicalRepository {
     return ExpenseDelta.between(
       before: before,
       after: ExpenseSnapshot.of(stored),
-      toPrimary: (s) => s.amount.toDouble(),
+      toPrimary: (s) {
+        final code = s.currency;
+        final primary = CurrencyCode.tryParse(context.primaryCurrency);
+        if (code == null || primary == null) return 0.0;
+        return toDisplay(Money(s.amount, code), primary, context.rateTable)
+            .majorValue;
+      },
     );
   }
 
@@ -560,6 +582,26 @@ class MedicalRepository {
         .findAll();
   }
 
+  /// Seeds the six default service types when [profileId] has none (FR-039).
+  ///
+  /// Migration step 0 only runs for profiles that predate the schema bump, so a
+  /// profile created at runtime (first-run onboarding) would otherwise start
+  /// with an empty picker. Same rule as that step: seed only when the profile
+  /// has no types at all, so a user who curated their own list is never
+  /// re-seeded.
+  Future<void> ensureDefaultServiceTypes(int profileId) async {
+    final existing = await _isar.medicalServiceTypes
+        .filter()
+        .profileIdEqualTo(profileId)
+        .count();
+    if (existing > 0) return;
+    await _isar.writeTxn(() async {
+      await _isar.medicalServiceTypes.putAll(
+        MedicalServiceTypeDefaults.seed(profileId),
+      );
+    });
+  }
+
   /// Creates or renames a service type, rejecting a name that already exists for
   /// the same profile regardless of case (FR-040).
   Future<MedicalServiceType> saveServiceType({
@@ -617,6 +659,19 @@ class MedicalRepository {
     final type = await _isar.medicalServiceTypes.get(id);
     if (type == null) return;
     type.archived = true;
+    await _isar.writeTxn(() async {
+      await _isar.medicalServiceTypes.put(type);
+    });
+  }
+
+  /// Archives or restores a type (FR-040).
+  ///
+  /// Archived types leave the picker but stay in the database so historical bills
+  /// keep a readable label; restoring puts one back in the picker.
+  Future<void> setServiceTypeArchived(int id, {required bool archived}) async {
+    final type = await _isar.medicalServiceTypes.get(id);
+    if (type == null) return;
+    type.archived = archived;
     await _isar.writeTxn(() async {
       await _isar.medicalServiceTypes.put(type);
     });
@@ -852,7 +907,8 @@ class MedicalRepository {
       ..amount = bill.fundsImpact
       // Medical bills are tracked in the bill's own currency when it records
       // one, otherwise the budget's primary currency (FR-016).
-      ..currency = bill.currency.isEmpty ? context.primaryCurrency : bill.currency
+      ..currency =
+          bill.currency.isEmpty ? context.primaryCurrency : bill.currency
       ..categoryId = medicalCategoryId
       ..type = ExpenseType.medical
       // R-1 — only a self-paid bill can be reimbursed, so only a self-paid bill
@@ -898,6 +954,7 @@ class MedicalRepository {
       budgetId: expense.budgetId,
       yearMonth: expense.yearMonth,
       primaryCurrency: expense.currency,
+      rateTable: _rateRegistry?.tableFor(expense.yearMonth),
     );
   }
 

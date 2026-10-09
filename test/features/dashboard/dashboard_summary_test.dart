@@ -1,13 +1,15 @@
 import 'package:budget_buddy/core/models/currency_code.dart';
 import 'package:budget_buddy/core/models/monthly_budget.dart';
-import 'package:budget_buddy/core/models/user_profile.dart';
 import 'package:budget_buddy/core/providers/active_budget_provider.dart';
+import 'package:budget_buddy/core/providers/active_profile_provider.dart';
 import 'package:budget_buddy/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:budget_buddy/features/dashboard/presentation/widgets/month_summary_card.dart';
 import 'package:budget_buddy/features/dashboard/presentation/widgets/month_summary_details.dart';
 import 'package:budget_buddy/features/engine/month_summary.dart';
 import 'package:budget_buddy/features/engine/providers/month_summary_provider.dart';
+import 'package:budget_buddy/features/engine/providers/rate_registry_provider.dart';
 import 'package:budget_buddy/features/medical/presentation/medical_theme.dart';
+import 'package:budget_buddy/features/settings/providers/settings_provider.dart';
 import 'package:budget_buddy/shared/presentation/widgets/month_incomplete_banner.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -54,7 +56,7 @@ void main() {
       ..yearMonth = '2026-01'
       ..baseAvailableAmount = 1000
       ..openingBalanceConfirmed = true
-      ..currency = PrimaryCurrency.usd
+      ..currency = 'usd'
       ..createdAt = DateTime(2026)
       ..updatedAt = DateTime(2026);
   }
@@ -62,8 +64,13 @@ void main() {
   Widget wrap(Widget child, {MonthSummary? value}) {
     return ProviderScope(
       overrides: [
-        monthSummaryProvider.overrideWithValue(value ?? makeSummary()),
+        activeProfileProvider.overrideWith((ref) => Stream.value(null)),
         activeBudgetProvider.overrideWith((ref) => Stream.value(budget())),
+        monthSummaryProvider.overrideWithValue(value ?? makeSummary()),
+        // The hero card now carries the conversion caption (T054), which reads
+        // the rate registry and the profile main currency.
+        rateRegistryProvider.overrideWithValue(RateTableRegistry()),
+        mainCurrencyProvider.overrideWithValue(CurrencyCode.huf),
       ],
       child: MaterialApp(home: Scaffold(body: child)),
     );
@@ -119,7 +126,9 @@ void main() {
       // hardcoded string, so this stays a test of the arithmetic rather than of
       // MedicalTheme's display policy.
       const kept = 4000.0 - 1200 + 300;
-      expect(find.textContaining(MedicalTheme.money(CurrencyCode.usd, kept)), findsWidgets);
+      expect(
+          find.textContaining(MedicalTheme.moneyMajor(CurrencyCode.usd, kept)),
+          findsWidgets);
     });
 
     testWidgets('the four supporting lines are labelled', (tester) async {
@@ -129,6 +138,44 @@ void main() {
       expect(find.text('Paid out'), findsOneWidget);
       expect(find.text('Planned'), findsOneWidget);
       expect(find.text('Returned'), findsOneWidget);
+    });
+
+    testWidgets('T-R07: a major figure renders its true magnitude',
+        (tester) async {
+      // The engine converts a stored minor-unit expense (USD 10.00 = 1000
+      // minor) into a major double before the card sees it. The card must show
+      // `$ 10.00`, not the inflated `$ 1,000.00` that a raw minor int would.
+      await pumpCard(tester, value: makeSummary(paymentsMade: 10.0));
+
+      final paid = find.descendant(
+        of: find.byKey(const Key('paymentsLine')),
+        matching: find.byType(Text),
+      );
+      final rendered =
+          tester.widgetList<Text>(paid).map((t) => t.data ?? '').join(' ');
+
+      expect(rendered, contains(r'$ 10.00'));
+      expect(rendered, isNot(contains('1,000.00')));
+    });
+  });
+
+  group('T-R06 conversion caption (T054)', () {
+    testWidgets('the hero card names the rate when display ≠ main',
+        (tester) async {
+      await pumpCard(tester);
+
+      expect(find.byKey(const Key('conversionFootnote')), findsOneWidget);
+      expect(find.textContaining('1 \$ = 345 Ft'), findsOneWidget);
+    });
+
+    testWidgets('the hero card stays quiet for a single currency',
+        (tester) async {
+      await tester.pumpWidget(
+        wrap(const MonthSummaryCard(currency: CurrencyCode.huf)),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('conversionFootnote')), findsNothing);
     });
   });
 
@@ -249,7 +296,8 @@ void main() {
       expect(
         find.descendant(
           of: medicalLine,
-          matching: find.textContaining(MedicalTheme.money(CurrencyCode.usd, 450)),
+          matching: find
+              .textContaining(MedicalTheme.moneyMajor(CurrencyCode.usd, 450)),
         ),
         findsOneWidget,
       );

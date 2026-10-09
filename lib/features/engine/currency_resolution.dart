@@ -13,14 +13,21 @@ CurrencyCode resolveDisplayCurrency({
   MonthlyBudget? month,
   UserProfile? profile,
 }) {
-  final monthCode =
-      month == null ? null : CurrencyCode.tryParse(month.currency.name);
-  if (monthCode != null) return monthCode;
-  final profileCode = profile == null
-      ? null
-      : CurrencyCode.tryParse(profile.primaryCurrency.name);
+  final convertTo = CurrencyCode.tryParse(month?.currency);
+  if (convertTo != null) return convertTo;
+  final profileCode = profile?.primaryCurrency.code;
   return profileCode ?? CurrencyCode.huf;
 }
+
+/// The currency a profile's stored income and opening balance are in.
+///
+/// Unlike expenses — which each carry their own stored currency — net salary
+/// (FR-001) and the confirmed opening balance (FR-006) are recorded once, in
+/// the profile main currency. When a month displays in a different currency,
+/// these two figures are converted *from* the main currency through the month's
+/// table, never relabelled into the display currency.
+CurrencyCode mainSourceCurrency(UserProfile? profile) =>
+    profile?.primaryCurrency.code ?? CurrencyCode.huf;
 
 /// Converts [amount] into the display currency using the month's [table].
 ///
@@ -34,7 +41,8 @@ Money toDisplay(Money amount, CurrencyCode display, RateTable? table) {
 
 /// Converts an expense into the display currency. Rows carrying an unsupported
 /// legacy currency contribute zero and are surfaced separately (FR-021, §4.4).
-Money expenseToDisplay(Expense expense, CurrencyCode display, RateTable? table) {
+Money expenseToDisplay(
+    Expense expense, CurrencyCode display, RateTable? table) {
   final code = expense.currencyCode;
   if (code == null) return Money.zero(display);
   return toDisplay(Money(expense.amount, code), display, table);

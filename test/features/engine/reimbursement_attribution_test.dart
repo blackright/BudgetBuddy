@@ -207,7 +207,8 @@ void main() {
 
       final orphans = await fixture.repository.getOrphanedReimbursements();
       expect(orphans, hasLength(1));
-      expect(orphans.single.amount, Money.fromMajor(260, CurrencyCode.usd).minorUnits);
+      expect(orphans.single.amount,
+          Money.fromMajor(260, CurrencyCode.usd).minorUnits);
       expect(orphans.single.orphaned, isTrue);
       // FR-032: the money still came back, so the month still reports it.
       expect((await fixture.summary(origin)).moneyReturned, 260);
@@ -279,7 +280,8 @@ void main() {
 
       expect((await fixture.summary('2026-04')).moneyReturned, 75.0);
       final stored = await fixture.isar.reimbursements.where().findAll();
-      expect(stored.single.amount, Money.fromMajor(75, CurrencyCode.usd).minorUnits);
+      expect(stored.single.amount,
+          Money.fromMajor(75, CurrencyCode.usd).minorUnits);
     });
   });
 
@@ -370,7 +372,7 @@ class _AttributionFixture {
       ..yearMonth = '2026-01'
       ..baseAvailableAmount = 5000
       ..openingBalanceConfirmed = true
-      ..currency = PrimaryCurrency.usd
+      ..currency = 'usd'
       ..createdAt = DateTime(2026)
       ..updatedAt = DateTime(2026);
 
@@ -501,7 +503,7 @@ class _AttributionFixture {
       ..yearMonth = yearMonth
       ..baseAvailableAmount = 0
       ..openingBalanceConfirmed = true
-      ..currency = PrimaryCurrency.usd
+      ..currency = 'usd'
       ..createdAt = DateTime(2026)
       ..updatedAt = DateTime(2026);
     await isar.writeTxn(() async {

@@ -2,9 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
-import '../../../core/models/currency_code.dart';
-import '../../../core/providers/active_profile_provider.dart';
 import '../../../core/providers/selected_month_provider.dart';
+import '../../settings/providers/settings_provider.dart';
 import '../../medical/presentation/medical_theme.dart';
 import '../providers/finance_providers.dart';
 import '../repositories/month_finance_repository.dart';
@@ -26,9 +25,9 @@ class NetSalarySection extends ConsumerWidget {
     final yearMonth = ref.watch(selectedYearMonthProvider);
     final repository = ref.watch(monthFinanceRepositoryProvider);
     final resolved = ref.watch(resolvedIncomeProvider);
-    final profile = ref.watch(activeProfileProvider).valueOrNull;
-    final currencySymbol = profile?.currencySymbol ?? '\$';
-    final currency = profile?.primaryCurrency.code ?? CurrencyCode.usd;
+    // Salary is kept in the profile's main currency; show its symbol on entry
+    // rather than a hardcoded default (FR-009, defect D5).
+    final currency = ref.watch(mainCurrencyProvider);
 
     return Card(
       child: Padding(
@@ -48,7 +47,7 @@ class NetSalarySection extends ConsumerWidget {
               label: 'Default salary',
               helper: 'Applies to every month without its own amount.',
               initialValue: ref.watch(defaultNetSalaryProvider),
-              prefixText: '$currencySymbol ',
+              prefixText: '${currency.symbol} ',
               onSubmitted: (amount) =>
                   repository.saveDefaultNetSalary(amount ?? 0.0),
             ),
@@ -60,13 +59,13 @@ class NetSalarySection extends ConsumerWidget {
                   ? 'Currently overridden for this month.'
                   : 'Leave empty to follow the default salary.',
               initialValue: resolved.usesOverride ? resolved.amount : null,
-              prefixText: '$currencySymbol ',
+              prefixText: '${currency.symbol} ',
               onSubmitted: (amount) =>
                   repository.saveNetSalaryOverride(yearMonth, amount),
             ),
             const SizedBox(height: 12),
             Text(
-              'Income used for this month: ${MedicalTheme.money(currency, resolved.amount)}'
+              'Income used for this month: ${MedicalTheme.moneyMajor(currency, resolved.amount)}'
               '${resolved.usesOverride ? ' (override)' : ' (default)'}',
               style: Theme.of(context).textTheme.bodySmall,
             ),

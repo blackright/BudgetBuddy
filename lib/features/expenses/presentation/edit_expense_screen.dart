@@ -13,8 +13,10 @@ import '../../engine/currency_resolution.dart';
 import '../../engine/expense_delta.dart';
 import '../../engine/providers/rate_registry_provider.dart';
 import '../../engine/providers/safe_to_spend_provider.dart';
+import '../../settings/providers/settings_provider.dart';
 import '../providers/expenses_provider.dart';
 import '../providers/category_provider.dart';
+import 'widgets/amount_conversion_hint.dart';
 import 'widgets/emotion_selector.dart';
 
 /// Full edit form for an existing [Expense]. Reuses the AddExpense field set,
@@ -177,6 +179,7 @@ class _EditExpenseScreenState extends ConsumerState<EditExpenseScreen> {
     final profile = ref.watch(activeProfileProvider).value;
     final yearMonth = ref.watch(selectedYearMonthProvider);
     final table = ref.watch(rateRegistryProvider).tableFor(yearMonth);
+    final main = ref.watch(mainCurrencyProvider);
     final display = resolveDisplayCurrency(month: budget, profile: profile);
     final safeToSpend = ref.watch(safeToSpendProvider);
     final delta = _currentDelta(display, table);
@@ -259,6 +262,13 @@ class _EditExpenseScreenState extends ConsumerState<EditExpenseScreen> {
                     ),
                   ),
                 ],
+              ),
+              AmountConversionHint(
+                amount: _parseAmount(_amountController.text),
+                currency: CurrencyCode.tryParse(_currency),
+                display: display,
+                main: main,
+                table: table,
               ),
               const SizedBox(height: 16),
               ref.watch(categoriesProvider).when(

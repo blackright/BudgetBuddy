@@ -1,12 +1,19 @@
+import 'package:budget_buddy/core/models/currency_code.dart';
 import 'package:budget_buddy/core/models/insurance_profile.dart';
 import 'package:budget_buddy/core/models/medical_bill.dart';
+import 'package:budget_buddy/core/models/medical_service_type.dart';
+import 'package:budget_buddy/core/models/monthly_budget.dart';
+import 'package:budget_buddy/core/models/money.dart';
 import 'package:budget_buddy/core/models/user_profile.dart';
+import 'package:budget_buddy/core/models/expense.dart';
 import 'package:budget_buddy/core/providers/active_budget_provider.dart';
 import 'package:budget_buddy/core/providers/active_profile_provider.dart';
 import 'package:budget_buddy/core/providers/selected_month_provider.dart';
+import 'package:budget_buddy/features/engine/providers/rate_registry_provider.dart';
 import 'package:budget_buddy/features/expenses/models/reimbursement.dart';
 import 'package:budget_buddy/features/medical/providers/medical_providers.dart';
 import 'package:budget_buddy/features/medical/presentation/medical_dashboard.dart';
+import 'package:budget_buddy/features/settings/providers/settings_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -236,17 +243,26 @@ void main() {
       WidgetTester tester, {
       List<MedicalBill> bills = const [],
       InsuranceProfile? insurance,
+      MonthlyBudget? budget,
     }) async {
       useSurfaceWithKeyboard(tester, keyboardHeight: 0);
 
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
-            activeBudgetProvider.overrideWith((ref) => Stream.value(null)),
+            activeBudgetProvider.overrideWith((ref) => Stream.value(budget)),
             selectedYearMonthProvider.overrideWith((ref) => '2026-01'),
+            // Pin the display currency so layout is independent of the (absent)
+            // profile's main currency.
+            medicalDisplayCurrencyProvider.overrideWithValue(CurrencyCode.usd),
+            // ...and the footnote reads the profile main currency (T054).
+            mainCurrencyProvider.overrideWithValue(CurrencyCode.huf),
             insuranceProfileProvider
                 .overrideWith((ref) => Stream.value(insurance)),
             medicalBillsProvider.overrideWith((ref) => Stream.value(bills)),
+            // The aggregate cards convert through the rate registry, whose live
+            // providers reach for Isar. Layout tests do not need real rates.
+            rateRegistryProvider.overrideWithValue(RateTableRegistry()),
             // The directory resolves names for the rows. Left live it reaches for
             // Isar through the active profile, which no layout test needs. The
             // sheet's own save path is covered separately below, against a real
@@ -268,7 +284,7 @@ void main() {
         bills: [
           MedicalBill()
             ..id = 1
-            ..billedAmount = 1000
+            ..billedAmount = Money.fromMajor(1000, CurrencyCode.usd).minorUnits
             ..patientSharePercent = 20,
         ],
       );
@@ -286,7 +302,7 @@ void main() {
         bills: [
           MedicalBill()
             ..id = 1
-            ..billedAmount = 1000
+            ..billedAmount = Money.fromMajor(1000, CurrencyCode.usd).minorUnits
             ..patientSharePercent = 20,
         ],
       );
@@ -306,6 +322,28 @@ void main() {
         isFalse,
         reason: 'the Add Bill button must not cover the bill amount',
       );
+    });
+
+    testWidgets(
+        'T-R06: a foreign bill keeps its own amount and a converted budget',
+        (tester) async {
+      await pumpDashboard(
+        tester,
+        bills: [
+          MedicalBill()
+            ..id = 1
+            ..billedAmount = Money.fromMajor(1000, CurrencyCode.eur).minorUnits
+            ..currency = CurrencyCode.eur.name
+            ..patientSharePercent = 20,
+        ],
+      );
+
+      expect(tester.takeException(), isNull);
+      // The bill is labelled in its own currency, not mislabelled as the display
+      // currency (the T-R01/T-R06 defect).
+      expect(find.textContaining('€ 1,000.00'), findsOneWidget);
+      // ...and a converted budget line is shown in the display currency.
+      expect(find.textContaining('budget'), findsOneWidget);
     });
 
     testWidgets('a configured profile shows its usual share', (tester) async {
@@ -406,6 +444,132 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.text('Cigna'), findsOneWidget);
       expect(find.text('Open Access'), findsOneWidget);
+    });
+
+    testWidgets(
+        'T054: the medical totals name the conversion when display ≠ main',
+        (tester) async {
+      // The Budget Impact labels render ~2x wider under the test font than in
+      // production (this suite's Ahem font draws every glyph at fontSize width),
+      // so a wider surface keeps this a presence test rather than a layout one.
+      tester.view.physicalSize = const Size(600, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            activeBudgetProvider.overrideWith((ref) => Stream.value(null)),
+            selectedYearMonthProvider.overrideWith((ref) => '2026-01'),
+            medicalDisplayCurrencyProvider.overrideWithValue(CurrencyCode.usd),
+            mainCurrencyProvider.overrideWithValue(CurrencyCode.huf),
+            insuranceProfileProvider
+                .overrideWith((ref) => Stream.value(InsuranceProfile())),
+            rateRegistryProvider.overrideWithValue(RateTableRegistry()),
+            medicalDirectoryProvider.overrideWithValue(
+              const MedicalDirectory(members: [], providers: []),
+            ),
+            // A bill only reaches the Budget Impact card once its linked expense
+            // resolves; pin both rows here so the card actually renders.
+            medicalBillsProvider.overrideWith((ref) => Stream.value([
+                  MedicalBill()
+                    ..id = 1
+                    ..linkedExpenseId = 1
+                    ..billedAmount =
+                        Money.fromMajor(1000, CurrencyCode.usd).minorUnits
+                    ..patientSharePercent = 20,
+                ])),
+            medicalExpenseStatusesProvider.overrideWith(
+              (ref) => Stream.value({1: ExpenseStatus.planned}),
+            ),
+          ],
+          child: const MaterialApp(home: MedicalDashboard()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      // The caption sits on the Budget Impact card; the registry is empty, so
+      // the bundled baseline (345 HUF/USD) governs.
+      expect(find.byKey(const Key('conversionFootnote')), findsOneWidget);
+      expect(find.textContaining('1 \$ = 345 Ft'), findsOneWidget);
+    });
+
+    testWidgets('T055: the app bar shares the dashboard month convert-to menu',
+        (tester) async {
+      // The Ahem font inflates text width, so a wider surface keeps this a
+      // presence test rather than a layout one (same finding as T054).
+      tester.view.physicalSize = const Size(600, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      await pumpDashboard(
+        tester,
+        budget: MonthlyBudget()
+          ..id = 1
+          ..yearMonth = '2026-01'
+          ..baseAvailableAmount = 1000
+          ..createdAt = DateTime(2026)
+          ..updatedAt = DateTime(2026),
+      );
+
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(const Key('monthConvertToMenu')), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('monthConvertToMenu')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Show in Forint (default)'), findsOneWidget);
+      expect(find.text('EUR (€)'), findsOneWidget);
+    });
+
+    testWidgets(
+        'the directory lists service types with add and archive controls',
+        (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            activeBudgetProvider.overrideWith((ref) => Stream.value(null)),
+            selectedYearMonthProvider.overrideWith((ref) => '2026-01'),
+            // The aggregate cards convert through the rate registry, whose live
+            // providers reach for Isar. Layout tests do not need real rates.
+            rateRegistryProvider.overrideWithValue(RateTableRegistry()),
+            medicalDisplayCurrencyProvider.overrideWithValue(CurrencyCode.usd),
+            insuranceProfileProvider.overrideWith((ref) => Stream.value(null)),
+            medicalBillsProvider
+                .overrideWith((ref) => Stream.value(const <MedicalBill>[])),
+            familyMembersProvider.overrideWith((ref) => Stream.value(const [])),
+            medicalProvidersProvider
+                .overrideWith((ref) => Stream.value(const [])),
+            // The persistence path (saveServiceType/setServiceTypeArchived) is
+            // covered against a real Isar in the repository tests; here only the
+            // sheet's wiring is under test.
+            medicalServiceTypesProvider.overrideWith(
+              (ref) => Stream.value([
+                MedicalServiceType()..name = 'Radiology',
+                MedicalServiceType()
+                  ..name = 'Surgery'
+                  ..archived = true,
+              ]),
+            ),
+            medicalDirectoryProvider.overrideWithValue(
+              const MedicalDirectory(members: [], providers: []),
+            ),
+          ],
+          child: const MaterialApp(home: MedicalDashboard()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Providers & family'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Service types'), findsOneWidget);
+      expect(find.byKey(const Key('addServiceTypeButton')), findsOneWidget);
+      expect(find.text('Radiology'), findsOneWidget);
+      expect(find.text('Surgery'), findsOneWidget);
+      expect(find.text('Archived'), findsOneWidget);
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('an unconfigured profile still prompts for setup',

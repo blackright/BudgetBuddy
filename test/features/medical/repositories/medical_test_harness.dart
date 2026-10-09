@@ -2,14 +2,17 @@ import 'dart:io';
 
 import 'package:budget_buddy/core/database/schema_migrations.dart';
 import 'package:budget_buddy/core/models/category.dart';
+import 'package:budget_buddy/core/models/currency_code.dart';
 import 'package:budget_buddy/core/models/expense.dart';
 import 'package:budget_buddy/core/models/insurance_profile.dart';
 import 'package:budget_buddy/core/models/live_rate_set.dart';
 import 'package:budget_buddy/core/models/medical_bill.dart';
 import 'package:budget_buddy/core/models/medical_service_type.dart';
+import 'package:budget_buddy/core/models/money.dart';
 import 'package:budget_buddy/core/models/month_rate_seal.dart';
 import 'package:budget_buddy/core/models/monthly_budget.dart';
 import 'package:budget_buddy/core/models/user_profile.dart';
+import 'package:budget_buddy/features/engine/providers/rate_registry_provider.dart';
 import 'package:budget_buddy/features/expenses/models/reimbursement.dart';
 import 'package:budget_buddy/features/medical/repositories/medical_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -22,7 +25,12 @@ import 'package:isar/isar.dart';
 /// than stubbing the repository.
 class MedicalTestHarness {
   MedicalTestHarness._(this.isar, this.directory)
-      : repository = MedicalRepository(isar);
+      : repository = MedicalRepository(isar, rateRegistry: rates);
+
+  /// A registry backed only by the bundled baseline; enough for same-currency
+  /// (USD→USD) conversion in these tests, and it keeps the repository's delta
+  /// path on the real `toDisplay` code path instead of a raw cast (T-R05).
+  static final RateTableRegistry rates = RateTableRegistry();
 
   static bool _coreReady = false;
 
@@ -105,7 +113,7 @@ class MedicalTestHarness {
     final budget = MonthlyBudget()
       ..yearMonth = yearMonth
       ..baseAvailableAmount = available
-      ..currency = PrimaryCurrency.usd
+      ..currency = 'usd'
       ..createdAt = DateTime(year)
       ..updatedAt = DateTime(year);
 
@@ -144,11 +152,15 @@ class MedicalTestHarness {
       budgetId: seededBudgetId,
       yearMonth: yearMonth,
       primaryCurrency: 'USD',
+      rateTable: rates.tableFor(yearMonth),
     );
   }
 
   /// Mirrors `trueAvailableProvider`:
   /// base - sum(paid expenses) + sum(reimbursements).
+  ///
+  /// Amounts are stored in minor units, so each is converted to major units in
+  /// its own currency before summing (T-R06) instead of casting the minor int.
   Future<double> trueAvailable(
       {required int profileId, required String yearMonth}) async {
     final expenses = await isar.expenses
@@ -161,7 +173,9 @@ class MedicalTestHarness {
     var totalPaid = 0.0;
     for (final expense in expenses) {
       if (expense.status == ExpenseStatus.paid) {
-        totalPaid += expense.amount.toDouble();
+        totalPaid +=
+            Money(expense.amount, expense.currencyCode ?? CurrencyCode.usd)
+                .majorValue;
       }
     }
 
@@ -169,7 +183,10 @@ class MedicalTestHarness {
     for (final reimbursement in await isar.reimbursements.where().findAll()) {
       final expense = byId[reimbursement.expenseId];
       if (expense != null) {
-        totalReimbursements += reimbursement.amount.toDouble();
+        totalReimbursements += Money(
+          reimbursement.amount,
+          reimbursement.currencyCode ?? CurrencyCode.usd,
+        ).majorValue;
       }
     }
 
@@ -215,7 +232,7 @@ class MedicalTestHarness {
     final budget = MonthlyBudget()
       ..yearMonth = yearMonth
       ..baseAvailableAmount = openingBalance
-      ..currency = PrimaryCurrency.usd
+      ..currency = 'usd'
       ..createdAt = DateTime(2026)
       ..updatedAt = DateTime(2026);
     await isar.writeTxn(() async {

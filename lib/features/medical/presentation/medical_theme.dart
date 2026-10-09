@@ -109,13 +109,15 @@ class MedicalTheme {
     }
   }
 
-  /// Money rendered through the app's single formatter (FR-018), so medical
-  /// figures obey the same exponent rules — HUF has no decimals, the rest two —
-  /// and never hardcode a symbol (defect D10).
-  static String money(CurrencyCode currency, num amount) =>
+  /// Money rendered from a **major-unit** value (e.g. an engine aggregate still
+  /// expressed as a double), through the app's single formatter (FR-018). Most
+  /// stored money is already in minor units and must use [moneyMinor] instead —
+  /// passing a minor-unit int here inflates it by the currency's minor factor.
+  static String moneyMajor(CurrencyCode currency, num amount) =>
       formatMajorUnits(amount, currency);
 
-  /// Renders money stored in minor units.
+  /// Renders money stored in **minor units** (the persisted form of every
+  /// amount field) through the app's single formatter (FR-018).
   static String moneyMinor(CurrencyCode currency, int minorUnits) =>
       formatMinorUnits(minorUnits, currency);
 }

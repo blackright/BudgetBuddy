@@ -1,5 +1,8 @@
+import 'package:budget_buddy/core/models/currency_code.dart';
 import 'package:budget_buddy/core/models/expense.dart';
 import 'package:budget_buddy/core/models/medical_bill.dart';
+import 'package:budget_buddy/core/models/medical_service_type.dart';
+import 'package:budget_buddy/core/models/money.dart';
 import 'package:budget_buddy/features/medical/providers/medical_providers.dart';
 import 'package:budget_buddy/features/medical/repositories/medical_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -9,6 +12,9 @@ import 'medical_test_harness.dart';
 /// End-to-end validation of the US2 lifecycle against a real Isar instance, so
 /// the expense and reimbursement rows the engine reads actually exist.
 void main() {
+  /// The persisted form of a major-unit amount: whole minor units (T-R06).
+  int usd(num major) =>
+      Money.fromMajor(major.toDouble(), CurrencyCode.usd).minorUnits;
   late MedicalTestHarness harness;
   late MedicalBillContext context;
 
@@ -35,7 +41,7 @@ void main() {
     MedicalBillState state = MedicalBillState.planned,
   }) {
     return MedicalBill()
-      ..billedAmount = amount
+      ..billedAmount = usd(amount)
       ..patientSharePercent = patientShare
       ..providerId = providerId
       ..serviceDate = DateTime(2026, month, 15)
@@ -138,7 +144,11 @@ void main() {
 
     test('FR-037: no bill in a month means an empty patient-share aggregate',
         () async {
-      final totals = PatientShareTotals.from(const []);
+      final totals = PatientShareTotals.from(
+        const [],
+        display: CurrencyCode.usd,
+        convert: (amount) => amount,
+      );
       expect(totals.isEmpty, isTrue);
       expect(totals.patientShareTotal, 0);
     });
@@ -168,8 +178,8 @@ void main() {
       final saved = await harness.repository.saveBill(bill(), context);
 
       expect(saved.patientSharePercent, 20);
-      expect(saved.patientShareAmount, 200);
-      expect(saved.insurerPaidAmount, 800);
+      expect(saved.patientShareAmount, usd(200));
+      expect(saved.insurerPaidAmount, usd(800));
     });
 
     test('FR-043: an insurer-paid waiting bill costs only the share (M2)',
@@ -180,7 +190,7 @@ void main() {
       );
 
       // M2 — the reduction lands the moment the bill is entered.
-      expect((await harness.expenseFor(saved))!.amount, 200);
+      expect((await harness.expenseFor(saved))!.amount, usd(200));
       expect(await available(), 4800);
     });
 
@@ -192,7 +202,7 @@ void main() {
         context,
       );
 
-      expect((await harness.expenseFor(saved))!.amount, 1000);
+      expect((await harness.expenseFor(saved))!.amount, usd(1000));
       expect(await available(), 4000);
     });
 
@@ -203,7 +213,7 @@ void main() {
         context,
       );
 
-      expect((await harness.expenseFor(saved))!.amount, 1000);
+      expect((await harness.expenseFor(saved))!.amount, usd(1000));
       expect(await available(), 4000);
     });
 
@@ -214,8 +224,8 @@ void main() {
         context,
       );
 
-      expect(saved.fundsImpact, 200);
-      expect((await harness.expenseFor(saved))!.amount, 200);
+      expect(saved.fundsImpact, usd(200));
+      expect((await harness.expenseFor(saved))!.amount, usd(200));
     });
 
     test('the expense title comes from the provider directory (FR-008)',
@@ -242,7 +252,7 @@ void main() {
       final expenseId = saved.linkedExpenseId;
 
       saved
-        ..billedAmount = 1500
+        ..billedAmount = usd(1500)
         ..patientSharePercent = 10
         ..state = MedicalBillState.waiting;
       await harness.repository.saveBill(saved, context);
@@ -250,7 +260,7 @@ void main() {
       expect(saved.linkedExpenseId, expenseId);
       expect(await harness.allExpenses(), hasLength(1));
       final expense = await harness.isar.expenses.get(expenseId!);
-      expect(expense!.amount, 150);
+      expect(expense!.amount, usd(150));
     });
 
     test('FR-054: correcting the percentage updates the expense immediately',
@@ -264,7 +274,7 @@ void main() {
       saved.patientSharePercent = 50;
       await harness.repository.saveBill(saved, context);
 
-      expect((await harness.expenseFor(saved))!.amount, 500);
+      expect((await harness.expenseFor(saved))!.amount, usd(500));
       expect(await available(), 4500);
     });
 
@@ -276,11 +286,66 @@ void main() {
       );
       expect(await available(), 4800);
 
-      saved.billedAmount = 1200;
+      saved.billedAmount = usd(1200);
       await harness.repository.saveBill(saved, context);
 
       // 20% of 1200 is 240.
       expect(await available(), 4760);
+    });
+
+    test('T-R04: re-saving a bill leaves its stored amount unchanged',
+        () async {
+      final saved = await harness.repository.saveBill(
+        bill(state: MedicalBillState.waiting),
+        context,
+      );
+      expect(saved.billedAmount, usd(1000));
+
+      final reread = await harness.repository.getMedicalBill(saved.id);
+      await harness.repository.saveBill(reread!, context);
+
+      final again = await harness.repository.getMedicalBill(saved.id);
+      expect(again!.billedAmount, usd(1000));
+    });
+  });
+
+  group('MedicalBill own currency (T020, FR-016)', () {
+    int euro(num major) =>
+        Money.fromMajor(major.toDouble(), CurrencyCode.eur).minorUnits;
+
+    test('a foreign bill keeps its own currency and does share math in it',
+        () async {
+      final saved = await harness.repository.saveBill(
+        MedicalBill()
+          ..billedAmount = euro(1000)
+          ..patientSharePercent = 20
+          ..currency = CurrencyCode.eur.code
+          ..serviceDate = DateTime(2026, 1, 15)
+          ..paymentMethod = MedicalPaymentMethod.insurerPaid
+          ..state = MedicalBillState.waiting,
+        context,
+      );
+
+      // The bill holds €1,000 and computes the 20% share in euros, not in the
+      // display currency (FR-016).
+      expect(saved.currency, 'eur');
+      expect(saved.currencyCode, CurrencyCode.eur);
+      expect(saved.patientShareAmount, euro(200));
+
+      // The linked expense carries the bill's own currency — no forced 1.0 (D6).
+      final expense = await harness.expenseFor(saved);
+      expect(expense!.currency, 'eur');
+      expect(expense.amount, euro(200));
+    });
+
+    test('a legacy bill with no own currency follows the budget currency',
+        () async {
+      final saved = await harness.repository.saveBill(bill(), context);
+
+      // Volume preserved, currency recorded by the linked expense (data-model §4.3).
+      expect(saved.currency, isEmpty);
+      final expense = await harness.expenseFor(saved);
+      expect(expense!.currency, context.primaryCurrency);
     });
   });
 
@@ -303,7 +368,7 @@ void main() {
           .setBillState(planned, MedicalBillState.waiting, context: context);
 
       expect(planned.state, MedicalBillState.waiting);
-      expect((await harness.expenseFor(planned))!.amount, 200);
+      expect((await harness.expenseFor(planned))!.amount, usd(200));
       expect(await available(), 4800);
     });
 
@@ -341,7 +406,7 @@ void main() {
       await harness.repository
           .setBillState(waiting, MedicalBillState.rejected, context: context);
 
-      expect((await harness.expenseFor(waiting))!.amount, 1000);
+      expect((await harness.expenseFor(waiting))!.amount, usd(1000));
       expect(await available(), 4000);
     });
 
@@ -353,7 +418,7 @@ void main() {
       await harness.repository
           .setBillState(waiting, MedicalBillState.rejected, context: context);
 
-      expect((await harness.expenseFor(waiting))!.amount, 1000);
+      expect((await harness.expenseFor(waiting))!.amount, usd(1000));
       expect(await available(), 4000);
     });
   });
@@ -372,7 +437,7 @@ void main() {
         context: context,
       );
 
-      expect((await harness.expenseFor(saved))!.amount, 1000);
+      expect((await harness.expenseFor(saved))!.amount, usd(1000));
       expect(await available(), 4000);
     });
 
@@ -392,7 +457,7 @@ void main() {
         context: context,
       );
 
-      expect((await harness.expenseFor(saved))!.amount, 200);
+      expect((await harness.expenseFor(saved))!.amount, usd(200));
       expect(await available(), 4800);
     });
 
@@ -425,7 +490,7 @@ void main() {
         ),
         context,
       );
-      await harness.repository.logReimbursement(saved, amount: 800);
+      await harness.repository.logReimbursement(saved, amount: usd(800));
       expect(await available(), 4800);
 
       await harness.repository.setPaymentMethod(
@@ -446,7 +511,7 @@ void main() {
         ),
         context,
       );
-      await harness.repository.logReimbursement(saved, amount: 800);
+      await harness.repository.logReimbursement(saved, amount: usd(800));
       expect(saved.state, MedicalBillState.finished);
 
       await harness.repository.setPaymentMethod(
@@ -471,7 +536,7 @@ void main() {
       );
 
       expect(await available(), 4800);
-      expect((await harness.expenseFor(saved))!.amount, 200);
+      expect((await harness.expenseFor(saved))!.amount, usd(200));
     });
   });
 
@@ -490,30 +555,31 @@ void main() {
       final paid = await selfPaidBill();
       expect(await available(), 4000);
 
-      await harness.repository.logReimbursement(paid, amount: 800);
+      await harness.repository.logReimbursement(paid, amount: usd(800));
 
       expect(paid.state, MedicalBillState.finished);
-      expect(paid.reimbursedAmount, 800);
-      expect(paid.netOutOfPocket, 200);
+      expect(paid.reimbursedAmount, usd(800));
+      expect(paid.netOutOfPocket, usd(200));
 
       expect(await available(), 4800);
-      expect(await available(), 5000 - paid.netOutOfPocket);
+      expect(await available(),
+          5000 - Money(paid.netOutOfPocket, CurrencyCode.usd).majorValue);
     });
 
     test('R-2: re-logging replaces the payout instead of stacking one',
         () async {
       final paid = await selfPaidBill();
-      await harness.repository.logReimbursement(paid, amount: 800);
-      await harness.repository.logReimbursement(paid, amount: 750);
+      await harness.repository.logReimbursement(paid, amount: usd(800));
+      await harness.repository.logReimbursement(paid, amount: usd(750));
 
       expect(await harness.allReimbursements(), hasLength(1));
       expect(await available(), 4750);
-      expect(paid.reimbursedAmount, 750);
+      expect(paid.reimbursedAmount, usd(750));
     });
 
     test('a payout larger than the charge is honoured as entered', () async {
       final paid = await selfPaidBill();
-      await harness.repository.logReimbursement(paid, amount: 1000);
+      await harness.repository.logReimbursement(paid, amount: usd(1000));
 
       expect(paid.netOutOfPocket, 0);
       expect(await available(), 5000);
@@ -521,9 +587,9 @@ void main() {
 
     test('a partial payout leaves the rest owed', () async {
       final paid = await selfPaidBill();
-      await harness.repository.logReimbursement(paid, amount: 150);
+      await harness.repository.logReimbursement(paid, amount: usd(150));
 
-      expect(paid.netOutOfPocket, closeTo(850, 1e-9));
+      expect(paid.netOutOfPocket, usd(850));
       expect(await available(), 4150);
     });
 
@@ -531,7 +597,7 @@ void main() {
       final paid = await selfPaidBill();
       await harness.repository.logReimbursement(
         paid,
-        amount: 800,
+        amount: usd(800),
         date: DateTime(2026, 6, 1),
       );
 
@@ -541,11 +607,11 @@ void main() {
 
     test('the payout hangs off the bill expense', () async {
       final paid = await selfPaidBill();
-      await harness.repository.logReimbursement(paid, amount: 800);
+      await harness.repository.logReimbursement(paid, amount: usd(800));
 
       final row = (await harness.allReimbursements()).single;
       expect(row.expenseId, paid.linkedExpenseId);
-      expect(row.amount, 800);
+      expect(row.amount, usd(800));
     });
 
     test('FR-044: an insurer-paid bill cannot be reimbursed', () async {
@@ -555,7 +621,8 @@ void main() {
       );
 
       expect(
-        () => harness.repository.logReimbursement(insurerPaid, amount: 800),
+        () =>
+            harness.repository.logReimbursement(insurerPaid, amount: usd(800)),
         throwsA(isA<ArgumentError>()),
       );
       expect(insurerPaid.reimbursedAmount, 0);
@@ -579,11 +646,11 @@ void main() {
         paid,
         MedicalBillState.finished,
         context: context,
-        reimbursedAmount: 800,
+        reimbursedAmount: usd(800),
       );
 
       expect(paid.state, MedicalBillState.finished);
-      expect(paid.reimbursedAmount, 800);
+      expect(paid.reimbursedAmount, usd(800));
       expect(await available(), 4800);
     });
 
@@ -603,7 +670,7 @@ void main() {
     test('T4: rejecting a reimbursed bill removes the injected payout',
         () async {
       final paid = await selfPaidBill();
-      await harness.repository.logReimbursement(paid, amount: 800);
+      await harness.repository.logReimbursement(paid, amount: usd(800));
       expect(await available(), 4800);
 
       await harness.repository
@@ -617,7 +684,7 @@ void main() {
 
     test('moving away from finished also drops the payout', () async {
       final paid = await selfPaidBill();
-      await harness.repository.logReimbursement(paid, amount: 800);
+      await harness.repository.logReimbursement(paid, amount: usd(800));
       expect(await harness.allReimbursements(), hasLength(1));
 
       await harness.repository
@@ -734,8 +801,8 @@ void main() {
 
       expect(january, hasLength(1));
       expect(february, hasLength(1));
-      expect(january.single.billedAmount, 1000);
-      expect(february.single.billedAmount, 1000);
+      expect(january.single.billedAmount, usd(1000));
+      expect(february.single.billedAmount, usd(1000));
     });
   });
 
@@ -748,7 +815,7 @@ void main() {
         ),
         context,
       );
-      await harness.repository.logReimbursement(saved, amount: 800);
+      await harness.repository.logReimbursement(saved, amount: usd(800));
 
       await harness.repository.deleteBill(saved.id, force: true);
 
@@ -766,7 +833,7 @@ void main() {
         ),
         context,
       );
-      await harness.repository.logReimbursement(saved, amount: 800);
+      await harness.repository.logReimbursement(saved, amount: usd(800));
 
       expect(
         () => harness.repository.deleteBill(saved.id),
@@ -809,7 +876,7 @@ void main() {
     test('a negative billed amount is rejected', () async {
       expect(
         () => harness.repository
-            .saveBill(MedicalBill()..billedAmount = -50, context),
+            .saveBill(MedicalBill()..billedAmount = usd(-50), context),
         throwsArgumentError,
       );
     });
@@ -818,7 +885,7 @@ void main() {
       expect(
         () => harness.repository.saveBill(
           MedicalBill()
-            ..billedAmount = 100
+            ..billedAmount = usd(100)
             ..patientSharePercent = 140,
           context,
         ),
@@ -827,7 +894,7 @@ void main() {
       expect(
         () => harness.repository.saveBill(
           MedicalBill()
-            ..billedAmount = 100
+            ..billedAmount = usd(100)
             ..patientSharePercent = -5,
           context,
         ),
@@ -975,6 +1042,58 @@ void main() {
           name: 'physician',
         ),
         throwsA(isA<DuplicateServiceTypeException>()),
+      );
+    });
+
+    test('ensureDefaultServiceTypes seeds the six defaults when empty',
+        () async {
+      expect(await harness.serviceTypes(), isEmpty);
+
+      await harness.repository.ensureDefaultServiceTypes(context.profileId);
+
+      final seeded = await harness.serviceTypes();
+      expect(seeded, hasLength(MedicalServiceTypeDefaults.seedNames.length));
+      expect(
+        seeded.map((t) => t.name),
+        containsAll(MedicalServiceTypeDefaults.seedNames),
+      );
+      expect(seeded.every((t) => t.isDefault), isTrue);
+      expect(seeded.every((t) => t.profileId == context.profileId), isTrue);
+    });
+
+    test('ensureDefaultServiceTypes leaves a curated list alone', () async {
+      await harness.repository.saveServiceType(
+        profileId: context.profileId,
+        name: 'Physician',
+      );
+
+      await harness.repository.ensureDefaultServiceTypes(context.profileId);
+
+      final types = await harness.serviceTypes();
+      expect(types, hasLength(1));
+      expect(types.single.name, 'Physician');
+    });
+
+    test('setServiceTypeArchived hides and restores a type', () async {
+      final created = await harness.repository.saveServiceType(
+        profileId: context.profileId,
+        name: 'Physician',
+      );
+
+      await harness.repository
+          .setServiceTypeArchived(created.id, archived: true);
+      expect(
+        await harness.repository.getServiceTypes(context.profileId),
+        isEmpty,
+      );
+
+      await harness.repository
+          .setServiceTypeArchived(created.id, archived: false);
+      expect(
+        (await harness.repository.getServiceTypes(context.profileId))
+            .single
+            .name,
+        'Physician',
       );
     });
   });

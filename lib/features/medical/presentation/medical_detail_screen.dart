@@ -7,7 +7,11 @@ import 'package:timezone/timezone.dart' as tz;
 import 'package:add_2_calendar/add_2_calendar.dart' as a2c;
 
 import '../../../core/models/medical_bill.dart';
+import '../../../core/models/money.dart';
 import '../../../core/providers/clock_provider.dart';
+import '../../../core/providers/selected_month_provider.dart';
+import '../../../shared/presentation/widgets/degraded_amount_label.dart';
+import '../../engine/providers/rate_registry_provider.dart';
 import '../providers/medical_providers.dart';
 import '../repositories/medical_repository.dart';
 import 'medical_theme.dart';
@@ -132,7 +136,7 @@ class _DetailScaffold extends ConsumerWidget {
         content: Text(
           isReimbursed
               ? 'This bill has a logged reimbursement of '
-                  '${MedicalTheme.moneyMinor(currency, bill.reimbursedAmount)}. Deleting it '
+                  '${MedicalTheme.moneyMinor(bill.currencyCode ?? currency, bill.reimbursedAmount)}. Deleting it '
                   'also removes that reimbursement from your available budget.'
               : 'The bill and its linked expense will be removed.',
         ),
@@ -219,7 +223,8 @@ class _HeaderSection extends ConsumerWidget {
             ),
             const SizedBox(height: 12),
             Text(
-              MedicalTheme.moneyMinor(currency, bill.billedAmount),
+              MedicalTheme.moneyMinor(
+                  bill.currencyCode ?? currency, bill.billedAmount),
               style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
@@ -263,6 +268,7 @@ class _InsuranceBreakdown extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final currency = ref.watch(medicalDisplayCurrencyProvider);
+    final billCurrency = bill.currencyCode ?? currency;
 
     return _SectionCard(
       title: 'Insurance Breakdown',
@@ -270,26 +276,29 @@ class _InsuranceBreakdown extends ConsumerWidget {
         children: [
           _MoneyRow(
             label: 'Billed amount',
-            value: MedicalTheme.moneyMinor(currency, bill.billedAmount),
+            value: MedicalTheme.moneyMinor(billCurrency, bill.billedAmount),
           ),
           // FR-048: the user-facing share, with the insurer's complement shown
           // rather than a second percentage the user never entered.
           _MoneyRow(
             label: 'Insurer pays '
                 '(${(100 - bill.patientSharePercent).toStringAsFixed(0)}%)',
-            value: MedicalTheme.moneyMinor(currency, bill.insurerPaidAmount),
+            value:
+                MedicalTheme.moneyMinor(billCurrency, bill.insurerPaidAmount),
             color: Colors.green,
           ),
           _MoneyRow(
             label: 'Your share '
                 '(${bill.patientSharePercent.toStringAsFixed(0)}%)',
-            value: MedicalTheme.moneyMinor(currency, bill.patientShareAmount),
+            value:
+                MedicalTheme.moneyMinor(billCurrency, bill.patientShareAmount),
             color: Colors.orange,
           ),
           if (bill.reimbursedAmount > 0)
             _MoneyRow(
               label: 'Reimbursed',
-              value: '+${MedicalTheme.moneyMinor(currency, bill.reimbursedAmount)}',
+              value:
+                  '+${MedicalTheme.moneyMinor(billCurrency, bill.reimbursedAmount)}',
               color: Colors.green,
             ),
           const Divider(height: 24),
@@ -304,7 +313,7 @@ class _InsuranceBreakdown extends ConsumerWidget {
                 ),
               ),
               Text(
-                MedicalTheme.moneyMinor(currency, bill.netOutOfPocket),
+                MedicalTheme.moneyMinor(billCurrency, bill.netOutOfPocket),
                 style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -363,7 +372,20 @@ class _PaymentMethodSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final currency = ref.watch(medicalDisplayCurrencyProvider);
+    final yearMonth = ref.watch(selectedYearMonthProvider);
     final insurerPaid = bill.paymentMethod == MedicalPaymentMethod.insurerPaid;
+
+    // The money-impact figure is quoted in the bill's own currency; when the
+    // bill is foreign, show the converted budget figure with the original
+    // beside it (FR-002, FR-016). A missing rate surfaces the original with an
+    // explicit unavailable label rather than a fabricated value (FR-014).
+    final impactOriginal =
+        Money(bill.fundsImpact, bill.currencyCode ?? currency);
+    final impactConversion = ref.watch(rateRegistryProvider).convert(
+          amount: impactOriginal,
+          to: currency,
+          yearMonth: yearMonth,
+        );
 
     return _SectionCard(
       title: 'Payment Method',
@@ -384,11 +406,26 @@ class _PaymentMethodSection extends ConsumerWidget {
             children: [
               Text(bill.paymentMethod.label,
                   style: const TextStyle(fontWeight: FontWeight.bold)),
-              Text(
-                '${MedicalTheme.moneyMinor(currency, bill.fundsImpact)} left your budget',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: MedicalTheme.subtleText(context),
+              Flexible(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    DegradedAmountLabel(
+                      original: impactOriginal,
+                      result: impactConversion,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: MedicalTheme.subtleText(context),
+                      ),
+                    ),
+                    Text(
+                      ' left your budget',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: MedicalTheme.subtleText(context),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -489,7 +526,7 @@ class _BillStateSection extends ConsumerWidget {
               color: MedicalTheme.subtleText(context),
             ),
           ),
-          if (selfPaid) ...[
+          if (selfPaid && bill.linkedExpenseId != null) ...[
             const SizedBox(height: 12),
             FilledButton.icon(
               key: const Key('logReimbursementButton'),
@@ -550,8 +587,10 @@ class _BillStateSection extends ConsumerWidget {
 
   /// FR-034: the payout is injected into the budget via a reimbursement row.
   Future<void> _logReimbursement(BuildContext context, WidgetRef ref) async {
+    final expenseId = bill.linkedExpenseId;
+    if (expenseId == null) return;
     final expenseRepo = ref.read(expenseRepositoryProvider);
-    final expense = await expenseRepo.getExpense(bill.linkedExpenseId!);
+    final expense = await expenseRepo.getExpense(expenseId);
 
     if (expense == null || !context.mounted) return;
 

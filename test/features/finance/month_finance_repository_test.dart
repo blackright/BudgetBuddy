@@ -1,4 +1,6 @@
+import 'package:budget_buddy/core/models/currency_code.dart';
 import 'package:budget_buddy/core/models/user_profile.dart';
+import 'package:budget_buddy/features/engine/currency_resolution.dart';
 import 'package:budget_buddy/features/finance/repositories/month_finance_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -67,12 +69,21 @@ void main() {
       expect(await harness.budgetCount(), 1);
     });
 
-    test('a new month inherits the active profile currency', () async {
-      await seedProfile(currency: PrimaryCurrency.eur);
+    test('a new month follows the profile main currency (no convert-to)',
+        () async {
+      final profileId = await seedProfile(currency: PrimaryCurrency.eur);
 
       final month = await repository.ensureMonth('2026-03');
 
-      expect(month.currency, PrimaryCurrency.eur);
+      expect(month.currency, isNull,
+          reason: 'a fresh month carries no convert-to override (FR-011)');
+      expect(
+        resolveDisplayCurrency(
+          month: month,
+          profile: await harness.isar.userProfiles.get(profileId),
+        ),
+        CurrencyCode.eur,
+      );
     });
 
     test('FR-007: no balance is carried forward into a new month', () async {

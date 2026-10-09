@@ -112,11 +112,12 @@ void main() {
 
     tearDown(() => harness.close());
 
-    test('stamps the schema at version 9 exactly once', () async {
+    test('stamps the schema at the current version exactly once', () async {
       await harness.runMigrations();
 
       expect(await readSchemaVersion(harness.isar), schemaVersion);
-      expect(schemaVersion, 9);
+      expect(schemaVersion, greaterThanOrEqualTo(10),
+          reason: 'step 10 bumped the schema past the step 9 migration');
       expect(await harness.schemaStamps(), hasLength(1));
     });
 
@@ -158,10 +159,12 @@ void main() {
         (await harness.isar.reimbursements.get(reimbursement.id))!.amount,
         26000,
       );
-      expect((await harness.isar.medicalBills.get(bill.id))!.billedAmount, 9900);
+      expect(
+          (await harness.isar.medicalBills.get(bill.id))!.billedAmount, 9900);
     });
 
-    test('is idempotent — a second run neither changes nor re-stamps', () async {
+    test('is idempotent — a second run neither changes nor re-stamps',
+        () async {
       final expense = Expense(
         profileId: harness.profileId,
         yearMonth: '2026-01',

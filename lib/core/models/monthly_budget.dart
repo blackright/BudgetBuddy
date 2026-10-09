@@ -1,5 +1,4 @@
 import 'package:isar/isar.dart';
-import 'user_profile.dart';
 
 part 'monthly_budget.g.dart';
 
@@ -22,8 +21,17 @@ class MonthlyBudget {
   /// [UserProfile.defaultNetSalary]" (FR-003). Must be null or >= 0.
   double? netSalaryOverride;
 
-  @enumerated
-  late PrimaryCurrency currency;
+  /// Display-only "convert this month to" currency code (FR-011, data-model
+  /// §4.2).
+  ///
+  /// `null` — the default for a freshly provisioned month — means "follow the
+  /// active profile's main currency". Setting it overrides the main currency
+  /// for this month alone; clearing it restores the fallback. Stored as a code
+  /// string because a persisted enum cannot represent "cleared"; unknown values
+  /// coerce to the default at read time (data-model §4.4). It is never read by
+  /// the conversion engine to decide a stored amount or rate — history stays
+  /// deterministic no matter what is chosen here.
+  String? currency;
 
   late DateTime createdAt;
 

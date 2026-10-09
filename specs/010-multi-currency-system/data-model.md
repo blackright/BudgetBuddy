@@ -32,6 +32,7 @@ Single source of truth for a supported currency. Replaces five divergent lists a
 - Scaling (× rate): `roundHalfAwayFromZero(minorUnits × rate)` — rounding happens **only** at this boundary and at input parsing and at display. Never mid-aggregation.
 - Cross-rate division (`usdRate[to] / usdRate[from]`) computes in double **once**, then rounds to the target currency's exponent.
 - Display: `format(Money)` renders using `exponent` (HUF: no decimals — fixes the phantom-cents defect D10).
+- **Display contract (single source of truth)**: persisted amount fields are `int` **minor units**; engine aggregates (`MonthSummary`, `ResolvedIncome`, `baseAvailableAmount`) may stay `double` **major units**. Every user-facing amount goes through the shared formatter — `formatMinorUnits`/`formatMoney` and `MedicalTheme.moneyMinor` for stored minor-unit ints, `formatMajorUnits`/`MedicalTheme.moneyMajor` for major-unit engine doubles. Passing a minor int to a `…Major` helper inflates the value by the currency exponent (the T-R01 defect). `MedicalTheme.money` was renamed to `moneyMajor` to make the unit explicit at every call site. Pinned by `test/shared/presentation/money_format_test.dart`.
 
 **Validation**: amounts ≤ 0 rejected at input (spec edge case). A persisted double that has no exact integer representation at its currency's exponent is **flagged by migration step 9**, never rounded silently (FR-021).
 

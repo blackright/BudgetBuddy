@@ -9,6 +9,7 @@ import '../../../core/models/currency_code.dart';
 import '../../../core/models/expense.dart';
 import '../../../core/models/insurance_profile.dart';
 import '../../../core/models/medical_bill.dart';
+import '../../../core/models/medical_service_type.dart';
 import '../../../core/models/money.dart';
 import '../../../core/providers/active_profile_provider.dart';
 import '../providers/medical_providers.dart';
@@ -153,7 +154,10 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
       _patientShareController.text = '20';
       return;
     }
-    _amountController.text = bill.billedAmount.toStringAsFixed(2);
+    _amountController.text =
+        Money(bill.billedAmount, bill.currencyCode ?? CurrencyCode.huf)
+            .majorValue
+            .toStringAsFixed(2);
     _patientShareController.text = bill.patientSharePercent.toStringAsFixed(0);
     _selectedProviderId = bill.providerId;
     _selectedFamilyMemberId = bill.familyMemberId;
@@ -163,7 +167,10 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
     _insurerReplyPath = bill.insurerReplyPath;
     _serviceDate = bill.serviceDate ?? DateTime.now();
     _state = bill.state;
-    _reimbursementController.text = (Money(bill.reimbursedAmount, bill.currencyCode ?? CurrencyCode.huf).majorValue).toStringAsFixed(2);
+    _reimbursementController.text =
+        (Money(bill.reimbursedAmount, bill.currencyCode ?? CurrencyCode.huf)
+                .majorValue)
+            .toStringAsFixed(2);
     _selectedCurrency = bill.currencyCode;
   }
 
@@ -236,29 +243,29 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
     return CurrencyCode.tryParse(primary ?? '') ?? CurrencyCode.huf;
   }
 
-  int get _amountMinor =>
-      Money.fromMajor(_amount, _currencyCode).minorUnits;
+  int get _amountMinor => Money.fromMajor(_amount, _currencyCode).minorUnits;
 
   /// FR-048: the share the *user* pays, not the insurer's coverage.
   double get _patientSharePercent =>
       double.tryParse(_patientShareController.text.trim()) ?? 0.0;
 
-  /// Live preview of the split while the user types.
-  ({double patientShare, double insurerPaid}) get _estimate {
-    final patient = _amount * (_patientSharePercent / 100);
-    return (patientShare: patient, insurerPaid: _amount - patient);
-  }
-
-  /// What this bill will take from the budget, straight from the same rule the
-  /// repository applies (R07). Shown so the consequence of method and state is
-  /// visible before saving.
-  double get _projectedImpact {
+  /// Live preview of the split while the user types, and what this bill will
+  /// take from the budget.
+  ///
+  /// Uses the same [MedicalBill] rules the repository applies (R07) and returns
+  /// whole **minor units** of the entered currency, so the preview, the stored
+  /// amount and the display formatter can never disagree about scale.
+  ({int patientShare, int insurerPaid, int projectedImpact}) get _preview {
     final probe = MedicalBill()
       ..billedAmount = _amountMinor
       ..patientSharePercent = _patientSharePercent
       ..paymentMethod = _paymentMethod
       ..state = _state;
-    return probe.fundsImpact.toDouble();
+    return (
+      patientShare: probe.patientShareAmount,
+      insurerPaid: probe.insurerPaidAmount,
+      projectedImpact: probe.fundsImpact,
+    );
   }
 
   // -----------------------------------------------------------------------------
@@ -354,7 +361,7 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
         ..hideCurrentSnackBar()
         ..showSnackBar(SnackBar(
           content: Text(
-            _isEditing ? 'Medical bill updated âœ…' : 'Medical bill saved âœ…',
+            _isEditing ? 'Medical bill updated ✅' : 'Medical bill saved ✅',
           ),
         ));
       if (navigator.canPop()) {
@@ -416,7 +423,20 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
     final providers = ref.watch(medicalProvidersProvider).value ?? const [];
     final members = ref.watch(familyMembersProvider).value ?? const [];
     final serviceTypes = ref.watch(selectableServiceTypesProvider);
-    final estimate = _estimate;
+    final allServiceTypes = ref.watch(medicalServiceTypesProvider).value ??
+        const <MedicalServiceType>[];
+    final selectedTypeMissing = _serviceTypeId != null &&
+        !serviceTypes.any((t) => t.id == _serviceTypeId);
+    String? selectedTypeName;
+    if (selectedTypeMissing) {
+      for (final type in allServiceTypes) {
+        if (type.id == _serviceTypeId) {
+          selectedTypeName = type.name;
+          break;
+        }
+      }
+    }
+    final estimate = _preview;
     final showReimbursement = _showReimbursementField;
 
     return Scaffold(
@@ -579,6 +599,16 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
               ),
               items: [
                 const DropdownMenuItem<int?>(value: null, child: Text('None')),
+                // An archived (or not-yet-loaded) type must still be shown so
+                // the seeded `initialValue` always has exactly one matching
+                // item — otherwise DropdownButtonFormField asserts on frame 1
+                // of the Edit form (defect batch walkthrough).
+                if (selectedTypeMissing)
+                  DropdownMenuItem<int?>(
+                    value: _serviceTypeId,
+                    enabled: false,
+                    child: Text(selectedTypeName ?? 'Service type'),
+                  ),
                 for (final type in serviceTypes)
                   DropdownMenuItem<int?>(
                       value: type.id, child: Text(type.name)),
@@ -634,7 +664,7 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
               currency: _currencyCode,
               patientShare: estimate.patientShare,
               insurerPaid: estimate.insurerPaid,
-              projectedImpact: _projectedImpact,
+              projectedImpact: estimate.projectedImpact,
               paymentMethod: _paymentMethod,
             ),
             if (showReimbursement) ...[
@@ -651,7 +681,9 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
                     const TextInputType.numberWithOptions(decimal: true),
                 validator: (value) {
                   final parsed = double.tryParse(value?.trim() ?? '');
-                  if (parsed == null || parsed <= 0) return 'Enter an amount';
+                  // 0 is a valid "not reimbursed yet" state on a self-paid
+                  // bill; without this the Edit form could never save one.
+                  if (parsed == null || parsed < 0) return 'Enter an amount';
                   return null;
                 },
               ),
@@ -734,7 +766,7 @@ class _ProviderSelectorState extends State<_ProviderSelector> {
                 child: Text(
                   provider.specialty == null
                       ? provider.name
-                      : '${provider.name} Â· ${provider.specialty}',
+                      : '${provider.name} · ${provider.specialty}',
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -804,7 +836,7 @@ class _MemberSelectorState extends State<_MemberSelector> {
                 child: Text(
                   member.relation.isEmpty
                       ? member.name
-                      : '${member.name} Â· ${member.relation}',
+                      : '${member.name} · ${member.relation}',
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -852,11 +884,11 @@ class _EstimateCard extends StatelessWidget {
   });
 
   final CurrencyCode currency;
-  final double patientShare;
-  final double insurerPaid;
+  final int patientShare;
+  final int insurerPaid;
 
   /// What this bill removes from available funds, per the money-impact table.
-  final double projectedImpact;
+  final int projectedImpact;
 
   final MedicalPaymentMethod paymentMethod;
 
@@ -875,12 +907,12 @@ class _EstimateCard extends StatelessWidget {
             const SizedBox(height: 12),
             _AmountRow(
               label: 'You pay',
-              value: MedicalTheme.money(currency, patientShare),
+              value: MedicalTheme.moneyMinor(currency, patientShare),
               color: Colors.orange,
             ),
             _AmountRow(
               label: 'Insurer pays',
-              value: MedicalTheme.money(currency, insurerPaid),
+              value: MedicalTheme.moneyMinor(currency, insurerPaid),
               color: Colors.green,
             ),
             const Divider(height: 24),
@@ -888,7 +920,7 @@ class _EstimateCard extends StatelessWidget {
               label: insurerPaidBill
                   ? 'Leaves your budget (your share)'
                   : 'Leaves your budget (full charge)',
-              value: MedicalTheme.money(currency, projectedImpact),
+              value: MedicalTheme.moneyMinor(currency, projectedImpact),
               color: Colors.red,
               bold: true,
             ),
@@ -1007,4 +1039,3 @@ class _DocumentTile extends StatelessWidget {
     );
   }
 }
-

@@ -6,13 +6,19 @@ import '../../../core/models/expense.dart';
 import '../../../core/models/insurance_profile.dart';
 import '../../../core/models/medical_bill.dart';
 import '../../../core/models/medical_service_type.dart';
+import '../../../core/models/money.dart';
 import '../../../core/providers/active_budget_provider.dart';
 import '../../../core/providers/active_profile_provider.dart';
 import '../../../core/providers/selected_month_provider.dart';
+import '../../engine/currency_resolution.dart';
+import '../../engine/providers/rate_registry_provider.dart';
 import '../repositories/medical_repository.dart';
 
 final medicalRepositoryProvider = Provider<MedicalRepository>((ref) {
-  return MedicalRepository(IsarHelper.instance);
+  return MedicalRepository(
+    IsarHelper.instance,
+    rateRegistry: ref.watch(rateRegistryProvider),
+  );
 });
 
 /// Alias used by the service-type providers so a rename of the primary
@@ -92,16 +98,19 @@ final medicalBillContextProvider = Provider<MedicalBillContext?>((ref) {
     profileId: profile.id,
     budgetId: budget.id,
     yearMonth: budget.yearMonth,
-    primaryCurrency: budget.currency.name.toUpperCase(),
+    primaryCurrency: profile.primaryCurrency.name.toUpperCase(),
+    rateTable: ref.watch(rateRegistryProvider).tableFor(budget.yearMonth),
   );
 });
 
-/// Display currency for the active budget, as the single [CurrencyCode] the
-/// medical screens format through (FR-018) instead of a hardcoded symbol.
+/// Display currency for the active month, as the single [CurrencyCode] the
+/// medical screens format through (FR-011, FR-018) instead of a hardcoded
+/// symbol: the month's convert-to choice when set, otherwise the profile main
+/// currency.
 final medicalDisplayCurrencyProvider = Provider<CurrencyCode>((ref) {
   final budget = ref.watch(activeBudgetProvider).value;
-  if (budget == null) return CurrencyCode.usd;
-  return budget.currency.code;
+  final profile = ref.watch(activeProfileProvider).valueOrNull;
+  return resolveDisplayCurrency(month: budget, profile: profile);
 });
 
 // -----------------------------------------------------------------------------
@@ -145,7 +154,15 @@ final selectableServiceTypesProvider =
 /// the fly so edits and deletes need no stored running total.
 final patientShareTotalsProvider = Provider<PatientShareTotals>((ref) {
   final bills = ref.watch(medicalBillsProvider).value ?? const <MedicalBill>[];
-  return PatientShareTotals.from(bills);
+  final display = ref.watch(medicalDisplayCurrencyProvider);
+  final table = ref.watch(rateRegistryProvider).tableFor(
+        ref.watch(selectedYearMonthProvider),
+      );
+  return PatientShareTotals.from(
+    bills,
+    display: display,
+    convert: (amount) => toDisplay(amount, display, table),
+  );
 });
 
 /// What the medical feature currently costs the selected month's budget.
@@ -153,7 +170,16 @@ final medicalBudgetImpactProvider = Provider<MedicalBudgetImpact>((ref) {
   final bills = ref.watch(medicalBillsProvider).value ?? const <MedicalBill>[];
   final statuses = ref.watch(medicalExpenseStatusesProvider).value ??
       const <int, ExpenseStatus>{};
-  return MedicalBudgetImpact.from(bills, expenseStatuses: statuses);
+  final display = ref.watch(medicalDisplayCurrencyProvider);
+  final table = ref.watch(rateRegistryProvider).tableFor(
+        ref.watch(selectedYearMonthProvider),
+      );
+  return MedicalBudgetImpact.from(
+    bills,
+    display: display,
+    convert: (amount) => toDisplay(amount, display, table),
+    expenseStatuses: statuses,
+  );
 });
 
 // -----------------------------------------------------------------------------
@@ -186,14 +212,21 @@ class MedicalDirectory {
   }
 }
 
+/// Converts a [Money] in a bill's own currency into the display currency.
+typedef MoneyConverter = Money Function(Money amount);
+
 /// Patient-share totals for a set of bills (FR-038).
 ///
 /// The deductible aggregate this replaces is gone by design (FR-037): every bill
 /// is treated as if no deductible applies, so there is no limit, no remaining
 /// balance and no progress to track - only what the user owes and what the
 /// insurers covered.
+///
+/// Every figure is held in **whole minor units of the display currency**; each
+/// bill is converted from its own currency as it is folded in (FR-016).
 class PatientShareTotals {
   const PatientShareTotals({
+    required this.currency,
     required this.billedTotal,
     required this.patientShareTotal,
     required this.insurerPaidTotal,
@@ -202,51 +235,63 @@ class PatientShareTotals {
     required this.billCount,
   });
 
-  const PatientShareTotals.empty()
-      : billedTotal = 0.0,
-        patientShareTotal = 0.0,
-        insurerPaidTotal = 0.0,
-        reimbursedTotal = 0.0,
-        netPatientCost = 0.0,
+  const PatientShareTotals.empty(this.currency)
+      : billedTotal = 0,
+        patientShareTotal = 0,
+        insurerPaidTotal = 0,
+        reimbursedTotal = 0,
+        netPatientCost = 0,
         billCount = 0;
 
-  /// Full charges across every bill.
-  final double billedTotal;
+  /// The currency every total is denominated in.
+  final CurrencyCode currency;
+
+  /// Full charges across every bill, in [currency] minor units.
+  final int billedTotal;
 
   /// What the user owes across every bill, before reimbursements.
-  final double patientShareTotal;
+  final int patientShareTotal;
 
   /// What the insurers paid across every bill.
-  final double insurerPaidTotal;
+  final int insurerPaidTotal;
 
   /// Money that came back.
-  final double reimbursedTotal;
+  final int reimbursedTotal;
 
   /// What the user is actually out of pocket once returns are counted.
-  final double netPatientCost;
+  final int netPatientCost;
 
   final int billCount;
 
   bool get isEmpty => billCount == 0;
 
-  static PatientShareTotals from(List<MedicalBill> bills) {
-    if (bills.isEmpty) return const PatientShareTotals.empty();
+  static PatientShareTotals from(
+    List<MedicalBill> bills, {
+    required CurrencyCode display,
+    required MoneyConverter convert,
+  }) {
+    if (bills.isEmpty) return PatientShareTotals.empty(display);
 
-    var billed = 0.0;
-    var patient = 0.0;
-    var insurer = 0.0;
-    var reimbursed = 0.0;
-    var net = 0.0;
+    int inDisplay(int minor, CurrencyCode? billCurrency) =>
+        convert(Money(minor, billCurrency ?? display)).minorUnits;
+
+    var billed = 0;
+    var patient = 0;
+    var insurer = 0;
+    var reimbursed = 0;
+    var net = 0;
 
     for (final bill in bills) {
-      billed += bill.billedAmount;
-      patient += bill.patientShareAmount;
-      insurer += bill.insurerPaidAmount;
-      reimbursed += bill.reimbursedAmount;
-      net += bill.netOutOfPocket;
+      final code = bill.currencyCode;
+      billed += inDisplay(bill.billedAmount, code);
+      patient += inDisplay(bill.patientShareAmount, code);
+      insurer += inDisplay(bill.insurerPaidAmount, code);
+      reimbursed += inDisplay(bill.reimbursedAmount, code);
+      net += inDisplay(bill.netOutOfPocket, code);
     }
 
     return PatientShareTotals(
+      currency: display,
       billedTotal: billed,
       patientShareTotal: patient,
       insurerPaidTotal: insurer,
@@ -258,8 +303,12 @@ class PatientShareTotals {
 }
 
 /// What the medical feature currently costs the budget.
+///
+/// Every figure is held in **whole minor units of the display currency**;
+/// each bill is converted from its own currency as it is folded in (FR-016).
 class MedicalBudgetImpact {
   const MedicalBudgetImpact({
+    required this.currency,
     required this.plannedTotal,
     required this.paidTotal,
     required this.outOfPocketTotal,
@@ -267,15 +316,18 @@ class MedicalBudgetImpact {
     required this.netOutOfPocket,
   });
 
-  const MedicalBudgetImpact.empty()
-      : plannedTotal = 0.0,
-        paidTotal = 0.0,
-        outOfPocketTotal = 0.0,
-        reimbursedTotal = 0.0,
-        netOutOfPocket = 0.0;
+  const MedicalBudgetImpact.empty(this.currency)
+      : plannedTotal = 0,
+        paidTotal = 0,
+        outOfPocketTotal = 0,
+        reimbursedTotal = 0,
+        netOutOfPocket = 0;
+
+  /// The currency every total is denominated in.
+  final CurrencyCode currency;
 
   /// Billed amount of bills whose linked expense is still `planned`.
-  final double plannedTotal;
+  final int plannedTotal;
 
   /// What the selected month's medical spending actually cost the budget.
   ///
@@ -283,35 +335,41 @@ class MedicalBudgetImpact {
   /// [MedicalBill.billedAmount], so an insurer-paid bill contributes only the
   /// patient share (FR-042). SC-009 — this is the same figure the month summary
   /// reports for its medical line.
-  final double paidTotal;
+  final int paidTotal;
 
-  final double outOfPocketTotal;
-  final double reimbursedTotal;
+  final int outOfPocketTotal;
+  final int reimbursedTotal;
 
   /// What the user is out of pocket after reimbursements land.
   ///
   /// Mirrors the budget itself: a paid bill leaves the budget at its full
   /// [MedicalBill.billedAmount] and a reimbursement is the only thing that
   /// gives money back, so the net cost is `billed - reimbursed` per paid bill.
-  final double netOutOfPocket;
+  final int netOutOfPocket;
 
   bool get hasPending => plannedTotal > 0;
 
   static MedicalBudgetImpact from(
     List<MedicalBill> bills, {
+    required CurrencyCode display,
+    required MoneyConverter convert,
     Map<int, ExpenseStatus> expenseStatuses = const {},
   }) {
-    if (bills.isEmpty) return const MedicalBudgetImpact.empty();
+    if (bills.isEmpty) return MedicalBudgetImpact.empty(display);
 
-    var planned = 0.0;
-    var paid = 0.0;
-    var outOfPocket = 0.0;
-    var reimbursed = 0.0;
-    var net = 0.0;
+    int inDisplay(int minor, CurrencyCode? billCurrency) =>
+        convert(Money(minor, billCurrency ?? display)).minorUnits;
+
+    var planned = 0;
+    var paid = 0;
+    var outOfPocket = 0;
+    var reimbursed = 0;
+    var net = 0;
 
     for (final bill in bills) {
-      outOfPocket += bill.patientShareAmount;
-      reimbursed += bill.reimbursedAmount;
+      final code = bill.currencyCode;
+      outOfPocket += inDisplay(bill.patientShareAmount, code);
+      reimbursed += inDisplay(bill.reimbursedAmount, code);
 
       final expenseId = bill.linkedExpenseId;
       final status = expenseId == null ? null : expenseStatuses[expenseId];
@@ -321,10 +379,10 @@ class MedicalBudgetImpact {
         case ExpenseStatus.partiallyReimbursed:
           // `fundsImpact`, not the billed amount: a rejected insurer-paid bill
           // owes the full charge and an unresolved one owes only the share.
-          paid += bill.fundsImpact;
-          net += bill.netOutOfPocket;
+          paid += inDisplay(bill.fundsImpact, code);
+          net += inDisplay(bill.netOutOfPocket, code);
         case ExpenseStatus.planned:
-          planned += bill.billedAmount;
+          planned += inDisplay(bill.billedAmount, code);
         // Cancelled expenses, or bills saved without a linked expense, leave
         // the budget untouched.
         case ExpenseStatus.cancelled:
@@ -334,6 +392,7 @@ class MedicalBudgetImpact {
     }
 
     return MedicalBudgetImpact(
+      currency: display,
       plannedTotal: planned,
       paidTotal: paid,
       outOfPocketTotal: outOfPocket,

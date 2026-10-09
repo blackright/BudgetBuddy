@@ -2,14 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/database/isar_helper.dart';
-import '../../../core/models/currency_code.dart';
-import '../../../core/models/monthly_budget.dart';
-import '../../../core/models/user_profile.dart';
 import '../../../core/providers/active_budget_provider.dart';
+import '../../../core/providers/active_profile_provider.dart';
 import '../../../core/providers/selected_month_provider.dart';
 import '../../../shared/presentation/widgets/month_incomplete_banner.dart';
+import '../../engine/currency_resolution.dart';
 import 'month_navigator.dart';
+import 'widgets/month_convert_to_menu.dart';
 import 'widgets/month_summary_card.dart';
 import 'widgets/month_summary_details.dart';
 
@@ -25,38 +24,16 @@ class DashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final activeBudget = ref.watch(activeBudgetProvider).value;
-    final symbol = currencySymbol(activeBudget);
-    final currency = activeBudget?.currency.code ?? CurrencyCode.usd;
+    final profile = ref.watch(activeProfileProvider).valueOrNull;
+    final display =
+        resolveDisplayCurrency(month: activeBudget, profile: profile);
+    final symbol = display.symbol;
 
     return Scaffold(
       appBar: AppBar(
         title: const MonthNavigator(),
         actions: [
-          if (activeBudget != null)
-            PopupMenuButton<PrimaryCurrency>(
-              initialValue: activeBudget.currency,
-              icon: const Icon(Icons.currency_exchange),
-              tooltip: 'Change Currency',
-              onSelected: (currency) => _changeCurrency(activeBudget, currency),
-              itemBuilder: (context) => const [
-                PopupMenuItem(
-                  value: PrimaryCurrency.usd,
-                  child: Text('USD (\$)'),
-                ),
-                PopupMenuItem(
-                  value: PrimaryCurrency.eur,
-                  child: Text('EUR (€)'),
-                ),
-                PopupMenuItem(
-                  value: PrimaryCurrency.cad,
-                  child: Text('CAD (C\$)'),
-                ),
-                PopupMenuItem(
-                  value: PrimaryCurrency.huf,
-                  child: Text('HUF (Ft)'),
-                ),
-              ],
-            ),
+          if (activeBudget != null) const MonthConvertToMenu(),
         ],
       ),
       body: GestureDetector(
@@ -81,10 +58,10 @@ class DashboardScreen extends ConsumerWidget {
             padding: const EdgeInsets.all(16),
             children: [
               MonthIncompleteBanner(currencySymbol: symbol),
-              MonthSummaryCard(currency: currency),
+              MonthSummaryCard(currency: display),
               const SizedBox(height: 12),
               MonthSummaryDetails(
-                currency: currency,
+                currency: display,
                 // The selected month lives in a provider, so the Medical tab opens
                 // on the same month with no route parameter to carry (FR-022,
                 // FR-027).
@@ -116,27 +93,6 @@ class DashboardScreen extends ConsumerWidget {
         ),
       ),
     );
-  }
-
-  Future<void> _changeCurrency(
-    MonthlyBudget budget,
-    PrimaryCurrency currency,
-  ) async {
-    final isar = IsarHelper.instance;
-    budget.currency = currency;
-    await isar.writeTxn(() async {
-      await isar.monthlyBudgets.put(budget);
-    });
-  }
-
-  static String currencySymbol(MonthlyBudget? budget) {
-    if (budget == null) return r'$';
-    return switch (budget.currency) {
-      PrimaryCurrency.huf => 'Ft',
-      PrimaryCurrency.usd => r'$',
-      PrimaryCurrency.cad => r'C$',
-      PrimaryCurrency.eur => '€',
-    };
   }
 
   Widget _buildActionButton(IconData icon, String label) {

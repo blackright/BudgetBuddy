@@ -39,8 +39,7 @@ String formatMinorUnits(int minorUnits, CurrencyCode currency) {
 /// A thin bridge for engine aggregates that are still expressed in major units:
 /// it rounds once to whole minor units and hands off to [formatMinorUnits], so
 /// there is still exactly one formatting/rounding path (FR-018).
-String formatMajorUnits(num amount, CurrencyCode currency) =>
-    formatMinorUnits(
+String formatMajorUnits(num amount, CurrencyCode currency) => formatMinorUnits(
       Money.fromMajor(amount.toDouble(), currency).minorUnits,
       currency,
     );

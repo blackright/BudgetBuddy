@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/models/expense.dart';
+import '../../../core/models/money.dart';
 import '../../../core/providers/active_profile_provider.dart';
 import '../../../core/providers/selected_month_provider.dart';
 import '../../expenses/repositories/expense_repository.dart';
@@ -35,6 +36,7 @@ final monthSummaryProvider = Provider<MonthSummary>((ref) {
   final income = ref.watch(resolvedIncomeProvider);
   final table = ref.watch(rateRegistryProvider).tableFor(yearMonth);
   final display = resolveDisplayCurrency(month: month, profile: profile);
+  final source = mainSourceCurrency(profile);
   final expenses =
       ref.watch(monthlyExpensesProvider).value ?? const <Expense>[];
   final reimbursements =
@@ -52,14 +54,17 @@ final monthSummaryProvider = Provider<MonthSummary>((ref) {
 
   return MonthSummary.from(
     yearMonth: yearMonth,
-    income: income.amount,
+    income: toDisplay(Money.fromMajor(income.amount, source), display, table)
+        .majorValue,
     usesOverriddenIncome: income.usesOverride,
     expenses: expenses,
     reimbursements: reimbursements,
     convertExpense: (e) => expenseToDisplay(e, display, table),
     convertReimbursement: (r) => reimbursementToDisplay(r, display, table),
     openingBalance: month != null && month.openingBalanceConfirmed
-        ? month.baseAvailableAmount
+        ? toDisplay(Money.fromMajor(month.baseAvailableAmount, source), display,
+                table)
+            .majorValue
         : null,
     targetPaidAmounts: targetPaidAmounts,
   );

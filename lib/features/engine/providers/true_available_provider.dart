@@ -48,7 +48,9 @@ final trueAvailableProvider = Provider<double>((ref) {
   if (budget == null) return 0.0;
 
   final display = resolveDisplayCurrency(month: budget, profile: profile);
-  var total = Money.fromMajor(budget.baseAvailableAmount, display);
+  final source = mainSourceCurrency(profile);
+  var total = toDisplay(
+      Money.fromMajor(budget.baseAvailableAmount, source), display, table);
 
   for (final exp in expenses) {
     if (exp.status == ExpenseStatus.paid ||

@@ -10,9 +10,11 @@ import '../../../core/providers/active_budget_provider.dart';
 import '../../../core/providers/active_profile_provider.dart';
 import '../../../core/providers/selected_month_provider.dart';
 import '../../../shared/presentation/money_format.dart';
+import '../../../shared/presentation/widgets/conversion_footnote.dart';
 import '../../engine/currency_resolution.dart';
 import '../../engine/providers/rate_registry_provider.dart';
 import '../../engine/providers/safe_to_spend_provider.dart';
+import '../../settings/providers/settings_provider.dart';
 import '../providers/category_provider.dart';
 import '../providers/expenses_provider.dart';
 import 'widgets/reimbursement_entry_sheet.dart' as entry;
@@ -230,6 +232,7 @@ class _ImpactCard extends ConsumerWidget {
     final yearMonth = ref.watch(selectedYearMonthProvider);
     final table = ref.watch(rateRegistryProvider).tableFor(yearMonth);
     final display = resolveDisplayCurrency(month: budget, profile: profile);
+    final main = ref.watch(mainCurrencyProvider);
 
     // Impact is approximate based on current safe to spend + expense amount (if we were to revert it)
     return Card(
@@ -264,6 +267,7 @@ class _ImpactCard extends ConsumerWidget {
                 ],
               );
             }),
+            ConversionFootnote(main: main, display: display, table: table),
           ],
         ),
       ),

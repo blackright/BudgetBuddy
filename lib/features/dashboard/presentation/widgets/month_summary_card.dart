@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../engine/providers/month_summary_provider.dart';
 import '../../../../core/models/currency_code.dart';
+import '../../../../core/providers/selected_month_provider.dart';
+import '../../../engine/providers/month_summary_provider.dart';
+import '../../../engine/providers/rate_registry_provider.dart';
 import '../../../medical/presentation/medical_theme.dart';
+import '../../../settings/providers/settings_provider.dart';
+import '../../../../shared/presentation/widgets/conversion_footnote.dart';
 
 /// The month's headline figures (FR-018).
 ///
@@ -89,13 +93,20 @@ class MonthSummaryCard extends ConsumerWidget {
               valueKey: const Key('returnedLine'),
               color: MedicalTheme.semantic(context, MedicalTheme.moneyIn),
             ),
+            ConversionFootnote(
+              main: ref.watch(mainCurrencyProvider),
+              display: currency,
+              table: ref.watch(rateRegistryProvider).tableFor(
+                    ref.watch(selectedYearMonthProvider),
+                  ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  String _money(double amount) => MedicalTheme.money(currency, amount);
+  String _money(double amount) => MedicalTheme.moneyMajor(currency, amount);
 }
 
 /// One labelled amount. The key sits on the value alone so a test can read its

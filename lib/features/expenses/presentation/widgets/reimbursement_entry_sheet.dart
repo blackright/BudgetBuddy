@@ -36,7 +36,13 @@ class _ReimbursementEntrySheetState
   @override
   void initState() {
     super.initState();
-    _currency = widget.expense.currency;
+    // Bill-sourced expenses store lowercase codes while the dropdown items are
+    // uppercase; normalize so the seeded value always matches an item (T055-era
+    // case handling exposed this as a `DropdownButtonFormField` assert).
+    _currency =
+        (CurrencyCode.tryParse(widget.expense.currency) ?? CurrencyCode.huf)
+            .code
+            .toUpperCase();
   }
 
   @override
@@ -56,7 +62,7 @@ class _ReimbursementEntrySheetState
     final enteredCode = CurrencyCode.tryParse(_currency) ?? expenseCode;
     final amountMinor = Money.fromMajor(amount, enteredCode).minorUnits;
 
-    if (_currency == widget.expense.currency && amountMinor > maxAllowed) {
+    if (enteredCode == expenseCode && amountMinor > maxAllowed) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
             content: Text(
@@ -98,8 +104,7 @@ class _ReimbursementEntrySheetState
         final medicalRepo = ref.read(medicalRepositoryProvider);
         final allReimbursements =
             await repo.getReimbursementsForExpense(widget.expense.id);
-        final newTotal =
-            allReimbursements.fold(0, (sum, r) => sum + r.amount);
+        final newTotal = allReimbursements.fold(0, (sum, r) => sum + r.amount);
 
         await medicalRepo.updateMedicalBillReimbursement(
             widget.medicalBill!, newTotal);
@@ -203,9 +208,10 @@ class _ReimbursementEntrySheetState
                             labelText: 'Currency',
                             border: OutlineInputBorder(),
                           ),
-                          items: ['USD', 'EUR', 'HUF', 'CAD']
-                              .map((c) =>
-                                  DropdownMenuItem(value: c, child: Text(c)))
+                          items: CurrencyCode.values
+                              .map((c) => DropdownMenuItem(
+                                  value: c.code.toUpperCase(),
+                                  child: Text(c.code.toUpperCase())))
                               .toList(),
                           onChanged: (val) {
                             if (val != null) setState(() => _currency = val);

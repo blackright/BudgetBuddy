@@ -29,7 +29,8 @@ void main() {
 
           final amount = Money(1000000, from);
           final result = convert(amount, to, table);
-          final expectedRate = _table().usdRates[to]! / _table().usdRates[from]!;
+          final expectedRate =
+              _table().usdRates[to]! / _table().usdRates[from]!;
           final expectedMinor = (amount.minorUnits *
                   expectedRate *
                   to.minorUnitsPerMajor /
@@ -62,7 +63,8 @@ void main() {
           expect(
             viaMid.amount.minorUnits,
             closeTo(direct.amount.minorUnits, 1),
-            reason: 'HUF → ${mid.code} → ${target.code} vs HUF → ${target.code}',
+            reason:
+                'HUF → ${mid.code} → ${target.code} vs HUF → ${target.code}',
           );
         }
       }

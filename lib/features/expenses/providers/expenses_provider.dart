@@ -2,31 +2,56 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:isar/isar.dart';
 import '../../../core/database/isar_helper.dart';
 import '../../../core/models/expense.dart';
+import '../../../core/models/money.dart';
 import '../../../core/providers/active_budget_provider.dart';
+import '../../../core/providers/active_profile_provider.dart';
+import '../../../core/providers/selected_month_provider.dart';
+import '../../engine/currency_resolution.dart';
 import '../../engine/expense_delta.dart';
+import '../../engine/providers/rate_registry_provider.dart';
 
 final expensesProvider =
     StateNotifierProvider<ExpensesNotifier, AsyncValue<List<Expense>>>((ref) {
   final activeBudgetAsync = ref.watch(activeBudgetProvider);
 
+  // Convert an expense snapshot (its own currency, minor units) into the active
+  // month's display currency (major units) through the live rate table. This
+  // mirrors the engine's own conversion so the returned delta is a real money
+  // movement rather than a raw minor-unit cast (T-R05).
+  double toPrimary(ExpenseSnapshot snapshot) {
+    final code = snapshot.currency;
+    if (code == null) return 0.0;
+    final budget = ref.read(activeBudgetProvider).value;
+    final profile = ref.read(activeProfileProvider).value;
+    final display = resolveDisplayCurrency(month: budget, profile: profile);
+    final table = ref
+        .read(rateRegistryProvider)
+        .tableFor(ref.read(selectedYearMonthProvider));
+    return toDisplay(Money(snapshot.amount, code), display, table).majorValue;
+  }
+
   return activeBudgetAsync.when(
     data: (budget) {
       if (budget == null) {
-        return ExpensesNotifier(null, const AsyncValue.data([]));
+        return ExpensesNotifier(null, toPrimary, const AsyncValue.data([]));
       }
-      return ExpensesNotifier(budget.id, null);
+      return ExpensesNotifier(budget.id, toPrimary);
     },
-    loading: () => ExpensesNotifier(null, const AsyncValue.loading()),
-    error: (e, st) => ExpensesNotifier(null, AsyncValue.error(e, st)),
+    loading: () =>
+        ExpensesNotifier(null, toPrimary, const AsyncValue.loading()),
+    error: (e, st) =>
+        ExpensesNotifier(null, toPrimary, AsyncValue.error(e, st)),
   );
 });
 
 class ExpensesNotifier extends StateNotifier<AsyncValue<List<Expense>>> {
   final int? budgetId;
+  final double Function(ExpenseSnapshot) _toPrimary;
   final Isar _isar = IsarHelper.instance;
 
   ExpensesNotifier(
-    this.budgetId, [
+    this.budgetId,
+    this._toPrimary, [
     AsyncValue<List<Expense>>? initialState,
   ]) : super(initialState ?? const AsyncValue.loading()) {
     if (budgetId != null && initialState == null) {
@@ -47,11 +72,6 @@ class ExpensesNotifier extends StateNotifier<AsyncValue<List<Expense>>> {
       state = AsyncValue.error(e, st);
     }
   }
-
-  /// The delta is only a coarse signal for callers; the live engine providers
-  /// recompute the authoritative figures from the correct rate table.
-  static double _toPrimary(ExpenseSnapshot snapshot) =>
-      snapshot.amount.toDouble();
 
   Future<void> addExpense(Expense expense) async {
     if (budgetId == null) return;

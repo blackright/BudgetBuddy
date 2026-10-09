@@ -4,6 +4,7 @@ import 'package:isar/isar.dart';
 import '../../../core/database/isar_helper.dart';
 import '../../../core/models/user_profile.dart';
 import '../../../core/models/monthly_budget.dart';
+import '../../medical/repositories/medical_repository.dart';
 
 class BudgetSetupState {
   final double? amount;
@@ -102,10 +103,12 @@ class BudgetSetupNotifier extends StateNotifier<BudgetSetupState> {
         userProfile.id = 1;
       }
 
+      // The chosen currency becomes the profile's main currency; the month itself
+      // carries no convert-to override, so it follows that main currency
+      // (FR-009, FR-011).
       final monthlyBudget = MonthlyBudget()
         ..yearMonth = state.yearMonth!
         ..baseAvailableAmount = state.amount!
-        ..currency = state.currency!
         ..createdAt = DateTime.now()
         ..updatedAt = DateTime.now();
 
@@ -113,7 +116,7 @@ class BudgetSetupNotifier extends StateNotifier<BudgetSetupState> {
         await isar.userProfiles.put(userProfile);
 
         // Handle MonthlyBudget (upsert based on yearMonth)
-        // Since id is autoIncrement, to truly upsert we would need to check if a budget with yearMonth exists.
+        // Since id is autoIncrement, to truly upsert we would need to check if a budget already exists.
         final existingBudget = await isar.monthlyBudgets
             .filter()
             .yearMonthEqualTo(state.yearMonth!)
@@ -124,6 +127,14 @@ class BudgetSetupNotifier extends StateNotifier<BudgetSetupState> {
         }
         await isar.monthlyBudgets.put(monthlyBudget);
       });
+
+      // A profile created here is brand new, so give it the default medical
+      // service types (FR-039). Migration step 0 only covers profiles that
+      // predate the schema bump; without this a first-run profile would start
+      // with an empty service-type picker.
+      if (existingProfile == null) {
+        await MedicalRepository(isar).ensureDefaultServiceTypes(userProfile.id);
+      }
 
       state = state.copyWith(isSaving: false);
       return true;

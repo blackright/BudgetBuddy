@@ -268,6 +268,39 @@ void main() {
 
       expect(summary.paymentsMade, 1400);
     });
+
+    test('T-R07: a stored minor-unit expense lands in major units', () {
+      // 1000 minor units of USD is ten dollars, not a thousand. The engine must
+      // convert through `Money.majorValue` rather than casting the int.
+      final summary = build(
+        income: 4000,
+        expenses: [expense(amount: 10.0, id: 1)],
+      );
+
+      expect(summary.paymentsMade, 10.0);
+      expect(summary.paymentsMade, isNot(1000.0));
+    });
+
+    test('T-R07: a mixed-currency month sums through the conversion path', () {
+      // USD 10.00 (1000 minor) + EUR 5.00 (500 minor at 1.2 USD/EUR = 600
+      // minor USD) = USD 16.00.
+      final summary = build(
+        income: 4000,
+        expenses: [
+          expense(amount: 10.0, id: 1),
+          expense(amount: 5.0, id: 2, currency: CurrencyCode.eur),
+        ],
+        convertExpense: (e) => Money(
+          e.amount,
+          e.currencyCode ?? CurrencyCode.usd,
+        ).scaledBy(
+          e.currencyCode == CurrencyCode.eur ? 1.2 : 1.0,
+          CurrencyCode.usd,
+        ),
+      );
+
+      expect(summary.paymentsMade, 16.0);
+    });
   });
 
   group('worked examples', () {

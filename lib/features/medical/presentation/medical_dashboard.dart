@@ -6,10 +6,18 @@ import 'package:intl/intl.dart';
 import '../../../core/models/currency_code.dart';
 import '../../../core/models/insurance_profile.dart';
 import '../../../core/models/medical_bill.dart';
+import '../../../core/models/medical_service_type.dart';
+import '../../../core/models/money.dart';
 import '../../../core/providers/active_profile_provider.dart';
 import '../../../core/providers/selected_month_provider.dart';
 import '../../../core/providers/clock_provider.dart';
+import '../../engine/currency_resolution.dart';
+import '../../engine/providers/rate_registry_provider.dart';
+import '../../settings/providers/settings_provider.dart';
+import '../../dashboard/presentation/widgets/month_convert_to_menu.dart';
+import '../../../shared/presentation/widgets/conversion_footnote.dart';
 import '../providers/medical_providers.dart';
+import '../repositories/medical_repository.dart';
 import 'medical_theme.dart';
 import 'reminder_picker_sheet.dart';
 
@@ -27,6 +35,7 @@ class MedicalDashboard extends ConsumerWidget {
         backgroundColor: background,
         elevation: 0,
         actions: [
+          const MonthConvertToMenu(),
           IconButton(
             key: const Key('billDefaultsButton'),
             tooltip: 'Bill defaults',
@@ -60,8 +69,10 @@ class MedicalDashboard extends ConsumerWidget {
             ref
               ..invalidate(medicalBillsProvider)
               ..invalidate(insuranceProfileProvider)
+              ..invalidate(insuranceProfileProvider)
               ..invalidate(familyMembersProvider)
-              ..invalidate(medicalProvidersProvider);
+              ..invalidate(medicalProvidersProvider)
+              ..invalidate(medicalServiceTypesProvider);
           },
           child: CustomScrollView(
             slivers: [
@@ -494,7 +505,7 @@ class _SplitRow extends StatelessWidget {
   });
 
   final String label;
-  final double value;
+  final int value;
   final CurrencyCode currency;
   final Color color;
   final bool bold;
@@ -512,7 +523,7 @@ class _SplitRow extends StatelessWidget {
             style: bold ? base?.copyWith(fontWeight: FontWeight.bold) : base,
           ),
           Text(
-            MedicalTheme.money(currency, value),
+            MedicalTheme.moneyMinor(currency, value),
             style: base?.copyWith(
               fontWeight: bold ? FontWeight.bold : FontWeight.w600,
               color: color,
@@ -531,6 +542,10 @@ class _BudgetImpactCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final impact = ref.watch(medicalBudgetImpactProvider);
     final currency = ref.watch(medicalDisplayCurrencyProvider);
+    final main = ref.watch(mainCurrencyProvider);
+    final table = ref.watch(rateRegistryProvider).tableFor(
+          ref.watch(selectedYearMonthProvider),
+        );
 
     if (impact.plannedTotal == 0 && impact.paidTotal == 0) {
       return const SizedBox.shrink();
@@ -551,24 +566,25 @@ class _BudgetImpactCard extends ConsumerWidget {
             const SizedBox(height: 12),
             _ImpactRow(
               label: 'Paid to providers',
-              value: MedicalTheme.money(currency, impact.paidTotal),
+              value: MedicalTheme.moneyMinor(currency, impact.paidTotal),
               color: Colors.redAccent,
             ),
             if (impact.hasPending)
               _ImpactRow(
                 label: 'Still planned',
-                value: MedicalTheme.money(currency, impact.plannedTotal),
+                value: MedicalTheme.moneyMinor(currency, impact.plannedTotal),
                 color: Colors.orange,
               ),
             _ImpactRow(
               label: 'Estimated out-of-pocket',
-              value: MedicalTheme.money(currency, impact.outOfPocketTotal),
+              value: MedicalTheme.moneyMinor(currency, impact.outOfPocketTotal),
               color: Colors.blueAccent,
             ),
             if (impact.reimbursedTotal > 0)
               _ImpactRow(
                 label: 'Reimbursed',
-                value: '+${MedicalTheme.money(currency, impact.reimbursedTotal)}',
+                value:
+                    '+${MedicalTheme.moneyMinor(currency, impact.reimbursedTotal)}',
                 color: Colors.green,
               ),
             const Divider(height: 24),
@@ -583,7 +599,7 @@ class _BudgetImpactCard extends ConsumerWidget {
                   ),
                 ),
                 Text(
-                  MedicalTheme.money(currency, impact.netOutOfPocket),
+                  MedicalTheme.moneyMinor(currency, impact.netOutOfPocket),
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -591,6 +607,7 @@ class _BudgetImpactCard extends ConsumerWidget {
                 ),
               ],
             ),
+            ConversionFootnote(main: main, display: currency, table: table),
           ],
         ),
       ),
@@ -716,8 +733,20 @@ class _BillTile extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final directory = ref.watch(medicalDirectoryProvider);
     final now = ref.watch(clockProvider);
+    final table = ref.watch(rateRegistryProvider).tableFor(
+          ref.watch(selectedYearMonthProvider),
+        );
     final provider = directory.providerName(bill.providerId);
     final patient = directory.memberName(bill.familyMemberId);
+
+    // The budget impact is denominated in the bill's own currency; show it in
+    // the display currency so a foreign-currency bill's cost is comparable with
+    // the rest of the month (FR-016).
+    final fundsImpactMinor = toDisplay(
+      Money(bill.fundsImpact, bill.currencyCode ?? currency),
+      currency,
+      table,
+    ).minorUnits;
 
     // FR-042: the state is the single source of truth for both the chip colour
     // and the wording, so it replaces the old claim-status + paid/planned pair.
@@ -815,7 +844,8 @@ class _BillTile extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Text(
-              MedicalTheme.moneyMinor(bill.currencyCode ?? currency, bill.billedAmount),
+              MedicalTheme.moneyMinor(
+                  bill.currencyCode ?? currency, bill.billedAmount),
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
             if (bill.paymentMethod == MedicalPaymentMethod.insurerPaid)
@@ -828,7 +858,7 @@ class _BillTile extends ConsumerWidget {
               ),
             if (bill.currencyCode != null && bill.currencyCode != currency)
               Text(
-                '${MedicalTheme.moneyMinor(currency, bill.fundsImpact)} budget',
+                '${MedicalTheme.moneyMinor(currency, fundsImpactMinor)} budget',
                 style: TextStyle(
                   fontSize: 12,
                   color: MedicalTheme.subtleText(context),
@@ -853,6 +883,8 @@ class _DirectorySheet extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final providers = ref.watch(medicalProvidersProvider).value ?? const [];
     final members = ref.watch(familyMembersProvider).value ?? const [];
+    final serviceTypes =
+        ref.watch(medicalServiceTypesProvider).value ?? const [];
 
     return SafeArea(
       child: Padding(
@@ -938,6 +970,45 @@ class _DirectorySheet extends ConsumerWidget {
                               .deleteFamilyMember(member.id),
                         ),
                       ),
+                    const Divider(height: 32),
+                    _DirectorySectionHeader(
+                      title: 'Service types',
+                      addKey: const Key('addServiceTypeButton'),
+                      onAdd: () => _editServiceType(context, ref),
+                    ),
+                    if (serviceTypes.isEmpty)
+                      const _DirectoryEmpty('No service types yet.'),
+                    for (final type in serviceTypes)
+                      ListTile(
+                        dense: true,
+                        leading: Icon(type.archived
+                            ? Icons.inventory_2_outlined
+                            : Icons.medical_services_outlined),
+                        title: Text(
+                          type.name,
+                          style: type.archived
+                              ? TextStyle(
+                                  color: MedicalTheme.subtleText(context))
+                              : null,
+                        ),
+                        subtitle: type.archived ? const Text('Archived') : null,
+                        trailing: IconButton(
+                          icon: Icon(type.archived
+                              ? Icons.unarchive_outlined
+                              : Icons.archive_outlined),
+                          tooltip: type.archived
+                              ? 'Restore service type'
+                              : 'Archive service type',
+                          onPressed: () => ref
+                              .read(medicalRepositoryProvider)
+                              .setServiceTypeArchived(type.id,
+                                  archived: !type.archived),
+                        ),
+                        onTap: type.archived
+                            ? null
+                            : () =>
+                                _editServiceType(context, ref, existing: type),
+                      ),
                   ],
                 ),
               ),
@@ -990,13 +1061,47 @@ class _DirectorySheet extends ConsumerWidget {
           relation: draft.relation,
         );
   }
+
+  Future<void> _editServiceType(
+    BuildContext context,
+    WidgetRef ref, {
+    MedicalServiceType? existing,
+  }) async {
+    final draft = await showModalBottomSheet<_ServiceTypeDraft>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => _ServiceTypeFormSheet(existing: existing),
+    );
+    if (draft == null) return;
+    final profileId = ref.read(activeProfileProvider).value?.id;
+    if (profileId == null) return;
+    try {
+      await ref.read(medicalRepositoryProvider).saveServiceType(
+            id: existing?.id,
+            profileId: profileId,
+            name: draft.name,
+          );
+    } on DuplicateServiceTypeException {
+      // The repository rejects a case-insensitive duplicate (FR-040); surface it
+      // instead of silently doing nothing.
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('"${draft.name}" is already a service type.')),
+      );
+    }
+  }
 }
 
 class _DirectorySectionHeader extends StatelessWidget {
-  const _DirectorySectionHeader({required this.title, required this.onAdd});
+  const _DirectorySectionHeader({
+    required this.title,
+    required this.onAdd,
+    this.addKey,
+  });
 
   final String title;
   final VoidCallback onAdd;
+  final Key? addKey;
 
   @override
   Widget build(BuildContext context) {
@@ -1008,6 +1113,7 @@ class _DirectorySectionHeader extends StatelessWidget {
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
         ),
         TextButton.icon(
+          key: addKey,
           onPressed: onAdd,
           icon: const Icon(Icons.add, size: 18),
           label: const Text('Add'),
@@ -1231,6 +1337,91 @@ class _FamilyMemberFormSheetState extends State<_FamilyMemberFormSheet> {
                       relation: _relation,
                     ),
                   );
+                },
+                child: const Text('Save'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ServiceTypeDraft {
+  const _ServiceTypeDraft({required this.name});
+
+  final String name;
+}
+
+class _ServiceTypeFormSheet extends StatefulWidget {
+  const _ServiceTypeFormSheet({this.existing});
+
+  final MedicalServiceType? existing;
+
+  @override
+  State<_ServiceTypeFormSheet> createState() => _ServiceTypeFormSheetState();
+}
+
+class _ServiceTypeFormSheetState extends State<_ServiceTypeFormSheet> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _name;
+
+  @override
+  void initState() {
+    super.initState();
+    _name = TextEditingController(text: widget.existing?.name ?? '');
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        top: 16,
+        bottom: MediaQuery.viewInsetsOf(context).bottom + 16,
+      ),
+      child: Form(
+        key: _formKey,
+        // See _InsuranceProfileSheetState: scroll the content so a soft keyboard
+        // cannot turn this into a RenderFlex overflow.
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                widget.existing == null
+                    ? 'Add Service Type'
+                    : 'Rename Service Type',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                key: const Key('serviceTypeNameField'),
+                controller: _name,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: const InputDecoration(
+                  labelText: 'Name',
+                  border: OutlineInputBorder(),
+                ),
+                validator: (v) =>
+                    (v == null || v.trim().isEmpty) ? 'Required' : null,
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                key: const Key('serviceTypeSaveButton'),
+                onPressed: () {
+                  if (!_formKey.currentState!.validate()) return;
+                  Navigator.of(context)
+                      .pop(_ServiceTypeDraft(name: _name.text.trim()));
                 },
                 child: const Text('Save'),
               ),

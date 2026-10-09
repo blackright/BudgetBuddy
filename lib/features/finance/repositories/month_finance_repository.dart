@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:isar/isar.dart';
 
 import '../../../core/database/isar_helper.dart';
+import '../../../core/models/currency_code.dart';
 import '../../../core/models/monthly_budget.dart';
 import '../../../core/models/user_profile.dart';
 
@@ -70,8 +71,8 @@ class MonthFinanceRepository {
   /// month is visited.
   ///
   /// A new month is provisioned with a zero opening balance that is explicitly
-  /// *not* confirmed, and inherits the active profile's currency. Nothing is
-  /// copied from the previous month (FR-007).
+  /// *not* confirmed and no convert-to choice, so it follows the profile's main
+  /// currency. Nothing is copied from the previous month (FR-007, FR-011).
   Future<MonthlyBudget> ensureMonth(String yearMonth) {
     return _isar.writeTxn(() => _ensureMonthInTxn(yearMonth));
   }
@@ -85,13 +86,13 @@ class MonthFinanceRepository {
         .findFirst();
     if (existing != null) return existing;
 
-    final profile = await _isar.userProfiles.where().findFirst();
     final now = DateTime.now();
     final budget = MonthlyBudget()
       ..yearMonth = yearMonth
       ..baseAvailableAmount = 0.0
       ..openingBalanceConfirmed = false
-      ..currency = profile?.primaryCurrency ?? PrimaryCurrency.usd
+      // No convert-to choice yet: the month follows the profile's main currency
+      // until the user picks otherwise (FR-011).
       ..createdAt = now
       ..updatedAt = now;
     budget.id = await _isar.monthlyBudgets.put(budget);
@@ -112,6 +113,19 @@ class MonthFinanceRepository {
       final budget = await _ensureMonthInTxn(yearMonth);
       budget.baseAvailableAmount = amount;
       budget.openingBalanceConfirmed = true;
+      budget.updatedAt = DateTime.now();
+      await _isar.monthlyBudgets.put(budget);
+    });
+  }
+
+  /// Sets the month's display-only convert-to choice (FR-011).
+  ///
+  /// Pass `null` to clear it so the month follows the profile's main currency
+  /// again. Display-only: no stored amount, rate or seal is touched.
+  Future<void> saveConvertTo(String yearMonth, CurrencyCode? currency) {
+    return _isar.writeTxn(() async {
+      final budget = await _ensureMonthInTxn(yearMonth);
+      budget.currency = currency?.name;
       budget.updatedAt = DateTime.now();
       await _isar.monthlyBudgets.put(budget);
     });

@@ -115,4 +115,104 @@ void main() {
       expect(result.isDegraded, isFalse);
     });
   });
+
+  group('month states (T029, quickstart V1)', () {
+    // A 1 USD amount converted for a past month takes whichever table governs
+    // that month: the seal when one exists, otherwise the live table, otherwise
+    // the bundled baseline. The state is carried through the table's source.
+    const amount = Money(100, CurrencyCode.usd);
+
+    RateTable seal(
+      RateSource source, {
+      bool stale = false,
+    }) =>
+        RateTable(
+          usdRates: const {
+            CurrencyCode.usd: 1.0,
+            CurrencyCode.eur: 0.86,
+            CurrencyCode.huf: 345.0,
+            CurrencyCode.cad: 1.36,
+          },
+          asOf: DateTime(2026, 1, 31),
+          fetchedAt: DateTime(2026, 2, 1),
+          source: source,
+          isStale: stale,
+        );
+
+    test('sealed month reads its historical seal', () {
+      final registry = RateTableRegistry(
+        sealedTables: {'2026-01': seal(RateSource.historical)},
+        liveTable: seal(RateSource.live),
+      );
+
+      final result = registry.convert(
+        amount: amount,
+        to: CurrencyCode.huf,
+        yearMonth: '2026-01',
+      );
+
+      expect(result.source, RateSource.historical);
+      expect(result.isDegraded, isFalse);
+      expect(result.isStale, isFalse);
+    });
+
+    test('provisional month reads its lastKnown seal, not the live table', () {
+      final registry = RateTableRegistry(
+        sealedTables: {'2026-01': seal(RateSource.lastKnown)},
+        liveTable: seal(RateSource.live),
+      );
+
+      final result = registry.convert(
+        amount: amount,
+        to: CurrencyCode.huf,
+        yearMonth: '2026-01',
+      );
+
+      expect(result.source, RateSource.lastKnown);
+      expect(result.isDegraded, isFalse);
+    });
+
+    test('an approximate month reads its frozen bundled seal', () {
+      final registry = RateTableRegistry(
+        sealedTables: {'2026-01': seal(RateSource.bundled)},
+        liveTable: seal(RateSource.live),
+      );
+
+      final result = registry.convert(
+        amount: amount,
+        to: CurrencyCode.huf,
+        yearMonth: '2026-01',
+      );
+
+      expect(result.source, RateSource.bundled);
+    });
+
+    test('the open month reads the fresh live table', () {
+      final registry = RateTableRegistry(
+        liveTable: seal(RateSource.live),
+      );
+
+      final result = registry.convert(
+        amount: amount,
+        to: CurrencyCode.huf,
+        yearMonth: '2026-02',
+      );
+
+      expect(result.source, RateSource.live);
+      expect(result.isDegraded, isFalse);
+    });
+
+    test('the open month offline falls back to the bundled baseline', () {
+      final registry = RateTableRegistry();
+
+      final result = registry.convert(
+        amount: amount,
+        to: CurrencyCode.huf,
+        yearMonth: '2026-02',
+      );
+
+      expect(result.source, RateSource.bundled);
+      expect(result.isDegraded, isFalse);
+    });
+  });
 }

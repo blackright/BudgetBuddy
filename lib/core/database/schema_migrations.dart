@@ -1,5 +1,6 @@
 import 'package:isar/isar.dart';
 
+import '../models/currency_code.dart';
 import '../models/expense.dart';
 import '../models/insurance_profile.dart';
 import '../models/medical_service_type.dart';
@@ -12,7 +13,7 @@ part 'schema_migrations.g.dart';
 
 /// Schema version this build expects. Bump whenever a numbered step is added to
 /// [_applySteps]; databases stamped at or above it are left untouched.
-const int schemaVersion = 9;
+const int schemaVersion = 10;
 
 const String schemaVersionKey = 'schema_version';
 
@@ -99,6 +100,48 @@ Future<void> _applySteps(Isar isar) async {
   await _step7NormalizePlanNames(isar);
   await _step8AddCurrencySealCollections(isar);
   await _step9ConvertAmountsToMinorUnits(isar);
+  await _step10ReconcileCurrencyDefaults(isar);
+}
+
+/// Step 10 (FR-009, FR-010, FR-011, data-model §4.2/§6) — reconcile the old,
+/// divergent currency defaults onto the new single model.
+///
+/// The retired build stored a month's currency as a `PrimaryCurrency` enum
+/// written by whichever path ran last (dashboard vs the dead settings seed),
+/// and scattered `?? USD` fallbacks. The new model makes the **profile** the
+/// single source of a main currency (default HUF) and re-labels
+/// `MonthlyBudget.currency` as a display-only, per-month convert-to choice.
+///
+/// `MonthlyBudget.currency` is now a nullable code string. This step sanitises
+/// whatever a prior build left behind:
+/// - a recognised code is normalised to its canonical lowercase form so a
+///   month's deliberate choice survives the upgrade unchanged;
+/// - anything unrecognised (a legacy enum byte reinterpreted as a string, or a
+///   retired code) is **cleared** to `null`, so the month follows the profile
+///   main currency instead of pinning garbage.
+///
+/// No stored amount, rate or seal is touched — the field is display-only
+/// (FR-010, FR-021). Idempotent: a second run finds only canonical or null
+/// values and writes nothing.
+Future<void> _step10ReconcileCurrencyDefaults(Isar isar) async {
+  final budgets = await isar.monthlyBudgets.where().findAll();
+  if (budgets.isEmpty) return;
+
+  var changed = false;
+  for (final budget in budgets) {
+    final raw = budget.currency;
+    if (raw == null) continue;
+    final code = CurrencyCode.tryParse(raw);
+    if (code == null) {
+      budget.currency = null;
+      changed = true;
+    } else if (raw != code.name) {
+      budget.currency = code.name;
+      changed = true;
+    }
+  }
+
+  if (changed) await isar.monthlyBudgets.putAll(budgets);
 }
 
 /// Step 8 (multi-currency, data-model §6) — additive only: the `MonthRateSeal`
@@ -218,7 +261,8 @@ class MoneyMigrationReport {
 /// Each amount is scaled to whole minor units with round-half-away-from-zero —
 /// the same single rounding rule the rest of the app uses — and flagged [lossy]
 /// when the stored `double` did not survive that rounding exactly.
-MoneyMigrationReport buildMoneyMigrationReport(Iterable<LegacyMoneyAmount> rows) {
+MoneyMigrationReport buildMoneyMigrationReport(
+    Iterable<LegacyMoneyAmount> rows) {
   final entries = <MoneyMigrationEntry>[];
   for (final row in rows) {
     final scaled = row.majorUnits * row.minorUnitsPerMajor;

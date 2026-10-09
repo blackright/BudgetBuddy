@@ -82,7 +82,7 @@ class MonthSummaryDetails extends ConsumerWidget {
     );
   }
 
-  String _money(double amount) => MedicalTheme.money(currency, amount);
+  String _money(double amount) => MedicalTheme.moneyMajor(currency, amount);
 }
 
 /// One labelled detail amount, optionally tappable.

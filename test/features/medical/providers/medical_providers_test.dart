@@ -1,5 +1,7 @@
+import 'package:budget_buddy/core/models/currency_code.dart';
 import 'package:budget_buddy/core/models/expense.dart';
 import 'package:budget_buddy/core/models/medical_bill.dart';
+import 'package:budget_buddy/core/models/money.dart';
 import 'package:budget_buddy/features/medical/providers/medical_providers.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -7,6 +9,26 @@ import 'package:flutter_test/flutter_test.dart';
 /// These need no Isar instance because they only read the bill objects handed
 /// to them plus the joined expense statuses.
 void main() {
+  // Bills in these tests carry no currency code, so they are treated as the
+  // display currency and the converter is the identity (no FX).
+  PatientShareTotals totalsOf(List<MedicalBill> bills) =>
+      PatientShareTotals.from(
+        bills,
+        display: CurrencyCode.usd,
+        convert: (amount) => amount,
+      );
+
+  MedicalBudgetImpact impactOf(
+    List<MedicalBill> bills, {
+    Map<int, ExpenseStatus> expenseStatuses = const {},
+  }) =>
+      MedicalBudgetImpact.from(
+        bills,
+        display: CurrencyCode.usd,
+        convert: (amount) => amount,
+        expenseStatuses: expenseStatuses,
+      );
+
   /// A bill with the US2 model in mind: a 20% patient share is the default, so
   /// most tests only vary what they actually care about.
   MedicalBill bill({
@@ -33,7 +55,7 @@ void main() {
 
   group('PatientShareTotals', () {
     test('no bills yields an empty aggregate', () {
-      final totals = PatientShareTotals.from(const []);
+      final totals = totalsOf(const []);
 
       expect(totals.isEmpty, isTrue);
       expect(totals.billCount, 0);
@@ -46,7 +68,7 @@ void main() {
 
     test('FR-048: the share is the user\'s, so 1000 at 20% leaves them 200',
         () {
-      final totals = PatientShareTotals.from([bill(billed: 1000)]);
+      final totals = totalsOf([bill(billed: 1000)]);
 
       expect(totals.billedTotal, 1000);
       expect(totals.patientShareTotal, 200);
@@ -56,7 +78,7 @@ void main() {
     });
 
     test('the split accumulates across every bill in the month', () {
-      final totals = PatientShareTotals.from([
+      final totals = totalsOf([
         bill(id: 1, billed: 1000, expenseId: 1),
         bill(id: 2, billed: 500, expenseId: 2),
       ]);
@@ -68,7 +90,7 @@ void main() {
     });
 
     test('a self-paid bill still shows the share arithmetic', () {
-      final totals = PatientShareTotals.from([
+      final totals = totalsOf([
         bill(
           billed: 1000,
           method: MedicalPaymentMethod.selfPaid,
@@ -83,7 +105,7 @@ void main() {
     });
 
     test('a reimbursement reduces the net cost but not the original share', () {
-      final totals = PatientShareTotals.from([
+      final totals = totalsOf([
         bill(billed: 1000, reimbursed: 800, state: MedicalBillState.finished),
       ]);
 
@@ -95,7 +117,7 @@ void main() {
 
     test('FR-037: there is no deductible limit, so nothing is ever excluded',
         () {
-      final totals = PatientShareTotals.from([
+      final totals = totalsOf([
         bill(id: 1, billed: 1000, expenseId: 1),
         bill(id: 2, billed: 1000, familyMemberId: 7, expenseId: 2),
       ]);
@@ -110,7 +132,7 @@ void main() {
 
   group('MedicalBudgetImpact', () {
     test('planned bills are not yet a budget cost (FR-004)', () {
-      final impact = MedicalBudgetImpact.from(
+      final impact = impactOf(
         [bill(billed: 1000)],
         expenseStatuses: const {100: ExpenseStatus.planned},
       );
@@ -122,7 +144,7 @@ void main() {
     });
 
     test('FR-042: an insurer-paid bill costs only the patient share', () {
-      final impact = MedicalBudgetImpact.from(
+      final impact = impactOf(
         [bill(billed: 1000)],
         expenseStatuses: const {100: ExpenseStatus.paid},
       );
@@ -137,7 +159,7 @@ void main() {
     });
 
     test('FR-042: a self-paid bill costs the full charge', () {
-      final impact = MedicalBudgetImpact.from(
+      final impact = impactOf(
         [
           bill(
             billed: 1000,
@@ -153,7 +175,7 @@ void main() {
     });
 
     test('a planned bill never costs anything, whatever the method', () {
-      final impact = MedicalBudgetImpact.from(
+      final impact = impactOf(
         [
           bill(
             billed: 1000,
@@ -170,7 +192,7 @@ void main() {
     });
 
     test('FR-034: a reimbursement cuts the net cost back to the share', () {
-      final impact = MedicalBudgetImpact.from(
+      final impact = impactOf(
         [
           bill(
             billed: 1000,
@@ -186,7 +208,7 @@ void main() {
     });
 
     test('a rejected insurer-paid bill falls back to the full charge', () {
-      final impact = MedicalBudgetImpact.from(
+      final impact = impactOf(
         [bill(billed: 1000, state: MedicalBillState.rejected)],
         expenseStatuses: const {100: ExpenseStatus.paid},
       );
@@ -196,7 +218,7 @@ void main() {
     });
 
     test('cancelled expenses leave the budget untouched', () {
-      final impact = MedicalBudgetImpact.from(
+      final impact = impactOf(
         [bill(billed: 1000)],
         expenseStatuses: const {100: ExpenseStatus.cancelled},
       );
@@ -209,7 +231,7 @@ void main() {
     test('a bill with no linked expense contributes nothing to the budget', () {
       final unbudgeted = bill(billed: 1000)..linkedExpenseId = null;
 
-      final impact = MedicalBudgetImpact.from([unbudgeted]);
+      final impact = impactOf([unbudgeted]);
 
       expect(impact.paidTotal, 0);
       expect(impact.netOutOfPocket, 0);
@@ -217,7 +239,7 @@ void main() {
     });
 
     test('planned and paid bills are tracked separately in one view', () {
-      final impact = MedicalBudgetImpact.from(
+      final impact = impactOf(
         [
           bill(id: 1, billed: 1000, expenseId: 1),
           bill(
@@ -244,7 +266,7 @@ void main() {
     });
 
     test('an empty list is all zeroes', () {
-      final impact = MedicalBudgetImpact.from(const []);
+      final impact = impactOf(const []);
       expect(impact.plannedTotal, 0);
       expect(impact.paidTotal, 0);
       expect(impact.netOutOfPocket, 0);
@@ -364,6 +386,55 @@ void main() {
         ).canBeReimbursed,
         isTrue,
       );
+    });
+  });
+
+  group('T-R06 cross-currency aggregates', () {
+    // EUR bills converted into the USD display currency at 1 EUR = 1.2 USD.
+    Money toUsd(Money amount) => amount.currency == CurrencyCode.eur
+        ? Money((amount.minorUnits * 1.2).round(), CurrencyCode.usd)
+        : amount;
+
+    MedicalBill eurBill() => MedicalBill()
+      ..id = 1
+      ..billedAmount = 1000
+      ..currency = CurrencyCode.eur.name
+      ..patientSharePercent = 20
+      ..state = MedicalBillState.waiting
+      ..linkedExpenseId = 100
+      ..serviceDate = DateTime(2026, 1, 10);
+
+    test('a non-HUF bill is converted into the display currency', () {
+      final totals = PatientShareTotals.from(
+        [eurBill()],
+        display: CurrencyCode.usd,
+        convert: toUsd,
+      );
+
+      // 1000 EUR minor -> 1200 USD minor; 20% share -> 240.
+      expect(totals.billedTotal, 1200);
+      expect(totals.patientShareTotal, 240);
+      expect(totals.insurerPaidTotal, 960);
+    });
+
+    test('a mixed-currency month sums through the conversion path', () {
+      final usd = MedicalBill()
+        ..id = 2
+        ..billedAmount = 1000
+        ..currency = CurrencyCode.usd.name
+        ..patientSharePercent = 20
+        ..state = MedicalBillState.waiting
+        ..linkedExpenseId = 200
+        ..serviceDate = DateTime(2026, 1, 11);
+
+      final totals = PatientShareTotals.from(
+        [eurBill(), usd],
+        display: CurrencyCode.usd,
+        convert: toUsd,
+      );
+
+      expect(totals.billedTotal, 2200);
+      expect(totals.patientShareTotal, 440);
     });
   });
 
