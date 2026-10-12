@@ -7,24 +7,29 @@ import '../../../core/models/medical_bill.dart';
 import '../../../core/models/medical_service_type.dart';
 import '../../../core/models/money.dart';
 import '../../../core/network/rate_types.dart';
+import '../../../core/providers/budget_context_provider.dart';
 import '../../../core/services/reminder_notification_service.dart';
 import '../../engine/currency_resolution.dart';
 import '../../engine/expense_delta.dart';
 import '../../engine/providers/rate_registry_provider.dart';
 import '../../expenses/models/reimbursement.dart';
+import '../../spaces/repositories/space_write_guard.dart';
 
 /// Budget-scoped inputs needed to keep a [MedicalBill] and its linked [Expense]
-/// consistent. Supplied by the UI layer from the active profile + budget.
+/// consistent. Supplied by the UI layer from the active context.
 class MedicalBillContext {
   const MedicalBillContext({
     required this.profileId,
+    this.sharedSpaceId,
     required this.budgetId,
     required this.yearMonth,
     required this.primaryCurrency,
     this.rateTable,
   });
 
+  /// Owning profile id, or `0` when the bill belongs to a shared space.
   final int profileId;
+  final int? sharedSpaceId;
   final int budgetId;
 
   /// `YYYY-MM` of the active budget, stored on the linked expense so the
@@ -93,8 +98,14 @@ class ReimbursedBillDeletionException implements Exception {
 /// - Injects/removes the [Reimbursement] row that moves `trueAvailable`
 ///   (FR-004, FR-005).
 class MedicalRepository {
-  MedicalRepository(this._isar, {RateTableRegistry? rateRegistry})
-      : _rateRegistry = rateRegistry;
+  MedicalRepository(
+    this._isar, {
+    RateTableRegistry? rateRegistry,
+    SpaceWriteGuard? guard,
+    int? actingProfileId,
+  })  : _rateRegistry = rateRegistry,
+        _writeGuard = guard,
+        _actingProfileId = actingProfileId;
 
   /// Matches the seeded `Category` with `categoryId == 'health'`.
   static const String medicalCategoryId = 'health';
@@ -105,6 +116,19 @@ class MedicalRepository {
   /// bundled fallback is used via a registry built from nothing.
   final RateTableRegistry? _rateRegistry;
 
+  /// Optional role guard + acting profile: when present, every shared bill or
+  /// reimbursement write is refused for a Viewer or a sealed month (US4).
+  final SpaceWriteGuard? _writeGuard;
+  final int? _actingProfileId;
+
+  Future<void> _guardWrite(int? sharedSpaceId, String yearMonth) async {
+    await _writeGuard?.assertSharedMoneyWrite(
+      sharedSpaceId: sharedSpaceId,
+      actingProfileId: _actingProfileId,
+      yearMonth: yearMonth,
+    );
+  }
+
   // ---------------------------------------------------------------------------
   // Reactive reads
   // ---------------------------------------------------------------------------
@@ -113,11 +137,19 @@ class MedicalRepository {
   ///
   /// Month-scoped rather than year-scoped because a bill's money impact lands in
   /// exactly one month's totals (FR-055, FR-056).
-  Stream<List<MedicalBill>> watchMedicalBills(int profileId, String yearMonth) {
+  /// Bills belonging to [context]'s month — the context-scoped route (R3,
+  /// data-model §3.5): `profileIdEqualTo` for personal, `sharedSpaceIdEqualTo`
+  /// for shared.
+  Stream<List<MedicalBill>> watchMedicalBillsForContext(ContextRef context) {
     return _isar.medicalBills
         .filter()
-        .profileIdEqualTo(profileId)
-        .yearMonthEqualTo(yearMonth)
+        .group(
+          (q) => context.isShared
+              ? q.sharedSpaceIdEqualTo(context.spaceId)
+              : q.profileIdEqualTo(context.profileKey),
+        )
+        .and()
+        .yearMonthEqualTo(context.yearMonth)
         .sortByServiceDateDesc()
         .watch(fireImmediately: true);
   }
@@ -126,26 +158,44 @@ class MedicalRepository {
     return _isar.medicalBills.watchObject(id, fireImmediately: true);
   }
 
-  Stream<InsuranceProfile?> watchInsuranceProfile(int profileId) {
+  Stream<InsuranceProfile?> watchInsuranceProfileForContext(
+      ContextRef context) {
     return _isar.insuranceProfiles
         .filter()
-        .profileIdEqualTo(profileId)
+        .group(
+          (q) => context.isShared
+              ? q.sharedSpaceIdEqualTo(context.spaceId)
+              : q.profileIdEqualTo(context.profileKey),
+        )
         .watch(fireImmediately: true)
-        .map((rows) => _pickProfile(rows, profileId));
+        .map((rows) => rows.isEmpty
+            ? null
+            : context.isShared
+                ? rows.first
+                : _pickProfile(rows, context.profileKey));
   }
 
-  Stream<List<FamilyMember>> watchFamilyMembers(int profileId) {
+  Stream<List<FamilyMember>> watchFamilyMembersForContext(ContextRef context) {
     return _isar.familyMembers
         .filter()
-        .profileIdEqualTo(profileId)
+        .group(
+          (q) => context.isShared
+              ? q.sharedSpaceIdEqualTo(context.spaceId)
+              : q.profileIdEqualTo(context.profileKey),
+        )
         .sortByName()
         .watch(fireImmediately: true);
   }
 
-  Stream<List<MedicalProvider>> watchMedicalProviders(int profileId) {
+  Stream<List<MedicalProvider>> watchMedicalProvidersForContext(
+      ContextRef context) {
     return _isar.medicalProviders
         .filter()
-        .profileIdEqualTo(profileId)
+        .group(
+          (q) => context.isShared
+              ? q.sharedSpaceIdEqualTo(context.spaceId)
+              : q.profileIdEqualTo(context.profileKey),
+        )
         .sortByName()
         .watch(fireImmediately: true);
   }
@@ -228,10 +278,12 @@ class MedicalRepository {
     MedicalBillContext context, {
     ExpenseStatus? status,
   }) async {
+    await _guardWrite(context.sharedSpaceId, context.yearMonth);
     _validateBill(bill);
 
     bill
       ..serviceDate ??= DateTime.now()
+      ..sharedSpaceId ??= context.sharedSpaceId
       ..profileId ??= context.profileId
       ..patientSharePercent = bill.patientSharePercent.clamp(0.0, 100.0);
 
@@ -255,6 +307,8 @@ class MedicalRepository {
     if (expenseId == null) {
       throw StateError('Bill ${bill.id} has no linked expense to pay.');
     }
+    await _guardWrite(
+        bill.sharedSpaceId ?? context.sharedSpaceId, bill.yearMonth);
     final stored = await _isar.expenses.get(expenseId);
     if (stored == null) {
       throw StateError('Linked expense $expenseId no longer exists.');
@@ -308,6 +362,8 @@ class MedicalRepository {
     MedicalBillContext? context,
     int? reimbursedAmount,
   }) async {
+    await _guardWrite(
+        bill.sharedSpaceId ?? context?.sharedSpaceId, bill.yearMonth);
     _validateTransition(bill, state);
 
     if (state == MedicalBillState.finished && bill.canBeReimbursed) {
@@ -358,6 +414,9 @@ class MedicalRepository {
   }) async {
     if (bill.paymentMethod == method) return;
 
+    await _guardWrite(
+        bill.sharedSpaceId ?? context?.sharedSpaceId, bill.yearMonth);
+
     await _isar.writeTxn(() async {
       final becomesInsurerPaid = method == MedicalPaymentMethod.insurerPaid;
       if (becomesInsurerPaid) {
@@ -384,6 +443,7 @@ class MedicalRepository {
 
   Future<void> updateMedicalBillReimbursement(
       MedicalBill bill, int totalReimbursed) async {
+    await _guardWrite(bill.sharedSpaceId, bill.yearMonth);
     await _isar.writeTxn(() async {
       bill
         ..reimbursedAmount = totalReimbursed
@@ -413,6 +473,7 @@ class MedicalRepository {
         'must be greater than zero',
       );
     }
+    await _guardWrite(bill.sharedSpaceId, bill.yearMonth);
     // FR-044 / R-1: an insurer-paid bill is settled with the provider, so there
     // is no payout to record. Refuse before touching the budget rather than
     // silently injecting money that was never coming.
@@ -446,6 +507,7 @@ class MedicalRepository {
         await _isar.reimbursements.put(
           Reimbursement(
             profileId: bill.profileId ?? expense.profileId,
+            sharedSpaceId: bill.sharedSpaceId ?? expense.sharedSpaceId,
             expenseId: expenseId,
             amount: amount,
             currency: expense.currency,
@@ -528,6 +590,8 @@ class MedicalRepository {
     final bill = await _isar.medicalBills.get(billId);
     if (bill == null) return;
 
+    await _guardWrite(bill.sharedSpaceId, bill.yearMonth);
+
     if (!force && bill.reimbursedAmount > 0) {
       throw ReimbursedBillDeletionException(billId, bill.reimbursedAmount);
     }
@@ -553,6 +617,21 @@ class MedicalRepository {
     return _isar.medicalServiceTypes
         .filter()
         .profileIdEqualTo(profileId)
+        .sortBySortOrder()
+        .thenByName()
+        .watch(fireImmediately: true);
+  }
+
+  /// Context-scoped variant for `watchServiceTypes` (R3, data-model §3.6).
+  Stream<List<MedicalServiceType>> watchServiceTypesForContext(
+      ContextRef context) {
+    return _isar.medicalServiceTypes
+        .filter()
+        .group(
+          (q) => context.isShared
+              ? q.sharedSpaceIdEqualTo(context.spaceId)
+              : q.profileIdEqualTo(context.profileKey),
+        )
         .sortBySortOrder()
         .thenByName()
         .watch(fireImmediately: true);
@@ -888,6 +967,7 @@ class MedicalRepository {
     final expense = stored ??
         Expense(
           profileId: context.profileId,
+          sharedSpaceId: context.sharedSpaceId,
           yearMonth: bill.yearMonth,
           title: title,
           amount: bill.fundsImpact,
@@ -899,6 +979,7 @@ class MedicalRepository {
 
     expense
       ..profileId = context.profileId
+      ..sharedSpaceId = context.sharedSpaceId
       // O2 — mirrored in the same transaction, never independently derived.
       ..yearMonth = bill.yearMonth
       ..budgetId = context.budgetId
@@ -951,6 +1032,7 @@ class MedicalRepository {
     if (expense == null) return null;
     return MedicalBillContext(
       profileId: expense.profileId,
+      sharedSpaceId: expense.sharedSpaceId,
       budgetId: expense.budgetId,
       yearMonth: expense.yearMonth,
       primaryCurrency: expense.currency,

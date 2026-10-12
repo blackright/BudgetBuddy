@@ -31,127 +31,154 @@ Halt immediately. Present your full analysis and the draft spec preview. Do not 
 [RAW INPUT SPECIFICATION START]
 {{
 
-Feature Specification: Multi‑Currency System (Unified)
+Feature Specification: Multi‑User Profiles & Shared Financial Spaces (Unified)
 
 ## Purpose
-Provide full multi‑currency support across the entire application, including:
-- Supported currencies
-- Currency conversion engine
-- Primary currency selection
-- Consistent cross‑module currency behavior
-- Real‑time conversion for dashboard, expenses, medical bills, reimbursements, and analytics
+Provide a complete multi‑user system that supports:
+- Multiple personal profiles on one device
+- Shared financial spaces where multiple users collaborate
+- Shared income + shared expenses
+- Personal income + personal expenses
+- Full data isolation between personal and shared contexts
+- Instant switching between profiles and shared spaces
 
-This module ensures the app works seamlessly for users handling multiple currencies.
+This module enables couples, families, roommates, or business partners to manage finances together while still keeping personal finances separate.
 
 ## Sub‑Features Included
-1. Supported Currencies (HUF, USD, CAD, EUR)
-2. Currency Conversion Engine
-3. Primary Currency Selection
+1. Create Personal Profile
+2. Create Shared Financial Space
+3. Switch Between Personal Profile and Shared Space
+4. User‑Scoped Data Isolation
+5. Shared Data Synchronization
 
 ## Entities Involved
-- UserProfile (primaryCurrency)
-- CurrencyRate (local cache)
+- UserProfile (personal)
+- SharedSpace (group)
+- SharedMember (link table)
 - Expense
 - MedicalBill
 - Reimbursement
+- CurrencyRate
+- Settings
 
-## Supported Currencies
-- HUF (default)
-- USD
-- CAD
-- EUR
+## Personal Profile Fields
+- id (string)
+- name (string)
+- avatar (string or emoji)
+- primaryCurrency (enum)
+- monthlyAvailableAmount (decimal)
+- createdAt (datetime)
+- lastActiveAt (datetime)
+
+## SharedSpace Fields
+- id (string)
+- name (string)
+- avatar (emoji or icon)
+- primaryCurrency (enum)
+- sharedMonthlyIncome (decimal)
+- createdAt (datetime)
+
+## SharedMember Fields
+- id (string)
+- sharedSpaceId (string)
+- userProfileId (string)
+- role (enum: owner, member)
+- joinedAt (datetime)
 
 ## Core Rules
-- Every financial entry must store its original currency.
-- All calculations (availableAmount, analytics, charts) must convert values into the user’s primaryCurrency.
-- Conversion must be deterministic and offline‑first.
-- Conversion rates must be cached locally.
-- If offline:
-  - Use last known conversion rates.
-- If online:
-  - Refresh conversion rates once per day.
 
-## Currency Conversion Engine
+### Personal Profiles
+- Fully isolated data
+- Personal expenses, medical bills, reimbursements belong only to that user
+- Personal monthlyAvailableAmount is independent
 
-### Inputs
-- amount (decimal)
-- fromCurrency (enum)
-- toCurrency (enum)
-- conversionRates (local cache)
+### Shared Spaces
+- All members see the same shared expenses, shared medical bills, shared reimbursements
+- Shared monthly income is used to compute shared availableAmount
+- Shared expenses reduce shared availableAmount
+- Shared reimbursements increase shared availableAmount
+- Shared currency settings apply to all members
 
-### Outputs
-- convertedAmount (decimal)
+### Switching Context
+- User can switch between:
+  - Personal Profile
+  - Any Shared Space they belong to
+- Switching context reloads:
+  - expenses
+  - medical bills
+  - reimbursements
+  - dashboard values
+  - analytics
+  - currency settings
 
-### Formula
-convertedAmount = amount * rate[fromCurrency → toCurrency]
+### Data Isolation Rules
+- Personal data is visible only in personal profile
+- Shared data is visible only inside shared space
+- No cross‑contamination
+- All queries must filter by:
+  - userId (personal)
+  - sharedSpaceId (shared)
 
-### Requirements
-- Must support all 12 conversion pairs:
-  - HUF ↔ USD
-  - HUF ↔ CAD
-  - HUF ↔ EUR
-  - USD ↔ CAD
-  - USD ↔ EUR
-  - CAD ↔ EUR
-- Must store:
-  - rate
-  - lastUpdatedAt
+### Shared Expense Logic
+- Shared expenses behave exactly like personal expenses
+- But they belong to sharedSpaceId instead of userId
+- Status flow identical:
+  - planned → paid → reimbursed → cancelled
+- Reimbursements increase shared availableAmount
 
-### Error Conditions
-- missing rate → fallback to last known rate
-- invalid currency → reject
-- negative amount → reject
-
-## Primary Currency Selection
-
-### UserProfile Field
-- primaryCurrency (enum)
-
-### Rules
-- Default = HUF
-- Changing primaryCurrency triggers:
-  - full recalculation of availableAmount
-  - full recalculation of dashboard values
-  - full recalculation of analytics
-- All screens must update instantly.
+### Shared Medical Bill Logic
+- Same as personal medical bills
+- Insurance logic applies normally
+- Reimbursements increase shared availableAmount
 
 ## UI Requirements
 
-### Currency Settings Screen
+### Profile & Shared Space Switcher
 User can:
-- Select primary currency
-- View last updated conversion rates
-- Manually refresh rates
-- View conversion table
+- View personal profile
+- View all shared spaces they belong to
+- Switch between them instantly
+- Create new shared space
+- Invite members (local-only for now)
+- Edit shared space name/avatar
+- Leave shared space (unless owner)
 
-### Expense Creation / Editing
-- User selects currency
-- Amount displayed in original currency
-- Dashboard displays converted amount
+### Shared Space Dashboard
+Shows:
+- shared availableAmount
+- shared expenses
+- shared medical bills
+- shared reimbursements
+- shared analytics
 
-### Medical Bill Creation / Editing
-- Same behavior as expenses
-- Insurance calculations use original currency
-- Dashboard uses converted currency
+### Personal Dashboard
+Shows:
+- personal availableAmount
+- personal expenses
+- personal medical bills
+- personal reimbursements
+- personal analytics
 
-### Reimbursement Entry
-- Reimbursement amount stored in original currency
-- Dashboard uses converted currency
+### Shared Expense Screens
+- identical to personal expense screens
+- but scoped to sharedSpaceId
+
+### Shared Medical Bill Screens
+- identical to personal medical bill screens
+- but scoped to sharedSpaceId
 
 ## Navigation
 Accessible from:
-- Settings → Currency Settings
-- Dashboard (converted values)
-- Expense List
-- Medical Bill List
-- Analytics
+- Settings → Profiles & Shared Spaces
+- Dashboard (profile/shared avatar button)
+- Onboarding (first profile creation)
 
 ## Non‑Functional Requirements
 - Offline‑first
-- Deterministic conversion
-- Fast recalculation
+- Instant context switching
+- Deterministic data isolation
 - Local persistence (Drift)
-- Daily rate refresh (optional)
+- Shared data consistency
 
 
 }}

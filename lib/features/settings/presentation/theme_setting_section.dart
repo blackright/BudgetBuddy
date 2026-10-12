@@ -57,9 +57,10 @@ class ThemeSettingSection extends ConsumerWidget {
                   }).toList(),
                   onChanged: (AppThemeMode? newValue) async {
                     if (newValue != null && newValue != profile.themeMode) {
-                      await ref
-                          .read(appThemeControllerProvider)
-                          .setThemeMode(newValue);
+                      await ref.read(appThemeControllerProvider).setThemeMode(
+                            newValue,
+                            profileId: profile.id,
+                          );
                     }
                   },
                 ),

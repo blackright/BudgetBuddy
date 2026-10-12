@@ -15,6 +15,7 @@ import '../../engine/currency_resolution.dart';
 import '../../engine/providers/rate_registry_provider.dart';
 import '../../engine/providers/safe_to_spend_provider.dart';
 import '../../settings/providers/settings_provider.dart';
+import '../../spaces/providers/spaces_providers.dart';
 import '../providers/category_provider.dart';
 import '../providers/expenses_provider.dart';
 import 'widgets/reimbursement_entry_sheet.dart' as entry;
@@ -80,6 +81,9 @@ class _ActionBar extends ConsumerWidget {
     final isPaid = expense.status == ExpenseStatus.paid ||
         expense.status == ExpenseStatus.partiallyReimbursed ||
         expense.status == ExpenseStatus.reimbursed;
+    final canEdit = ref.watch(activeContextCanEditProvider);
+
+    if (!canEdit) return const SizedBox.shrink();
 
     return Column(
       children: [

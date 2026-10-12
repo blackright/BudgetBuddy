@@ -11,6 +11,12 @@ class Reimbursement {
   @Index()
   int profileId;
 
+  /// Owning shared space, or `null` for a personal reimbursement. Exactly one of
+  /// [profileId] / [sharedSpaceId] is set (FR-003, data-model §3.4). Credit
+  /// always goes to the row's `originYearMonth` in this context.
+  @Index()
+  int? sharedSpaceId;
+
   /// Target expense or medical bill's linked expense. `null` means the target
   /// was deleted; the row is retained, flagged and surfaced to the user
   /// (FR-035).
@@ -41,6 +47,7 @@ class Reimbursement {
   Reimbursement({
     this.id = Isar.autoIncrement,
     required this.profileId,
+    this.sharedSpaceId,
     this.expenseId,
     required this.originYearMonth,
     this.orphaned = false,

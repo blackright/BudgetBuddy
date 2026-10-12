@@ -13,7 +13,7 @@ part 'schema_migrations.g.dart';
 
 /// Schema version this build expects. Bump whenever a numbered step is added to
 /// [_applySteps]; databases stamped at or above it are left untouched.
-const int schemaVersion = 11;
+const int schemaVersion = 13;
 
 const String schemaVersionKey = 'schema_version';
 
@@ -102,6 +102,8 @@ Future<void> _applySteps(Isar isar) async {
   await _step9ConvertAmountsToMinorUnits(isar);
   await _step10ReconcileCurrencyDefaults(isar);
   await _step11AddThemePreference(isar);
+  await _step12AddSpacesAndContextColumns(isar);
+  await _step13BackfillContextOwnership(isar);
 }
 
 /// Step 10 (FR-009, FR-010, FR-011, data-model §4.2/§6) — reconcile the old,
@@ -156,6 +158,179 @@ Future<void> _step10ReconcileCurrencyDefaults(Isar isar) async {
 /// default (T059).
 Future<void> _step11AddThemePreference(Isar isar) async {
   // Intentionally empty: additive schema only — see doc comment.
+}
+
+/// Step 12 (011-shared-financial-spaces, data-model §7) — additive only: the
+/// `SharedSpace` and `SharedMember` collections appear, money rows gain nullable
+/// context columns (`profileId`/`sharedSpaceId`/`sharedIncomeOverride`) and
+/// `UserProfile` gains `avatar`/`lastActiveAt`.
+///
+/// Isar reconciles the stored schema on open, so new collections and columns
+/// materialise with their declared defaults before this runs; there is no data
+/// to rewrite. Every existing money row is all-null-context here; step 13
+/// backfills the personal profile after this step ships.
+Future<void> _step12AddSpacesAndContextColumns(Isar isar) async {
+  // Intentionally empty: additive schema only — see doc comment.
+}
+
+/// Step 13 (011-shared-financial-spaces) — backfill ownership so every money
+/// row satisfies the exactly-one-context invariant (FR-003, data-model §3).
+///
+/// Picks the single personal profile (creating the legacy id-1 'User' row when
+/// none exists) and assigns it to every all-null-context money row that has no
+/// way to resolve a space: `MonthlyBudget`, `Expense`, `Reimbursement`,
+/// `MedicalBill` and the medical directory. A `MedicalBill` that links to an
+/// expense first tries that expense's context, then falls back to the legacy
+/// profile (`_pickProfile` semantics, medical_repository.dart). Idempotent:
+/// rows already carrying a context are left untouched, so a second run writes
+/// nothing.
+///
+/// No monetary amount, seal or month total is rewritten — SC-003's byte-identical
+/// clause (the backfill touches ownership columns only).
+Future<void> _step13BackfillContextOwnership(Isar isar) async {
+  // A database with nothing to own must not fabricate a legacy profile:
+  // resetLocalDatabase clears every collection and re-runs these steps on an
+  // empty database, which must stay empty of profiles too.
+  final hasRows = await isar.monthlyBudgets.count() > 0 ||
+      await isar.expenses.count() > 0 ||
+      await isar.reimbursements.count() > 0 ||
+      await isar.medicalBills.count() > 0 ||
+      await isar.insuranceProfiles.count() > 0 ||
+      await isar.familyMembers.count() > 0 ||
+      await isar.medicalProviders.count() > 0 ||
+      await isar.medicalServiceTypes.count() > 0;
+  if (!hasRows) return;
+
+  final profileId = await _legacyProfileId(isar);
+
+  final budgets = await isar.monthlyBudgets.where().findAll();
+  for (final budget in budgets) {
+    if (budget.profileId == null && budget.sharedSpaceId == null) {
+      budget.profileId = profileId;
+    }
+  }
+  if (budgets.isNotEmpty) await isar.monthlyBudgets.putAll(budgets);
+
+  final expenses = await isar.expenses.where().findAll();
+  var changed = false;
+  for (final expense in expenses) {
+    if (expense.sharedSpaceId == null && expense.profileId == 0) {
+      expense.profileId = profileId;
+      changed = true;
+    }
+  }
+  if (changed) await isar.expenses.putAll(expenses);
+
+  await _backfillReimbursementContext(isar, profileId);
+  await _backfillMedicalContext(isar, profileId);
+  await _backfillDirectoryContext(isar, profileId);
+}
+
+/// The single legacy personal profile: the lowest-id `UserProfile`, created as
+/// the id-1 'User' row when none exists (data-model §7, migration step 13).
+Future<int> _legacyProfileId(Isar isar) async {
+  final profiles = await isar.userProfiles.where().findAll();
+  if (profiles.isNotEmpty) {
+    profiles.sort((a, b) => a.id.compareTo(b.id));
+    return profiles.first.id;
+  }
+  final now = DateTime.now();
+  final legacy = UserProfile()
+    ..id = 1
+    ..name = 'User'
+    ..primaryCurrency = PrimaryCurrency.huf
+    ..monthlyAvailableAmount = 0.0
+    ..createdAt = now
+    ..updatedAt = now;
+  await isar.userProfiles.put(legacy);
+  return 1;
+}
+
+/// Assigns the legacy profile to every all-null-context reimbursement.
+Future<void> _backfillReimbursementContext(Isar isar, int profileId) async {
+  final rows = await isar.reimbursements.where().findAll();
+  if (rows.isEmpty) return;
+  var changed = false;
+  for (final row in rows) {
+    if (row.sharedSpaceId == null && row.profileId == 0) {
+      row.profileId = profileId;
+      changed = true;
+    }
+  }
+  if (changed) await isar.reimbursements.putAll(rows);
+}
+
+/// Assigns the legacy profile to every all-null-context medical bill,
+/// preferring the context of a linked expense when one exists.
+Future<void> _backfillMedicalContext(Isar isar, int profileId) async {
+  final bills = await isar.medicalBills.where().findAll();
+  if (bills.isEmpty) return;
+
+  final expenseIds =
+      bills.map((b) => b.linkedExpenseId).whereType<int>().toSet();
+  final expenses = await isar.expenses
+      .filter()
+      .anyOf(expenseIds.toList(), (q, id) => q.idEqualTo(id))
+      .findAll();
+  final byId = {for (final e in expenses) e.id: e};
+
+  var changed = false;
+  for (final bill in bills) {
+    if (bill.profileId != null || bill.sharedSpaceId != null) continue;
+    final expense =
+        bill.linkedExpenseId == null ? null : byId[bill.linkedExpenseId];
+    if (expense != null && expense.profileId != 0) {
+      bill.profileId = expense.profileId;
+    } else {
+      bill.profileId = profileId;
+    }
+    changed = true;
+  }
+  if (changed) await isar.medicalBills.putAll(bills);
+}
+
+/// Assigns the legacy profile to every all-null-context directory row
+/// (insurance profile, family member, provider, service type).
+Future<void> _backfillDirectoryContext(Isar isar, int profileId) async {
+  final insurance = await isar.insuranceProfiles.where().findAll();
+  var changed = false;
+  for (final row in insurance) {
+    if (row.profileId == null && row.sharedSpaceId == null) {
+      row.profileId = profileId;
+      changed = true;
+    }
+  }
+  if (changed) await isar.insuranceProfiles.putAll(insurance);
+
+  final members = await isar.familyMembers.where().findAll();
+  changed = false;
+  for (final row in members) {
+    if (row.profileId == null && row.sharedSpaceId == null) {
+      row.profileId = profileId;
+      changed = true;
+    }
+  }
+  if (changed) await isar.familyMembers.putAll(members);
+
+  final providers = await isar.medicalProviders.where().findAll();
+  changed = false;
+  for (final row in providers) {
+    if (row.profileId == null && row.sharedSpaceId == null) {
+      row.profileId = profileId;
+      changed = true;
+    }
+  }
+  if (changed) await isar.medicalProviders.putAll(providers);
+
+  final types = await isar.medicalServiceTypes.where().findAll();
+  changed = false;
+  for (final row in types) {
+    if (row.profileId == null && row.sharedSpaceId == null) {
+      row.profileId = profileId;
+      changed = true;
+    }
+  }
+  if (changed) await isar.medicalServiceTypes.putAll(types);
 }
 
 /// Step 8 (multi-currency, data-model §6) — additive only: the `MonthRateSeal`

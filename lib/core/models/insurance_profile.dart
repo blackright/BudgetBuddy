@@ -15,6 +15,12 @@ class InsuranceProfile {
   @Index()
   int? profileId;
 
+  /// Owning shared space, or `null` for a personal row. Exactly one of
+  /// [profileId] / [sharedSpaceId] is set when the space has bills (R3,
+  /// data-model §3.6).
+  @Index()
+  int? sharedSpaceId;
+
   /// Percentage **the user** is responsible for, used for a bill when the bill
   /// itself does not say. Inverted from the retired `defaultCoveragePercent`.
   double defaultPatientPercent = 20.0;
@@ -65,6 +71,10 @@ class FamilyMember {
   @Index()
   int? profileId;
 
+  /// Owning shared space, or `null` for a personal member (data-model §3.6).
+  @Index()
+  int? sharedSpaceId;
+
   String name = '';
   String relation = ''; // e.g., "Self", "Spouse", "Child"
 }
@@ -76,6 +86,10 @@ class MedicalProvider {
 
   @Index()
   int? profileId;
+
+  /// Owning shared space, or `null` for a personal provider (data-model §3.6).
+  @Index()
+  int? sharedSpaceId;
 
   String name = ''; // e.g., "City Hospital", "Dr. Smith"
   String? specialty;

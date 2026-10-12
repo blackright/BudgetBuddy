@@ -9,15 +9,21 @@ import '../../../core/models/medical_service_type.dart';
 import '../../../core/models/money.dart';
 import '../../../core/providers/active_budget_provider.dart';
 import '../../../core/providers/active_profile_provider.dart';
+import '../../../core/providers/active_space_provider.dart';
+import '../../../core/providers/budget_context_provider.dart';
 import '../../../core/providers/selected_month_provider.dart';
 import '../../engine/currency_resolution.dart';
 import '../../engine/providers/rate_registry_provider.dart';
+import '../../settings/providers/settings_provider.dart';
+import '../../spaces/repositories/space_write_guard.dart';
 import '../repositories/medical_repository.dart';
 
 final medicalRepositoryProvider = Provider<MedicalRepository>((ref) {
   return MedicalRepository(
     IsarHelper.instance,
     rateRegistry: ref.watch(rateRegistryProvider),
+    guard: ref.watch(spaceWriteGuardProvider),
+    actingProfileId: ref.watch(actingProfileIdProvider),
   );
 });
 
@@ -31,38 +37,40 @@ final medicalServiceTypesRepositoryProvider = Provider<MedicalRepository>(
 // Streamed source data
 // -----------------------------------------------------------------------------
 
-/// Every medical bill for the active profile in the selected month.
+/// Every medical bill for the active context in the selected month.
 ///
 /// Month-scoped: a bill's money impact lands in exactly one month's totals
-/// (FR-055, FR-056).
+/// (FR-055, FR-056). Context-scoped: a shared space sees only its own bills
+/// (R3, data-model §3.5).
 ///
-/// Yields an empty list until a profile exists so consumers never have to
-/// null-check the profile themselves.
+/// Yields an empty list until a context exists so consumers never have to
+/// null-check it themselves.
 final medicalBillsProvider = StreamProvider<List<MedicalBill>>((ref) {
-  final profileId = ref.watch(activeProfileProvider).value?.id;
-  final yearMonth = ref.watch(selectedYearMonthProvider);
-  if (profileId == null) return Stream.value(const <MedicalBill>[]);
+  final context = ref.watch(budgetContextProvider);
   return ref
       .watch(medicalRepositoryProvider)
-      .watchMedicalBills(profileId, yearMonth);
+      .watchMedicalBillsForContext(context);
 });
 
 final insuranceProfileProvider = StreamProvider<InsuranceProfile?>((ref) {
-  final profileId = ref.watch(activeProfileProvider).value?.id;
-  if (profileId == null) return Stream.value(null);
-  return ref.watch(medicalRepositoryProvider).watchInsuranceProfile(profileId);
+  final context = ref.watch(budgetContextProvider);
+  return ref.watch(medicalRepositoryProvider).watchInsuranceProfileForContext(
+        context,
+      );
 });
 
 final familyMembersProvider = StreamProvider<List<FamilyMember>>((ref) {
-  final profileId = ref.watch(activeProfileProvider).value?.id;
-  if (profileId == null) return Stream.value(const <FamilyMember>[]);
-  return ref.watch(medicalRepositoryProvider).watchFamilyMembers(profileId);
+  final context = ref.watch(budgetContextProvider);
+  return ref
+      .watch(medicalRepositoryProvider)
+      .watchFamilyMembersForContext(context);
 });
 
 final medicalProvidersProvider = StreamProvider<List<MedicalProvider>>((ref) {
-  final profileId = ref.watch(activeProfileProvider).value?.id;
-  if (profileId == null) return Stream.value(const <MedicalProvider>[]);
-  return ref.watch(medicalRepositoryProvider).watchMedicalProviders(profileId);
+  final context = ref.watch(budgetContextProvider);
+  return ref
+      .watch(medicalRepositoryProvider)
+      .watchMedicalProvidersForContext(context);
 });
 
 /// A single bill, kept live so the detail screen reflects edits made elsewhere.
@@ -90,12 +98,31 @@ final medicalExpenseStatusesProvider =
 // -----------------------------------------------------------------------------
 
 /// The budget-scoped inputs the repository needs to link a bill to an expense.
+///
+/// Resolved straight from the selection markers and the live profile/space rows
+/// rather than through [budgetContextProvider], so a context that has not
+/// resolved yet (no profile on the first build frame, no budget) yields `null`
+/// instead of propagating a `StateError`.
 final medicalBillContextProvider = Provider<MedicalBillContext?>((ref) {
-  final profile = ref.watch(activeProfileProvider).value;
   final budget = ref.watch(activeBudgetProvider).value;
-  if (profile == null || budget == null) return null;
+  if (budget == null) return null;
+
+  final spaceId = ref.watch(activeSpaceIdProvider);
+  if (spaceId != null) {
+    return MedicalBillContext(
+      profileId: 0, // unused for shared context; money rows key on spaceId
+      sharedSpaceId: spaceId,
+      budgetId: budget.id,
+      yearMonth: budget.yearMonth,
+      primaryCurrency: ref.watch(mainCurrencyProvider).name.toUpperCase(),
+      rateTable: ref.watch(rateRegistryProvider).tableFor(budget.yearMonth),
+    );
+  }
+  final profile = ref.watch(activeProfileProvider).value;
+  if (profile == null) return null;
   return MedicalBillContext(
     profileId: profile.id,
+    sharedSpaceId: null,
     budgetId: budget.id,
     yearMonth: budget.yearMonth,
     primaryCurrency: profile.primaryCurrency.name.toUpperCase(),
@@ -105,12 +132,12 @@ final medicalBillContextProvider = Provider<MedicalBillContext?>((ref) {
 
 /// Display currency for the active month, as the single [CurrencyCode] the
 /// medical screens format through (FR-011, FR-018) instead of a hardcoded
-/// symbol: the month's convert-to choice when set, otherwise the profile main
-/// currency.
+/// symbol: the month's convert-to choice when set, otherwise the context's main
+/// currency (space currency when a space is active, context-router §4-I5).
 final medicalDisplayCurrencyProvider = Provider<CurrencyCode>((ref) {
   final budget = ref.watch(activeBudgetProvider).value;
-  final profile = ref.watch(activeProfileProvider).valueOrNull;
-  return resolveDisplayCurrency(month: budget, profile: profile);
+  final main = ref.watch(mainCurrencyProvider);
+  return resolveContextDisplayCurrency(budget, main);
 });
 
 // -----------------------------------------------------------------------------
@@ -126,17 +153,16 @@ final medicalDirectoryProvider = Provider<MedicalDirectory>((ref) {
   return MedicalDirectory(members: members, providers: providers);
 });
 
-/// User-editable service types for the active profile (FR-040).
+/// User-editable service types for the active context (FR-040).
 ///
 /// Archived types are included so a historical bill can still resolve its type
-/// by name.
+/// by name. Context-aware (R3): a shared space with bills seeds/reads its own.
 final medicalServiceTypesProvider =
     StreamProvider<List<MedicalServiceType>>((ref) {
-  final profileId = ref.watch(activeProfileProvider).value?.id;
-  if (profileId == null) return Stream.value(const <MedicalServiceType>[]);
+  final context = ref.watch(budgetContextProvider);
   return ref
       .watch(medicalServiceTypesRepositoryProvider)
-      .watchServiceTypes(profileId);
+      .watchServiceTypesForContext(context);
 });
 
 /// Types offered when picking one for a new bill — archived types are excluded.

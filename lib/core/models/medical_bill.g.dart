@@ -93,14 +93,19 @@ const MedicalBillSchema = CollectionSchema(
       name: r'serviceTypeId',
       type: IsarType.long,
     ),
-    r'state': PropertySchema(
+    r'sharedSpaceId': PropertySchema(
       id: 15,
+      name: r'sharedSpaceId',
+      type: IsarType.long,
+    ),
+    r'state': PropertySchema(
+      id: 16,
       name: r'state',
       type: IsarType.byte,
       enumMap: _MedicalBillstateEnumValueMap,
     ),
     r'yearMonth': PropertySchema(
-      id: 16,
+      id: 17,
       name: r'yearMonth',
       type: IsarType.string,
     )
@@ -119,6 +124,19 @@ const MedicalBillSchema = CollectionSchema(
       properties: [
         IndexPropertySchema(
           name: r'profileId',
+          type: IndexType.value,
+          caseSensitive: false,
+        )
+      ],
+    ),
+    r'sharedSpaceId': IndexSchema(
+      id: 9187801792503633945,
+      name: r'sharedSpaceId',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'sharedSpaceId',
           type: IndexType.value,
           caseSensitive: false,
         )
@@ -274,8 +292,9 @@ void _medicalBillSerialize(
   writer.writeLong(offsets[12], object.reimbursedAmount);
   writer.writeDateTime(offsets[13], object.serviceDate);
   writer.writeLong(offsets[14], object.serviceTypeId);
-  writer.writeByte(offsets[15], object.state.index);
-  writer.writeString(offsets[16], object.yearMonth);
+  writer.writeLong(offsets[15], object.sharedSpaceId);
+  writer.writeByte(offsets[16], object.state.index);
+  writer.writeString(offsets[17], object.yearMonth);
 }
 
 MedicalBill _medicalBillDeserialize(
@@ -303,10 +322,11 @@ MedicalBill _medicalBillDeserialize(
   object.reimbursedAmount = reader.readLong(offsets[12]);
   object.serviceDate = reader.readDateTimeOrNull(offsets[13]);
   object.serviceTypeId = reader.readLongOrNull(offsets[14]);
+  object.sharedSpaceId = reader.readLongOrNull(offsets[15]);
   object.state =
-      _MedicalBillstateValueEnumMap[reader.readByteOrNull(offsets[15])] ??
+      _MedicalBillstateValueEnumMap[reader.readByteOrNull(offsets[16])] ??
           MedicalBillState.planned;
-  object.yearMonth = reader.readString(offsets[16]);
+  object.yearMonth = reader.readString(offsets[17]);
   return object;
 }
 
@@ -350,9 +370,11 @@ P _medicalBillDeserializeProp<P>(
     case 14:
       return (reader.readLongOrNull(offset)) as P;
     case 15:
+      return (reader.readLongOrNull(offset)) as P;
+    case 16:
       return (_MedicalBillstateValueEnumMap[reader.readByteOrNull(offset)] ??
           MedicalBillState.planned) as P;
-    case 16:
+    case 17:
       return (reader.readString(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -407,6 +429,14 @@ extension MedicalBillQueryWhereSort
     return QueryBuilder.apply(this, (query) {
       return query.addWhereClause(
         const IndexWhereClause.any(indexName: r'profileId'),
+      );
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterWhere> anySharedSpaceId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        const IndexWhereClause.any(indexName: r'sharedSpaceId'),
       );
     });
   }
@@ -635,6 +665,121 @@ extension MedicalBillQueryWhere
         lower: [lowerProfileId],
         includeLower: includeLower,
         upper: [upperProfileId],
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterWhereClause>
+      sharedSpaceIdIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'sharedSpaceId',
+        value: [null],
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterWhereClause>
+      sharedSpaceIdIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'sharedSpaceId',
+        lower: [null],
+        includeLower: false,
+        upper: [],
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterWhereClause>
+      sharedSpaceIdEqualTo(int? sharedSpaceId) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'sharedSpaceId',
+        value: [sharedSpaceId],
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterWhereClause>
+      sharedSpaceIdNotEqualTo(int? sharedSpaceId) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'sharedSpaceId',
+              lower: [],
+              upper: [sharedSpaceId],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'sharedSpaceId',
+              lower: [sharedSpaceId],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'sharedSpaceId',
+              lower: [sharedSpaceId],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'sharedSpaceId',
+              lower: [],
+              upper: [sharedSpaceId],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterWhereClause>
+      sharedSpaceIdGreaterThan(
+    int? sharedSpaceId, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'sharedSpaceId',
+        lower: [sharedSpaceId],
+        includeLower: include,
+        upper: [],
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterWhereClause>
+      sharedSpaceIdLessThan(
+    int? sharedSpaceId, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'sharedSpaceId',
+        lower: [],
+        upper: [sharedSpaceId],
+        includeUpper: include,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterWhereClause>
+      sharedSpaceIdBetween(
+    int? lowerSharedSpaceId,
+    int? upperSharedSpaceId, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'sharedSpaceId',
+        lower: [lowerSharedSpaceId],
+        includeLower: includeLower,
+        upper: [upperSharedSpaceId],
         includeUpper: includeUpper,
       ));
     });
@@ -2753,6 +2898,80 @@ extension MedicalBillQueryFilter
     });
   }
 
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      sharedSpaceIdIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'sharedSpaceId',
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      sharedSpaceIdIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'sharedSpaceId',
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      sharedSpaceIdEqualTo(int? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'sharedSpaceId',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      sharedSpaceIdGreaterThan(
+    int? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'sharedSpaceId',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      sharedSpaceIdLessThan(
+    int? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'sharedSpaceId',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      sharedSpaceIdBetween(
+    int? lower,
+    int? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'sharedSpaceId',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
   QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition> stateEqualTo(
       MedicalBillState value) {
     return QueryBuilder.apply(this, (query) {
@@ -3146,6 +3365,19 @@ extension MedicalBillQuerySortBy
     });
   }
 
+  QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy> sortBySharedSpaceId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sharedSpaceId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy>
+      sortBySharedSpaceIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sharedSpaceId', Sort.desc);
+    });
+  }
+
   QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy> sortByState() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'state', Sort.asc);
@@ -3379,6 +3611,19 @@ extension MedicalBillQuerySortThenBy
     });
   }
 
+  QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy> thenBySharedSpaceId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sharedSpaceId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy>
+      thenBySharedSpaceIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sharedSpaceId', Sort.desc);
+    });
+  }
+
   QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy> thenByState() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'state', Sort.asc);
@@ -3506,6 +3751,12 @@ extension MedicalBillQueryWhereDistinct
     });
   }
 
+  QueryBuilder<MedicalBill, MedicalBill, QDistinct> distinctBySharedSpaceId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'sharedSpaceId');
+    });
+  }
+
   QueryBuilder<MedicalBill, MedicalBill, QDistinct> distinctByState() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'state');
@@ -3620,6 +3871,12 @@ extension MedicalBillQueryProperty
   QueryBuilder<MedicalBill, int?, QQueryOperations> serviceTypeIdProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'serviceTypeId');
+    });
+  }
+
+  QueryBuilder<MedicalBill, int?, QQueryOperations> sharedSpaceIdProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'sharedSpaceId');
     });
   }
 

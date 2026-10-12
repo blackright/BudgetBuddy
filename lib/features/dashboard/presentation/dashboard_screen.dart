@@ -5,8 +5,11 @@ import 'package:go_router/go_router.dart';
 import '../../../core/providers/active_budget_provider.dart';
 import '../../../core/providers/active_profile_provider.dart';
 import '../../../core/providers/selected_month_provider.dart';
+import '../../../shared/presentation/widgets/analytics_placeholder_card.dart';
 import '../../../shared/presentation/widgets/month_incomplete_banner.dart';
 import '../../engine/currency_resolution.dart';
+import '../../spaces/presentation/move_month_sheet.dart';
+import '../../spaces/providers/spaces_providers.dart';
 import 'month_navigator.dart';
 import 'widgets/month_convert_to_menu.dart';
 import 'widgets/month_summary_card.dart';
@@ -25,6 +28,7 @@ class DashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final activeBudget = ref.watch(activeBudgetProvider).value;
     final profile = ref.watch(activeProfileProvider).valueOrNull;
+    final canEdit = ref.watch(activeContextCanEditProvider);
     final display =
         resolveDisplayCurrency(month: activeBudget, profile: profile);
     final symbol = display.symbol;
@@ -33,7 +37,14 @@ class DashboardScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const MonthNavigator(),
         actions: [
-          if (activeBudget != null) const MonthConvertToMenu(),
+          if (activeBudget != null && canEdit) const MonthConvertToMenu(),
+          if (activeBudget != null && canEdit)
+            IconButton(
+              key: const Key('moveMonthButton'),
+              icon: const Icon(Icons.swap_horiz),
+              tooltip: 'Move this month',
+              onPressed: () => MoveMonthSheet.show(context),
+            ),
         ],
       ),
       body: GestureDetector(
@@ -67,6 +78,8 @@ class DashboardScreen extends ConsumerWidget {
                 // FR-027).
                 onMedicalTap: () => context.go('/medical'),
               ),
+              const SizedBox(height: 12),
+              const AnalyticsPlaceholderCard(),
               const SizedBox(height: 24),
               const Text(
                 'Quick Actions',
@@ -76,10 +89,11 @@ class DashboardScreen extends ConsumerWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  InkWell(
-                    onTap: () => context.push('/add_expense'),
-                    child: _buildActionButton(Icons.add, 'Add Expense'),
-                  ),
+                  if (canEdit)
+                    InkWell(
+                      onTap: () => context.push('/add_expense'),
+                      child: _buildActionButton(Icons.add, 'Add Expense'),
+                    ),
                   InkWell(
                     onTap: () => context.go('/medical'),
                     child:

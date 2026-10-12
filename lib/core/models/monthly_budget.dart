@@ -8,6 +8,33 @@ class MonthlyBudget {
 
   late String yearMonth; // Format: "YYYY-MM"
 
+  /// Owning personal profile, or `null` when the month belongs to a shared
+  /// space. Exactly one of [profileId] / [sharedSpaceId] is set (FR-003,
+  /// data-model §3.2).
+  ///
+  /// The single unique constraint is the full context tuple
+  /// `(profileId, sharedSpaceId, yearMonth)`, not two separate per-column
+  /// indexes: Isar's composite-unique treats two identical tuples as duplicates
+  /// (nulls included), so two zero-context columns would make a second
+  /// personal budget for the same month collide on the `sharedSpaceId` index
+  /// (both `(null, month)`) and a second shared budget collide on the
+  /// `profileId` index. Tuple identity equals context identity instead — every
+  /// context sorts, unclaimed and shared alike (FR-003, data-model §3.2).
+  @Index(
+      unique: true,
+      composite: [CompositeIndex('sharedSpaceId'), CompositeIndex('yearMonth')])
+  int? profileId;
+
+  /// Owning shared space, or `null` when the month is personal. Exactly one of
+  /// [profileId] / [sharedSpaceId] is set (FR-003, data-model §3.2).
+  int? sharedSpaceId;
+
+  /// "Our income" override for this month, in whole minor units. `null` means
+  /// "follow [SharedSpace.defaultIncome]". The personal pot
+  /// ([netSalaryOverride]/[UserProfile.defaultNetSalary]) is separate and never
+  /// read for a shared month (FR-009, shared-income contract §2).
+  int? sharedIncomeOverride;
+
   /// The month's opening balance: money in the bank at the start of the month
   /// (FR-006). Nothing is ever carried forward into a new month (FR-007).
   late double baseAvailableAmount;

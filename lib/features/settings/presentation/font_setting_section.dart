@@ -49,6 +49,7 @@ class FontSettingSection extends ConsumerWidget {
                       final isar = IsarHelper.instance;
                       await isar.writeTxn(() async {
                         profile.fontFamily = newValue;
+                        profile.updatedAt = DateTime.now();
                         await isar.userProfiles.put(profile);
                       });
                     }

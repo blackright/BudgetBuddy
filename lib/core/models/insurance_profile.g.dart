@@ -41,6 +41,11 @@ const InsuranceProfileSchema = CollectionSchema(
       id: 4,
       name: r'profileId',
       type: IsarType.long,
+    ),
+    r'sharedSpaceId': PropertySchema(
+      id: 5,
+      name: r'sharedSpaceId',
+      type: IsarType.long,
     )
   },
   estimateSize: _insuranceProfileEstimateSize,
@@ -57,6 +62,19 @@ const InsuranceProfileSchema = CollectionSchema(
       properties: [
         IndexPropertySchema(
           name: r'profileId',
+          type: IndexType.value,
+          caseSensitive: false,
+        )
+      ],
+    ),
+    r'sharedSpaceId': IndexSchema(
+      id: 9187801792503633945,
+      name: r'sharedSpaceId',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'sharedSpaceId',
           type: IndexType.value,
           caseSensitive: false,
         )
@@ -109,6 +127,7 @@ void _insuranceProfileSerialize(
   writer.writeString(offsets[2], object.planName);
   writer.writeString(offsets[3], object.planSummary);
   writer.writeLong(offsets[4], object.profileId);
+  writer.writeLong(offsets[5], object.sharedSpaceId);
 }
 
 InsuranceProfile _insuranceProfileDeserialize(
@@ -123,6 +142,7 @@ InsuranceProfile _insuranceProfileDeserialize(
   object.insurerName = reader.readStringOrNull(offsets[1]);
   object.planName = reader.readStringOrNull(offsets[2]);
   object.profileId = reader.readLongOrNull(offsets[4]);
+  object.sharedSpaceId = reader.readLongOrNull(offsets[5]);
   return object;
 }
 
@@ -142,6 +162,8 @@ P _insuranceProfileDeserializeProp<P>(
     case 3:
       return (reader.readStringOrNull(offset)) as P;
     case 4:
+      return (reader.readLongOrNull(offset)) as P;
+    case 5:
       return (reader.readLongOrNull(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -173,6 +195,15 @@ extension InsuranceProfileQueryWhereSort
     return QueryBuilder.apply(this, (query) {
       return query.addWhereClause(
         const IndexWhereClause.any(indexName: r'profileId'),
+      );
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterWhere>
+      anySharedSpaceId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        const IndexWhereClause.any(indexName: r'sharedSpaceId'),
       );
     });
   }
@@ -357,6 +388,121 @@ extension InsuranceProfileQueryWhere
         lower: [lowerProfileId],
         includeLower: includeLower,
         upper: [upperProfileId],
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterWhereClause>
+      sharedSpaceIdIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'sharedSpaceId',
+        value: [null],
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterWhereClause>
+      sharedSpaceIdIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'sharedSpaceId',
+        lower: [null],
+        includeLower: false,
+        upper: [],
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterWhereClause>
+      sharedSpaceIdEqualTo(int? sharedSpaceId) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'sharedSpaceId',
+        value: [sharedSpaceId],
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterWhereClause>
+      sharedSpaceIdNotEqualTo(int? sharedSpaceId) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'sharedSpaceId',
+              lower: [],
+              upper: [sharedSpaceId],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'sharedSpaceId',
+              lower: [sharedSpaceId],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'sharedSpaceId',
+              lower: [sharedSpaceId],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'sharedSpaceId',
+              lower: [],
+              upper: [sharedSpaceId],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterWhereClause>
+      sharedSpaceIdGreaterThan(
+    int? sharedSpaceId, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'sharedSpaceId',
+        lower: [sharedSpaceId],
+        includeLower: include,
+        upper: [],
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterWhereClause>
+      sharedSpaceIdLessThan(
+    int? sharedSpaceId, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'sharedSpaceId',
+        lower: [],
+        upper: [sharedSpaceId],
+        includeUpper: include,
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterWhereClause>
+      sharedSpaceIdBetween(
+    int? lowerSharedSpaceId,
+    int? upperSharedSpaceId, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'sharedSpaceId',
+        lower: [lowerSharedSpaceId],
+        includeLower: includeLower,
+        upper: [upperSharedSpaceId],
         includeUpper: includeUpper,
       ));
     });
@@ -1022,6 +1168,80 @@ extension InsuranceProfileQueryFilter
       ));
     });
   }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
+      sharedSpaceIdIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'sharedSpaceId',
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
+      sharedSpaceIdIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'sharedSpaceId',
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
+      sharedSpaceIdEqualTo(int? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'sharedSpaceId',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
+      sharedSpaceIdGreaterThan(
+    int? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'sharedSpaceId',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
+      sharedSpaceIdLessThan(
+    int? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'sharedSpaceId',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
+      sharedSpaceIdBetween(
+    int? lower,
+    int? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'sharedSpaceId',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
 }
 
 extension InsuranceProfileQueryObject
@@ -1099,6 +1319,20 @@ extension InsuranceProfileQuerySortBy
       sortByProfileIdDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'profileId', Sort.desc);
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterSortBy>
+      sortBySharedSpaceId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sharedSpaceId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterSortBy>
+      sortBySharedSpaceIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sharedSpaceId', Sort.desc);
     });
   }
 }
@@ -1187,6 +1421,20 @@ extension InsuranceProfileQuerySortThenBy
       return query.addSortBy(r'profileId', Sort.desc);
     });
   }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterSortBy>
+      thenBySharedSpaceId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sharedSpaceId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterSortBy>
+      thenBySharedSpaceIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sharedSpaceId', Sort.desc);
+    });
+  }
 }
 
 extension InsuranceProfileQueryWhereDistinct
@@ -1223,6 +1471,13 @@ extension InsuranceProfileQueryWhereDistinct
       distinctByProfileId() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'profileId');
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QDistinct>
+      distinctBySharedSpaceId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'sharedSpaceId');
     });
   }
 }
@@ -1267,6 +1522,13 @@ extension InsuranceProfileQueryProperty
       return query.addPropertyName(r'profileId');
     });
   }
+
+  QueryBuilder<InsuranceProfile, int?, QQueryOperations>
+      sharedSpaceIdProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'sharedSpaceId');
+    });
+  }
 }
 
 // coverage:ignore-file
@@ -1294,6 +1556,11 @@ const FamilyMemberSchema = CollectionSchema(
       id: 2,
       name: r'relation',
       type: IsarType.string,
+    ),
+    r'sharedSpaceId': PropertySchema(
+      id: 3,
+      name: r'sharedSpaceId',
+      type: IsarType.long,
     )
   },
   estimateSize: _familyMemberEstimateSize,
@@ -1310,6 +1577,19 @@ const FamilyMemberSchema = CollectionSchema(
       properties: [
         IndexPropertySchema(
           name: r'profileId',
+          type: IndexType.value,
+          caseSensitive: false,
+        )
+      ],
+    ),
+    r'sharedSpaceId': IndexSchema(
+      id: 9187801792503633945,
+      name: r'sharedSpaceId',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'sharedSpaceId',
           type: IndexType.value,
           caseSensitive: false,
         )
@@ -1344,6 +1624,7 @@ void _familyMemberSerialize(
   writer.writeString(offsets[0], object.name);
   writer.writeLong(offsets[1], object.profileId);
   writer.writeString(offsets[2], object.relation);
+  writer.writeLong(offsets[3], object.sharedSpaceId);
 }
 
 FamilyMember _familyMemberDeserialize(
@@ -1357,6 +1638,7 @@ FamilyMember _familyMemberDeserialize(
   object.name = reader.readString(offsets[0]);
   object.profileId = reader.readLongOrNull(offsets[1]);
   object.relation = reader.readString(offsets[2]);
+  object.sharedSpaceId = reader.readLongOrNull(offsets[3]);
   return object;
 }
 
@@ -1373,6 +1655,8 @@ P _familyMemberDeserializeProp<P>(
       return (reader.readLongOrNull(offset)) as P;
     case 2:
       return (reader.readString(offset)) as P;
+    case 3:
+      return (reader.readLongOrNull(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
   }
@@ -1403,6 +1687,14 @@ extension FamilyMemberQueryWhereSort
     return QueryBuilder.apply(this, (query) {
       return query.addWhereClause(
         const IndexWhereClause.any(indexName: r'profileId'),
+      );
+    });
+  }
+
+  QueryBuilder<FamilyMember, FamilyMember, QAfterWhere> anySharedSpaceId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        const IndexWhereClause.any(indexName: r'sharedSpaceId'),
       );
     });
   }
@@ -1585,6 +1877,121 @@ extension FamilyMemberQueryWhere
         lower: [lowerProfileId],
         includeLower: includeLower,
         upper: [upperProfileId],
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<FamilyMember, FamilyMember, QAfterWhereClause>
+      sharedSpaceIdIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'sharedSpaceId',
+        value: [null],
+      ));
+    });
+  }
+
+  QueryBuilder<FamilyMember, FamilyMember, QAfterWhereClause>
+      sharedSpaceIdIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'sharedSpaceId',
+        lower: [null],
+        includeLower: false,
+        upper: [],
+      ));
+    });
+  }
+
+  QueryBuilder<FamilyMember, FamilyMember, QAfterWhereClause>
+      sharedSpaceIdEqualTo(int? sharedSpaceId) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'sharedSpaceId',
+        value: [sharedSpaceId],
+      ));
+    });
+  }
+
+  QueryBuilder<FamilyMember, FamilyMember, QAfterWhereClause>
+      sharedSpaceIdNotEqualTo(int? sharedSpaceId) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'sharedSpaceId',
+              lower: [],
+              upper: [sharedSpaceId],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'sharedSpaceId',
+              lower: [sharedSpaceId],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'sharedSpaceId',
+              lower: [sharedSpaceId],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'sharedSpaceId',
+              lower: [],
+              upper: [sharedSpaceId],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
+
+  QueryBuilder<FamilyMember, FamilyMember, QAfterWhereClause>
+      sharedSpaceIdGreaterThan(
+    int? sharedSpaceId, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'sharedSpaceId',
+        lower: [sharedSpaceId],
+        includeLower: include,
+        upper: [],
+      ));
+    });
+  }
+
+  QueryBuilder<FamilyMember, FamilyMember, QAfterWhereClause>
+      sharedSpaceIdLessThan(
+    int? sharedSpaceId, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'sharedSpaceId',
+        lower: [],
+        upper: [sharedSpaceId],
+        includeUpper: include,
+      ));
+    });
+  }
+
+  QueryBuilder<FamilyMember, FamilyMember, QAfterWhereClause>
+      sharedSpaceIdBetween(
+    int? lowerSharedSpaceId,
+    int? upperSharedSpaceId, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'sharedSpaceId',
+        lower: [lowerSharedSpaceId],
+        includeLower: includeLower,
+        upper: [upperSharedSpaceId],
         includeUpper: includeUpper,
       ));
     });
@@ -1989,6 +2396,80 @@ extension FamilyMemberQueryFilter
       ));
     });
   }
+
+  QueryBuilder<FamilyMember, FamilyMember, QAfterFilterCondition>
+      sharedSpaceIdIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'sharedSpaceId',
+      ));
+    });
+  }
+
+  QueryBuilder<FamilyMember, FamilyMember, QAfterFilterCondition>
+      sharedSpaceIdIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'sharedSpaceId',
+      ));
+    });
+  }
+
+  QueryBuilder<FamilyMember, FamilyMember, QAfterFilterCondition>
+      sharedSpaceIdEqualTo(int? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'sharedSpaceId',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<FamilyMember, FamilyMember, QAfterFilterCondition>
+      sharedSpaceIdGreaterThan(
+    int? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'sharedSpaceId',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<FamilyMember, FamilyMember, QAfterFilterCondition>
+      sharedSpaceIdLessThan(
+    int? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'sharedSpaceId',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<FamilyMember, FamilyMember, QAfterFilterCondition>
+      sharedSpaceIdBetween(
+    int? lower,
+    int? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'sharedSpaceId',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
 }
 
 extension FamilyMemberQueryObject
@@ -2032,6 +2513,19 @@ extension FamilyMemberQuerySortBy
   QueryBuilder<FamilyMember, FamilyMember, QAfterSortBy> sortByRelationDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'relation', Sort.desc);
+    });
+  }
+
+  QueryBuilder<FamilyMember, FamilyMember, QAfterSortBy> sortBySharedSpaceId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sharedSpaceId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<FamilyMember, FamilyMember, QAfterSortBy>
+      sortBySharedSpaceIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sharedSpaceId', Sort.desc);
     });
   }
 }
@@ -2085,6 +2579,19 @@ extension FamilyMemberQuerySortThenBy
       return query.addSortBy(r'relation', Sort.desc);
     });
   }
+
+  QueryBuilder<FamilyMember, FamilyMember, QAfterSortBy> thenBySharedSpaceId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sharedSpaceId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<FamilyMember, FamilyMember, QAfterSortBy>
+      thenBySharedSpaceIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sharedSpaceId', Sort.desc);
+    });
+  }
 }
 
 extension FamilyMemberQueryWhereDistinct
@@ -2106,6 +2613,13 @@ extension FamilyMemberQueryWhereDistinct
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'relation', caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<FamilyMember, FamilyMember, QDistinct>
+      distinctBySharedSpaceId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'sharedSpaceId');
     });
   }
 }
@@ -2133,6 +2647,12 @@ extension FamilyMemberQueryProperty
   QueryBuilder<FamilyMember, String, QQueryOperations> relationProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'relation');
+    });
+  }
+
+  QueryBuilder<FamilyMember, int?, QQueryOperations> sharedSpaceIdProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'sharedSpaceId');
     });
   }
 }
@@ -2163,8 +2683,13 @@ const MedicalProviderSchema = CollectionSchema(
       name: r'profileId',
       type: IsarType.long,
     ),
-    r'specialty': PropertySchema(
+    r'sharedSpaceId': PropertySchema(
       id: 3,
+      name: r'sharedSpaceId',
+      type: IsarType.long,
+    ),
+    r'specialty': PropertySchema(
+      id: 4,
       name: r'specialty',
       type: IsarType.string,
     )
@@ -2183,6 +2708,19 @@ const MedicalProviderSchema = CollectionSchema(
       properties: [
         IndexPropertySchema(
           name: r'profileId',
+          type: IndexType.value,
+          caseSensitive: false,
+        )
+      ],
+    ),
+    r'sharedSpaceId': IndexSchema(
+      id: 9187801792503633945,
+      name: r'sharedSpaceId',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'sharedSpaceId',
           type: IndexType.value,
           caseSensitive: false,
         )
@@ -2222,7 +2760,8 @@ void _medicalProviderSerialize(
   writer.writeBool(offsets[0], object.autoCreated);
   writer.writeString(offsets[1], object.name);
   writer.writeLong(offsets[2], object.profileId);
-  writer.writeString(offsets[3], object.specialty);
+  writer.writeLong(offsets[3], object.sharedSpaceId);
+  writer.writeString(offsets[4], object.specialty);
 }
 
 MedicalProvider _medicalProviderDeserialize(
@@ -2236,7 +2775,8 @@ MedicalProvider _medicalProviderDeserialize(
   object.id = id;
   object.name = reader.readString(offsets[1]);
   object.profileId = reader.readLongOrNull(offsets[2]);
-  object.specialty = reader.readStringOrNull(offsets[3]);
+  object.sharedSpaceId = reader.readLongOrNull(offsets[3]);
+  object.specialty = reader.readStringOrNull(offsets[4]);
   return object;
 }
 
@@ -2254,6 +2794,8 @@ P _medicalProviderDeserializeProp<P>(
     case 2:
       return (reader.readLongOrNull(offset)) as P;
     case 3:
+      return (reader.readLongOrNull(offset)) as P;
+    case 4:
       return (reader.readStringOrNull(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -2285,6 +2827,15 @@ extension MedicalProviderQueryWhereSort
     return QueryBuilder.apply(this, (query) {
       return query.addWhereClause(
         const IndexWhereClause.any(indexName: r'profileId'),
+      );
+    });
+  }
+
+  QueryBuilder<MedicalProvider, MedicalProvider, QAfterWhere>
+      anySharedSpaceId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        const IndexWhereClause.any(indexName: r'sharedSpaceId'),
       );
     });
   }
@@ -2470,6 +3021,121 @@ extension MedicalProviderQueryWhere
         lower: [lowerProfileId],
         includeLower: includeLower,
         upper: [upperProfileId],
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalProvider, MedicalProvider, QAfterWhereClause>
+      sharedSpaceIdIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'sharedSpaceId',
+        value: [null],
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalProvider, MedicalProvider, QAfterWhereClause>
+      sharedSpaceIdIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'sharedSpaceId',
+        lower: [null],
+        includeLower: false,
+        upper: [],
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalProvider, MedicalProvider, QAfterWhereClause>
+      sharedSpaceIdEqualTo(int? sharedSpaceId) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'sharedSpaceId',
+        value: [sharedSpaceId],
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalProvider, MedicalProvider, QAfterWhereClause>
+      sharedSpaceIdNotEqualTo(int? sharedSpaceId) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'sharedSpaceId',
+              lower: [],
+              upper: [sharedSpaceId],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'sharedSpaceId',
+              lower: [sharedSpaceId],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'sharedSpaceId',
+              lower: [sharedSpaceId],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'sharedSpaceId',
+              lower: [],
+              upper: [sharedSpaceId],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
+
+  QueryBuilder<MedicalProvider, MedicalProvider, QAfterWhereClause>
+      sharedSpaceIdGreaterThan(
+    int? sharedSpaceId, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'sharedSpaceId',
+        lower: [sharedSpaceId],
+        includeLower: include,
+        upper: [],
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalProvider, MedicalProvider, QAfterWhereClause>
+      sharedSpaceIdLessThan(
+    int? sharedSpaceId, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'sharedSpaceId',
+        lower: [],
+        upper: [sharedSpaceId],
+        includeUpper: include,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalProvider, MedicalProvider, QAfterWhereClause>
+      sharedSpaceIdBetween(
+    int? lowerSharedSpaceId,
+    int? upperSharedSpaceId, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'sharedSpaceId',
+        lower: [lowerSharedSpaceId],
+        includeLower: includeLower,
+        upper: [upperSharedSpaceId],
         includeUpper: includeUpper,
       ));
     });
@@ -2755,6 +3421,80 @@ extension MedicalProviderQueryFilter
   }
 
   QueryBuilder<MedicalProvider, MedicalProvider, QAfterFilterCondition>
+      sharedSpaceIdIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'sharedSpaceId',
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalProvider, MedicalProvider, QAfterFilterCondition>
+      sharedSpaceIdIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'sharedSpaceId',
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalProvider, MedicalProvider, QAfterFilterCondition>
+      sharedSpaceIdEqualTo(int? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'sharedSpaceId',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalProvider, MedicalProvider, QAfterFilterCondition>
+      sharedSpaceIdGreaterThan(
+    int? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'sharedSpaceId',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalProvider, MedicalProvider, QAfterFilterCondition>
+      sharedSpaceIdLessThan(
+    int? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'sharedSpaceId',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalProvider, MedicalProvider, QAfterFilterCondition>
+      sharedSpaceIdBetween(
+    int? lower,
+    int? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'sharedSpaceId',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalProvider, MedicalProvider, QAfterFilterCondition>
       specialtyIsNull() {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(const FilterCondition.isNull(
@@ -2959,6 +3699,20 @@ extension MedicalProviderQuerySortBy
   }
 
   QueryBuilder<MedicalProvider, MedicalProvider, QAfterSortBy>
+      sortBySharedSpaceId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sharedSpaceId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<MedicalProvider, MedicalProvider, QAfterSortBy>
+      sortBySharedSpaceIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sharedSpaceId', Sort.desc);
+    });
+  }
+
+  QueryBuilder<MedicalProvider, MedicalProvider, QAfterSortBy>
       sortBySpecialty() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'specialty', Sort.asc);
@@ -3029,6 +3783,20 @@ extension MedicalProviderQuerySortThenBy
   }
 
   QueryBuilder<MedicalProvider, MedicalProvider, QAfterSortBy>
+      thenBySharedSpaceId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sharedSpaceId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<MedicalProvider, MedicalProvider, QAfterSortBy>
+      thenBySharedSpaceIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sharedSpaceId', Sort.desc);
+    });
+  }
+
+  QueryBuilder<MedicalProvider, MedicalProvider, QAfterSortBy>
       thenBySpecialty() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'specialty', Sort.asc);
@@ -3066,6 +3834,13 @@ extension MedicalProviderQueryWhereDistinct
     });
   }
 
+  QueryBuilder<MedicalProvider, MedicalProvider, QDistinct>
+      distinctBySharedSpaceId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'sharedSpaceId');
+    });
+  }
+
   QueryBuilder<MedicalProvider, MedicalProvider, QDistinct> distinctBySpecialty(
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
@@ -3097,6 +3872,13 @@ extension MedicalProviderQueryProperty
   QueryBuilder<MedicalProvider, int?, QQueryOperations> profileIdProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'profileId');
+    });
+  }
+
+  QueryBuilder<MedicalProvider, int?, QQueryOperations>
+      sharedSpaceIdProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'sharedSpaceId');
     });
   }
 

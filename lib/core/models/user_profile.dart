@@ -15,6 +15,10 @@ class UserProfile {
 
   late String name;
 
+  /// Emoji avatar shown next to the profile in switchers (FR-001). Empty means
+  /// the default is rendered.
+  String avatar = '';
+
   @enumerated
   late PrimaryCurrency primaryCurrency;
 
@@ -27,6 +31,11 @@ class UserProfile {
   late DateTime createdAt;
 
   late DateTime updatedAt;
+
+  /// When the profile was last used (context switch or visit). Updated on
+  /// selection so a profile switcher can sort by recency (FR-001, context-router
+  /// §3).
+  DateTime? lastActiveAt;
 
   @enumerated
   AppFontFamily fontFamily = AppFontFamily.system;

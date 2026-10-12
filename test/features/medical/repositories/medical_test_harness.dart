@@ -11,9 +11,12 @@ import 'package:budget_buddy/core/models/medical_service_type.dart';
 import 'package:budget_buddy/core/models/money.dart';
 import 'package:budget_buddy/core/models/month_rate_seal.dart';
 import 'package:budget_buddy/core/models/monthly_budget.dart';
+import 'package:budget_buddy/core/models/shared_member.dart';
+import 'package:budget_buddy/core/models/shared_space.dart';
 import 'package:budget_buddy/core/models/user_profile.dart';
 import 'package:budget_buddy/features/engine/providers/rate_registry_provider.dart';
 import 'package:budget_buddy/features/expenses/models/reimbursement.dart';
+import 'package:budget_buddy/features/vault/models/savings_vault.dart';
 import 'package:budget_buddy/features/medical/repositories/medical_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:isar/isar.dart';
@@ -74,12 +77,15 @@ class MedicalTestHarness {
         MonthlyBudgetSchema,
         ExpenseSchema,
         ReimbursementSchema,
+        SavingsVaultSchema,
         CategorySchema,
         MedicalBillSchema,
         InsuranceProfileSchema,
         FamilyMemberSchema,
         MedicalProviderSchema,
         MedicalServiceTypeSchema,
+        SharedSpaceSchema,
+        SharedMemberSchema,
         SchemaMigrationStampSchema,
         MonthRateSealSchema,
         LiveRateSetSchema,
@@ -97,11 +103,18 @@ class MedicalTestHarness {
 
   /// Seeds the profile + budget every medical bill needs, and returns the
   /// budget context the repository expects.
+  ///
+  /// Pass a [spaceId] to seed a **shared** month instead of a personal one: the
+  /// budget row carries `sharedSpaceId` (exactly-one-context, FR-003) and the
+  /// returned context is a shared [MedicalBillContext] with `profileId = 0`,
+  /// mirroring `medicalBillContextProvider`'s shared branch. The caller owns
+  /// creating the [SharedSpace] row itself (see [createSpace]).
   Future<MedicalBillContext> seedBudget({
     double available = 5000,
     double defaultPatientPercent = 20,
     String yearMonth = '2026-01',
     int year = 2026,
+    int? spaceId,
   }) async {
     final profile = UserProfile()
       ..name = 'Test'
@@ -114,6 +127,7 @@ class MedicalTestHarness {
       ..yearMonth = yearMonth
       ..baseAvailableAmount = available
       ..currency = 'usd'
+      ..sharedSpaceId = spaceId
       ..createdAt = DateTime(year)
       ..updatedAt = DateTime(year);
 
@@ -148,12 +162,31 @@ class MedicalTestHarness {
     );
 
     return MedicalBillContext(
-      profileId: seededProfileId,
+      profileId: spaceId == null ? seededProfileId : 0,
+      sharedSpaceId: spaceId,
       budgetId: seededBudgetId,
       yearMonth: yearMonth,
       primaryCurrency: 'USD',
       rateTable: rates.tableFor(yearMonth),
     );
+  }
+
+  /// Creates a [SharedSpace] row (no members), returning its id.
+  ///
+  /// Seed a space budget with `seedBudget(spaceId: id)` afterwards so the
+  /// exactly-one-context rows are consistent (T023).
+  Future<int> createSpace({int year = 2026, int createdByProfileId = 1}) async {
+    final space = SharedSpace()
+      ..name = 'Test space'
+      ..avatar = '👨‍👩‍👧'
+      ..currency = PrimaryCurrency.usd
+      ..defaultIncome = 0
+      ..createdByProfileId = createdByProfileId
+      ..createdAt = DateTime(year);
+    await isar.writeTxn(() async {
+      space.id = await isar.sharedSpaces.put(space);
+    });
+    return space.id;
   }
 
   /// Mirrors `trueAvailableProvider`:

@@ -13,6 +13,11 @@ class Expense {
   @Index()
   late int profileId;
 
+  /// Owning shared space, or `null` for a personal expense. Exactly one of
+  /// [profileId] / [sharedSpaceId] is set (FR-003, data-model §3.3).
+  @Index()
+  int? sharedSpaceId;
+
   @Index()
   late String yearMonth;
 
@@ -48,6 +53,7 @@ class Expense {
   Expense({
     this.id = Isar.autoIncrement,
     required this.profileId,
+    this.sharedSpaceId,
     required this.yearMonth,
     this.type = ExpenseType.standard,
     required this.title,

@@ -9,10 +9,13 @@ import '../../../core/providers/selected_month_provider.dart';
 import '../../engine/currency_resolution.dart';
 import '../../engine/expense_delta.dart';
 import '../../engine/providers/rate_registry_provider.dart';
+import '../../spaces/repositories/space_write_guard.dart';
 
 final expensesProvider =
     StateNotifierProvider<ExpensesNotifier, AsyncValue<List<Expense>>>((ref) {
   final activeBudgetAsync = ref.watch(activeBudgetProvider);
+  final guard = ref.watch(spaceWriteGuardProvider);
+  final actingProfileId = ref.watch(actingProfileIdProvider);
 
   // Convert an expense snapshot (its own currency, minor units) into the active
   // month's display currency (major units) through the live rate table. This
@@ -33,27 +36,41 @@ final expensesProvider =
   return activeBudgetAsync.when(
     data: (budget) {
       if (budget == null) {
-        return ExpensesNotifier(null, toPrimary, const AsyncValue.data([]));
+        return ExpensesNotifier(null, toPrimary,
+            initialState: const AsyncValue.data([]),
+            guard: guard,
+            actingProfileId: actingProfileId);
       }
-      return ExpensesNotifier(budget.id, toPrimary);
+      return ExpensesNotifier(budget.id, toPrimary,
+          guard: guard, actingProfileId: actingProfileId);
     },
-    loading: () =>
-        ExpensesNotifier(null, toPrimary, const AsyncValue.loading()),
-    error: (e, st) =>
-        ExpensesNotifier(null, toPrimary, AsyncValue.error(e, st)),
+    loading: () => ExpensesNotifier(null, toPrimary,
+        initialState: const AsyncValue.loading(),
+        guard: guard,
+        actingProfileId: actingProfileId),
+    error: (e, st) => ExpensesNotifier(null, toPrimary,
+        initialState: AsyncValue.error(e, st),
+        guard: guard,
+        actingProfileId: actingProfileId),
   );
 });
 
 class ExpensesNotifier extends StateNotifier<AsyncValue<List<Expense>>> {
   final int? budgetId;
   final double Function(ExpenseSnapshot) _toPrimary;
+  final SpaceWriteGuard? _guard;
+  final int? _actingProfileId;
   final Isar _isar = IsarHelper.instance;
 
   ExpensesNotifier(
     this.budgetId,
-    this._toPrimary, [
+    this._toPrimary, {
     AsyncValue<List<Expense>>? initialState,
-  ]) : super(initialState ?? const AsyncValue.loading()) {
+    SpaceWriteGuard? guard,
+    int? actingProfileId,
+  })  : _guard = guard,
+        _actingProfileId = actingProfileId,
+        super(initialState ?? const AsyncValue.loading()) {
     if (budgetId != null && initialState == null) {
       _loadExpenses();
     }
@@ -77,6 +94,12 @@ class ExpensesNotifier extends StateNotifier<AsyncValue<List<Expense>>> {
     if (budgetId == null) return;
 
     try {
+      await _guard?.assertSharedMoneyWrite(
+        sharedSpaceId: expense.sharedSpaceId,
+        actingProfileId: _actingProfileId,
+        yearMonth: expense.yearMonth,
+      );
+
       expense.budgetId = budgetId!;
       if (expense.status == ExpenseStatus.paid) {
         expense.paidAt ??= DateTime.now();
@@ -116,6 +139,11 @@ class ExpensesNotifier extends StateNotifier<AsyncValue<List<Expense>>> {
       if (stored == null) {
         throw StateError('Expense ${updated.id} no longer exists');
       }
+      await _guard?.assertSharedMoneyWrite(
+        sharedSpaceId: updated.sharedSpaceId ?? stored.sharedSpaceId,
+        actingProfileId: _actingProfileId,
+        yearMonth: updated.yearMonth,
+      );
       final before = ExpenseSnapshot.of(stored);
 
       // Status transition → paidAt bookkeeping.
@@ -161,6 +189,11 @@ class ExpensesNotifier extends StateNotifier<AsyncValue<List<Expense>>> {
     try {
       final stored = await _isar.expenses.get(id);
       if (stored == null) return ExpenseDelta.zero;
+      await _guard?.assertSharedMoneyWrite(
+        sharedSpaceId: stored.sharedSpaceId,
+        actingProfileId: _actingProfileId,
+        yearMonth: stored.yearMonth,
+      );
       final before = ExpenseSnapshot.of(stored);
 
       await _isar.writeTxn(() async {

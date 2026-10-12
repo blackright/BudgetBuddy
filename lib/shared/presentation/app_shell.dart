@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/medical/providers/medical_providers.dart';
+import '../../features/spaces/presentation/space_switcher.dart';
 import '../../core/providers/clock_provider.dart';
 import '../../core/models/medical_bill.dart';
 
@@ -40,7 +41,18 @@ class AppShell extends ConsumerWidget {
     }
 
     return Scaffold(
-      body: navigationShell,
+      body: Column(
+        children: [
+          // US2: the context switch point every tab shares (T034, context-router
+          // §3). A single activeSpaceId/activeProfileId write re-derives every
+          // screen below in the same frame.
+          const SafeArea(
+            bottom: false,
+            child: SpaceSwitcher(),
+          ),
+          Expanded(child: navigationShell),
+        ],
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: navigationShell.currentIndex,
         onDestinationSelected: _goBranch,

@@ -2,21 +2,22 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../expenses/repositories/expense_repository.dart';
 import '../../expenses/providers/reimbursement_provider.dart';
 import '../../../core/providers/active_budget_provider.dart';
-import '../../../core/providers/active_profile_provider.dart';
+import '../../../core/providers/budget_context_provider.dart';
 import '../../../core/providers/selected_month_provider.dart';
 import '../../../core/models/expense.dart';
 import '../../../core/models/money.dart';
 import '../../expenses/models/reimbursement.dart';
+import '../../settings/providers/settings_provider.dart';
 import '../currency_resolution.dart';
 import 'rate_registry_provider.dart';
 
 final monthlyExpensesProvider = StreamProvider<List<Expense>>((ref) {
-  final profile = ref.watch(activeProfileProvider).value;
+  final context = ref.watch(budgetContextProvider);
   final budget = ref.watch(activeBudgetProvider).value;
-  if (profile == null || budget == null) return Stream.value([]);
+  if (context.isShared && budget == null) return Stream.value([]);
 
   final repository = ref.watch(expenseRepositoryProvider);
-  return repository.watchExpenses(profile.id, budget.yearMonth);
+  return repository.watchExpensesForContext(context);
 });
 
 /// Reimbursements that *belong* to the selected month, keyed on
@@ -28,18 +29,18 @@ final monthlyExpensesProvider = StreamProvider<List<Expense>>((ref) {
 /// month is what stops that (SC-005).
 final monthlyReimbursementsProvider =
     StreamProvider<List<Reimbursement>>((ref) {
+  final context = ref.watch(budgetContextProvider);
   final budget = ref.watch(activeBudgetProvider).value;
-  if (budget == null) return Stream.value([]);
+  if (context.isShared && budget == null) return Stream.value([]);
 
   final repository = ref.watch(reimbursementRepositoryProvider);
-  return repository.watchReimbursementsForMonth(budget.yearMonth);
+  return repository.watchReimbursementsForContext(context);
 });
 
 /// Money in the bank minus what has actually left, converted to the month's
 /// display currency through the registry table (FR-011, FR-013).
 final trueAvailableProvider = Provider<double>((ref) {
   final budget = ref.watch(activeBudgetProvider).value;
-  final profile = ref.watch(activeProfileProvider).value;
   final yearMonth = ref.watch(selectedYearMonthProvider);
   final table = ref.watch(rateRegistryProvider).tableFor(yearMonth);
   final expenses = ref.watch(monthlyExpensesProvider).value ?? [];
@@ -47,8 +48,9 @@ final trueAvailableProvider = Provider<double>((ref) {
 
   if (budget == null) return 0.0;
 
-  final display = resolveDisplayCurrency(month: budget, profile: profile);
-  final source = mainSourceCurrency(profile);
+  final main = ref.watch(mainCurrencyProvider);
+  final display = resolveContextDisplayCurrency(budget, main);
+  final source = main;
   var total = toDisplay(
       Money.fromMajor(budget.baseAvailableAmount, source), display, table);
 

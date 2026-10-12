@@ -2,6 +2,7 @@ import 'package:budget_buddy/core/models/currency_code.dart';
 import 'package:budget_buddy/core/models/monthly_budget.dart';
 import 'package:budget_buddy/core/providers/active_budget_provider.dart';
 import 'package:budget_buddy/core/providers/active_profile_provider.dart';
+import 'package:budget_buddy/core/providers/budget_context_provider.dart';
 import 'package:budget_buddy/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:budget_buddy/features/dashboard/presentation/widgets/month_summary_card.dart';
 import 'package:budget_buddy/features/dashboard/presentation/widgets/month_summary_details.dart';
@@ -65,6 +66,11 @@ void main() {
     return ProviderScope(
       overrides: [
         activeProfileProvider.overrideWith((ref) => Stream.value(null)),
+        // The analytics placeholder reads the active context directly; resolve
+        // it to a personal context without needing an Isar-backed profile.
+        budgetContextProvider.overrideWithValue(
+          ContextRef.personal(profileId: 1, yearMonth: '2026-01'),
+        ),
         activeBudgetProvider.overrideWith((ref) => Stream.value(budget())),
         monthSummaryProvider.overrideWithValue(value ?? makeSummary()),
         // The hero card now carries the conversion caption (T054), which reads

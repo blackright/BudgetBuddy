@@ -3,19 +3,27 @@ import 'package:isar/isar.dart';
 
 import '../database/isar_helper.dart';
 import '../models/monthly_budget.dart';
-import 'selected_month_provider.dart';
+import 'budget_context_provider.dart';
 
-/// The finance record for the month the user is currently looking at.
+/// The finance record for the month the user is currently looking at, resolved
+/// through the active context (FR-004).
 ///
-/// Reads through [selectedYearMonthProvider], which is the single funnel every
-/// month-scoped query resolves through. That is what makes the selected month
-/// persist across screens without any per-screen plumbing (FR-027).
+/// In a personal context this is `MonthlyBudget(profileId, yearMonth)`; in a
+/// shared context it is `MonthlyBudget(sharedSpaceId, yearMonth)`. Falling back
+/// to the lowest-id profile keeps today's single-profile behaviour while the
+/// user has not picked one (R2).
 final activeBudgetProvider = StreamProvider<MonthlyBudget?>((ref) {
+  final context = ref.watch(budgetContextProvider);
   final isar = IsarHelper.instance;
-  final yearMonth = ref.watch(selectedYearMonthProvider);
   return isar.monthlyBudgets
       .filter()
-      .yearMonthEqualTo(yearMonth)
+      .group(
+        (q) => context.isShared
+            ? q.sharedSpaceIdEqualTo(context.spaceId)
+            : q.profileIdEqualTo(context.profileKey),
+      )
+      .and()
+      .yearMonthEqualTo(context.yearMonth)
       .watch(fireImmediately: true)
       .map((budgets) => budgets.isNotEmpty ? budgets.first : null);
 });

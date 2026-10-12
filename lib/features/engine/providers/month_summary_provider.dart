@@ -2,10 +2,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/models/expense.dart';
 import '../../../core/models/money.dart';
-import '../../../core/providers/active_profile_provider.dart';
+import '../../../core/providers/budget_context_provider.dart';
 import '../../../core/providers/selected_month_provider.dart';
 import '../../expenses/repositories/expense_repository.dart';
 import '../../finance/providers/finance_providers.dart';
+import '../../settings/providers/settings_provider.dart';
 import '../currency_resolution.dart';
 import '../month_summary.dart';
 import 'rate_registry_provider.dart';
@@ -16,11 +17,10 @@ import 'true_available_provider.dart';
 /// Scoped by `originYearMonth` — the month the money belongs to — not by the
 /// month the user happened to record them in (FR-032).
 final monthlyOriginReimbursementsProvider = StreamProvider((ref) {
-  ref.watch(activeProfileProvider);
-  final yearMonth = ref.watch(selectedYearMonthProvider);
+  final context = ref.watch(budgetContextProvider);
   return ref
       .watch(expenseRepositoryProvider)
-      .watchReimbursementsForMonth(yearMonth);
+      .watchReimbursementsForContext(context);
 });
 
 /// The financial verdict for the selected month.
@@ -32,11 +32,11 @@ final monthlyOriginReimbursementsProvider = StreamProvider((ref) {
 final monthSummaryProvider = Provider<MonthSummary>((ref) {
   final yearMonth = ref.watch(selectedYearMonthProvider);
   final month = ref.watch(monthFinanceProvider).value;
-  final profile = ref.watch(activeProfileProvider).value;
   final income = ref.watch(resolvedIncomeProvider);
+  final main = ref.watch(mainCurrencyProvider);
   final table = ref.watch(rateRegistryProvider).tableFor(yearMonth);
-  final display = resolveDisplayCurrency(month: month, profile: profile);
-  final source = mainSourceCurrency(profile);
+  final display = resolveContextDisplayCurrency(month, main);
+  final source = main;
   final expenses =
       ref.watch(monthlyExpensesProvider).value ?? const <Expense>[];
   final reimbursements =

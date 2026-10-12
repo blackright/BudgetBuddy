@@ -14,6 +14,7 @@ import '../../../core/providers/clock_provider.dart';
 import '../../engine/currency_resolution.dart';
 import '../../engine/providers/rate_registry_provider.dart';
 import '../../settings/providers/settings_provider.dart';
+import '../../spaces/providers/spaces_providers.dart';
 import '../../dashboard/presentation/widgets/month_convert_to_menu.dart';
 import '../../../shared/presentation/widgets/conversion_footnote.dart';
 import '../providers/medical_providers.dart';
@@ -27,6 +28,7 @@ class MedicalDashboard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final background = MedicalTheme.background(context);
+    final canEdit = ref.watch(activeContextCanEditProvider);
 
     return Scaffold(
       backgroundColor: background,
@@ -35,18 +37,20 @@ class MedicalDashboard extends ConsumerWidget {
         backgroundColor: background,
         elevation: 0,
         actions: [
-          const MonthConvertToMenu(),
-          IconButton(
-            key: const Key('billDefaultsButton'),
-            tooltip: 'Bill defaults',
-            icon: const Icon(Icons.tune),
-            onPressed: () => _editInsuranceProfile(context, ref),
-          ),
-          IconButton(
-            tooltip: 'Providers & family',
-            icon: const Icon(Icons.groups_outlined),
-            onPressed: () => _openDirectory(context, ref),
-          ),
+          if (canEdit) const MonthConvertToMenu(),
+          if (canEdit)
+            IconButton(
+              key: const Key('billDefaultsButton'),
+              tooltip: 'Bill defaults',
+              icon: const Icon(Icons.tune),
+              onPressed: () => _editInsuranceProfile(context, ref),
+            ),
+          if (canEdit)
+            IconButton(
+              tooltip: 'Providers & family',
+              icon: const Icon(Icons.groups_outlined),
+              onPressed: () => _openDirectory(context, ref),
+            ),
         ],
       ),
       body: GestureDetector(
@@ -78,6 +82,7 @@ class MedicalDashboard extends ConsumerWidget {
             slivers: [
               SliverToBoxAdapter(
                 child: _InsuranceSection(
+                    canEdit: canEdit,
                     onSetup: () => _editInsuranceProfile(context, ref)),
               ),
               const SliverToBoxAdapter(child: _BudgetImpactCard()),
@@ -98,7 +103,9 @@ class MedicalDashboard extends ConsumerWidget {
                       ),
                       ElevatedButton.icon(
                         key: const Key('addBillButton'),
-                        onPressed: () => context.push('/medical_bill_form'),
+                        onPressed: canEdit
+                            ? () => context.push('/medical_bill_form')
+                            : null,
                         icon: const Icon(Icons.add, size: 20),
                         label: const Text('Add',
                             style: TextStyle(fontWeight: FontWeight.bold)),
@@ -160,9 +167,10 @@ class MedicalDashboard extends ConsumerWidget {
 // -----------------------------------------------------------------------------
 
 class _InsuranceSection extends ConsumerWidget {
-  const _InsuranceSection({required this.onSetup});
+  const _InsuranceSection({required this.onSetup, required this.canEdit});
 
   final VoidCallback onSetup;
+  final bool canEdit;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -171,6 +179,7 @@ class _InsuranceSection extends ConsumerWidget {
     return insurance.when(
       data: (profile) {
         if (profile == null || !_isConfigured(profile)) {
+          if (!canEdit) return const SizedBox.shrink();
           return _SetupPrompt(onSetup: onSetup);
         }
         // The gear used to be the only entry point to this setting, so its
@@ -179,11 +188,12 @@ class _InsuranceSection extends ConsumerWidget {
         return _DefaultsSummary(
           percent: profile.defaultPatientPercent,
           plan: profile.planSummary,
-          onEdit: onSetup,
+          onEdit: canEdit ? onSetup : null,
         );
       },
       loading: () => const SizedBox(height: 8),
-      error: (_, __) => _SetupPrompt(onSetup: onSetup),
+      error: (_, __) =>
+          canEdit ? _SetupPrompt(onSetup: onSetup) : const SizedBox.shrink(),
     );
   }
 
@@ -206,7 +216,7 @@ class _DefaultsSummary extends StatelessWidget {
   /// Already joined by `InsuranceProfile.planSummary`, so it is null when
   /// neither part was recorded.
   final String? plan;
-  final VoidCallback onEdit;
+  final VoidCallback? onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -228,7 +238,7 @@ class _DefaultsSummary extends StatelessWidget {
             ],
           ),
           isThreeLine: plan != null,
-          trailing: const Icon(Icons.chevron_right),
+          trailing: onEdit == null ? null : const Icon(Icons.chevron_right),
           onTap: onEdit,
         ),
       ),

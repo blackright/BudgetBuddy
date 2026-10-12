@@ -14,6 +14,10 @@ class MedicalServiceType {
   @Index()
   int? profileId;
 
+  /// Owning shared space, or `null` for a personal type (data-model §3.6).
+  @Index()
+  int? sharedSpaceId;
+
   /// Display name. Unique per profile, case-insensitive.
   String name = '';
 

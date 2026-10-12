@@ -12,6 +12,7 @@ import '../../../core/providers/clock_provider.dart';
 import '../../../core/providers/selected_month_provider.dart';
 import '../../../shared/presentation/widgets/degraded_amount_label.dart';
 import '../../engine/providers/rate_registry_provider.dart';
+import '../../spaces/providers/spaces_providers.dart';
 import '../providers/medical_providers.dart';
 import '../repositories/medical_repository.dart';
 import 'medical_theme.dart';
@@ -67,6 +68,7 @@ class _DetailScaffold extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final background = MedicalTheme.background(context);
+    final canEdit = ref.watch(activeContextCanEditProvider);
 
     return Scaffold(
       backgroundColor: background,
@@ -75,16 +77,19 @@ class _DetailScaffold extends ConsumerWidget {
         backgroundColor: background,
         elevation: 0,
         actions: [
-          IconButton(
-            tooltip: 'Edit',
-            icon: const Icon(Icons.edit),
-            onPressed: () => context.push('/edit_medical_bill', extra: bill.id),
-          ),
-          IconButton(
-            tooltip: 'Delete',
-            icon: const Icon(Icons.delete_outline),
-            onPressed: () => _delete(context, ref),
-          ),
+          if (canEdit)
+            IconButton(
+              tooltip: 'Edit',
+              icon: const Icon(Icons.edit),
+              onPressed: () =>
+                  context.push('/edit_medical_bill', extra: bill.id),
+            ),
+          if (canEdit)
+            IconButton(
+              tooltip: 'Delete',
+              icon: const Icon(Icons.delete_outline),
+              onPressed: () => _delete(context, ref),
+            ),
         ],
       ),
       body: SingleChildScrollView(
@@ -373,6 +378,7 @@ class _PaymentMethodSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final currency = ref.watch(medicalDisplayCurrencyProvider);
     final yearMonth = ref.watch(selectedYearMonthProvider);
+    final canEdit = ref.watch(activeContextCanEditProvider);
     final insurerPaid = bill.paymentMethod == MedicalPaymentMethod.insurerPaid;
 
     // The money-impact figure is quoted in the bill's own currency; when the
@@ -431,22 +437,23 @@ class _PaymentMethodSection extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 12),
-          SegmentedButton<MedicalPaymentMethod>(
-            key: const Key('detailPaymentMethod'),
-            segments: const [
-              ButtonSegment(
-                value: MedicalPaymentMethod.selfPaid,
-                label: Text('Self-paid'),
-              ),
-              ButtonSegment(
-                value: MedicalPaymentMethod.insurerPaid,
-                label: Text('Insurer paid'),
-              ),
-            ],
-            selected: {bill.paymentMethod},
-            onSelectionChanged: (selection) =>
-                _setMethod(context, ref, selection.first),
-          ),
+          if (canEdit)
+            SegmentedButton<MedicalPaymentMethod>(
+              key: const Key('detailPaymentMethod'),
+              segments: const [
+                ButtonSegment(
+                  value: MedicalPaymentMethod.selfPaid,
+                  label: Text('Self-paid'),
+                ),
+                ButtonSegment(
+                  value: MedicalPaymentMethod.insurerPaid,
+                  label: Text('Insurer paid'),
+                ),
+              ],
+              selected: {bill.paymentMethod},
+              onSelectionChanged: (selection) =>
+                  _setMethod(context, ref, selection.first),
+            ),
         ],
       ),
     );
@@ -490,6 +497,7 @@ class _BillStateSection extends ConsumerWidget {
     // R-1: an insurer-paid bill is settled with the provider, so it can never be
     // finished and can never be reimbursed.
     final selfPaid = bill.paymentMethod == MedicalPaymentMethod.selfPaid;
+    final canEdit = ref.watch(activeContextCanEditProvider);
     final canFinish = selfPaid && bill.reimbursedAmount > 0;
 
     return _SectionCard(
@@ -497,27 +505,28 @@ class _BillStateSection extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final state in MedicalBillState.values)
-                if (state != MedicalBillState.finished || canFinish)
-                  OutlinedButton.icon(
-                    key: Key('state-${state.name}'),
-                    onPressed: () => _setState(context, ref, state),
-                    icon: Icon(MedicalTheme.billStateIcon(state), size: 18),
-                    label: Text(state.label),
-                    style: bill.state == state
-                        ? OutlinedButton.styleFrom(
-                            backgroundColor:
-                                MedicalTheme.billStateColor(context, state)
-                                    .withValues(alpha: 0.18),
-                          )
-                        : null,
-                  ),
-            ],
-          ),
+          if (canEdit)
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final state in MedicalBillState.values)
+                  if (state != MedicalBillState.finished || canFinish)
+                    OutlinedButton.icon(
+                      key: Key('state-${state.name}'),
+                      onPressed: () => _setState(context, ref, state),
+                      icon: Icon(MedicalTheme.billStateIcon(state), size: 18),
+                      label: Text(state.label),
+                      style: bill.state == state
+                          ? OutlinedButton.styleFrom(
+                              backgroundColor:
+                                  MedicalTheme.billStateColor(context, state)
+                                      .withValues(alpha: 0.18),
+                            )
+                          : null,
+                    ),
+              ],
+            ),
           const SizedBox(height: 8),
           Text(
             _stateHint(bill.state, selfPaid: selfPaid),
@@ -526,7 +535,7 @@ class _BillStateSection extends ConsumerWidget {
               color: MedicalTheme.subtleText(context),
             ),
           ),
-          if (selfPaid && bill.linkedExpenseId != null) ...[
+          if (canEdit && selfPaid && bill.linkedExpenseId != null) ...[
             const SizedBox(height: 12),
             FilledButton.icon(
               key: const Key('logReimbursementButton'),
@@ -617,6 +626,7 @@ class _FollowUpSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final now = ref.watch(clockProvider);
+    final canEdit = ref.watch(activeContextCanEditProvider);
     final hasFollowUp = bill.followUpDate != null;
 
     String statusText = 'No reminder set for this claim yet.';
@@ -657,34 +667,35 @@ class _FollowUpSection extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () => _pick(context, ref),
-                  icon: const Icon(Icons.event_available_outlined, size: 18),
-                  label: Text(hasFollowUp
-                      ? (isOverdue ? 'Reschedule' : 'Change time')
-                      : 'Set reminder'),
+          if (canEdit)
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _pick(context, ref),
+                    icon: const Icon(Icons.event_available_outlined, size: 18),
+                    label: Text(hasFollowUp
+                        ? (isOverdue ? 'Reschedule' : 'Change time')
+                        : 'Set reminder'),
+                  ),
                 ),
-              ),
-              if (hasFollowUp) ...[
-                const SizedBox(width: 8),
-                IconButton(
-                  tooltip: 'Add to calendar',
-                  icon: const Icon(Icons.edit_calendar_outlined),
-                  onPressed: () => _addToCalendar(context, ref),
-                ),
-                IconButton(
-                  tooltip: 'Clear reminder',
-                  icon: const Icon(Icons.close),
-                  onPressed: () => ref
-                      .read(medicalRepositoryProvider)
-                      .setFollowUpDate(bill, null),
-                ),
+                if (hasFollowUp) ...[
+                  const SizedBox(width: 8),
+                  IconButton(
+                    tooltip: 'Add to calendar',
+                    icon: const Icon(Icons.edit_calendar_outlined),
+                    onPressed: () => _addToCalendar(context, ref),
+                  ),
+                  IconButton(
+                    tooltip: 'Clear reminder',
+                    icon: const Icon(Icons.close),
+                    onPressed: () => ref
+                        .read(medicalRepositoryProvider)
+                        .setFollowUpDate(bill, null),
+                  ),
+                ],
               ],
-            ],
-          ),
+            ),
         ],
       ),
     );

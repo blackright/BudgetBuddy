@@ -87,33 +87,41 @@ class BudgetSetupNotifier extends StateNotifier<BudgetSetupState> {
 
     try {
       final isar = IsarHelper.instance;
-      final existingProfile = await isar.userProfiles.where().findFirst();
 
-      final userProfile = existingProfile ?? UserProfile()
-        ..name = 'User' // Default name if new
-        ..createdAt = DateTime.now();
-
-      userProfile
+      // Onboarding runs on a fresh/cleared database, so it always creates a
+      // new profile rather than reusing (and silently reconfiguring) someone
+      // else's. The very first profile owns the canonical id 1; later profiles
+      // (never created through onboarding, but guarded anyway) keep whatever
+      // auto-increment id their insertion earns (US1).
+      final existingCount = await isar.userProfiles.count();
+      final now = DateTime.now();
+      final userProfile = UserProfile()
+        ..name = 'User' // Default name if new; renamed in the settings switcher
+        ..avatar = '👤'
         ..primaryCurrency = state.currency!
         ..monthlyAvailableAmount = state.amount!
-        ..updatedAt = DateTime.now();
-
-      // Ensure there's only one user profile by keeping id = 1 if it exists
-      if (existingProfile == null) {
+        ..defaultNetSalary = 0
+        ..createdAt = now
+        ..updatedAt = now
+        ..lastActiveAt = now;
+      if (existingCount == 0) {
         userProfile.id = 1;
       }
 
       // The chosen currency becomes the profile's main currency; the month itself
       // carries no convert-to override, so it follows that main currency
-      // (FR-009, FR-011).
+      // (FR-009, FR-011). The month row belongs to the new profile, so it can
+      // never collide with another profile's row for the same month (US1).
       final monthlyBudget = MonthlyBudget()
+        ..profileId = userProfile.id
         ..yearMonth = state.yearMonth!
         ..baseAvailableAmount = state.amount!
-        ..createdAt = DateTime.now()
-        ..updatedAt = DateTime.now();
+        ..createdAt = now
+        ..updatedAt = now;
 
       await isar.writeTxn(() async {
-        await isar.userProfiles.put(userProfile);
+        userProfile.id = await isar.userProfiles.put(userProfile);
+        monthlyBudget.profileId = userProfile.id;
 
         // Handle MonthlyBudget (upsert based on yearMonth)
         // Since id is autoIncrement, to truly upsert we would need to check if a budget already exists.
@@ -132,9 +140,7 @@ class BudgetSetupNotifier extends StateNotifier<BudgetSetupState> {
       // service types (FR-039). Migration step 0 only covers profiles that
       // predate the schema bump; without this a first-run profile would start
       // with an empty service-type picker.
-      if (existingProfile == null) {
-        await MedicalRepository(isar).ensureDefaultServiceTypes(userProfile.id);
-      }
+      await MedicalRepository(isar).ensureDefaultServiceTypes(userProfile.id);
 
       state = state.copyWith(isSaving: false);
       return true;

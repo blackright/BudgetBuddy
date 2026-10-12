@@ -3,24 +3,50 @@ import 'package:isar/isar.dart';
 
 import '../../../core/database/isar_helper.dart';
 import '../../../core/models/expense.dart';
+import '../../../core/providers/active_profile_provider.dart';
+import '../../../core/providers/budget_context_provider.dart';
+import '../../spaces/repositories/space_write_guard.dart';
 import '../models/reimbursement.dart';
 
 final expenseRepositoryProvider = Provider<ExpenseRepository>((ref) {
-  return ExpenseRepository(IsarHelper.instance);
+  return ExpenseRepository(
+    IsarHelper.instance,
+    guard: ref.watch(spaceWriteGuardProvider),
+    actingProfileId: ref.watch(actingProfileIdProvider),
+  );
 });
 
 class ExpenseRepository {
   final Isar _isar;
+  final SpaceWriteGuard? _writeGuard;
+  final int? _actingProfileId;
 
-  ExpenseRepository(this._isar);
+  ExpenseRepository(
+    this._isar, {
+    SpaceWriteGuard? guard,
+    int? actingProfileId,
+  })  : _writeGuard = guard,
+        _actingProfileId = actingProfileId;
+
+  /// Refuses a shared write the acting profile has no right to make (role +
+  /// sealed month). Personal writes (`null` space) pass through.
+  Future<void> _guardWrite(int? sharedSpaceId, String yearMonth) async {
+    await _writeGuard?.assertSharedMoneyWrite(
+      sharedSpaceId: sharedSpaceId,
+      actingProfileId: _actingProfileId,
+      yearMonth: yearMonth,
+    );
+  }
 
   Future<void> addExpense(Expense expense) async {
+    await _guardWrite(expense.sharedSpaceId, expense.yearMonth);
     await _isar.writeTxn(() async {
       await _isar.expenses.put(expense);
     });
   }
 
   Future<void> updateExpense(Expense expense) async {
+    await _guardWrite(expense.sharedSpaceId, expense.yearMonth);
     await _isar.writeTxn(() async {
       await _isar.expenses.put(expense);
     });
@@ -32,6 +58,10 @@ class ExpenseRepository {
   /// removing them silently would erase a return from a month that is already
   /// closed. Flagging hands the decision to the user.
   Future<void> deleteExpense(int id) async {
+    final existing = await _isar.expenses.get(id);
+    if (existing != null) {
+      await _guardWrite(existing.sharedSpaceId, existing.yearMonth);
+    }
     await _isar.writeTxn(() async {
       await _isar.expenses.delete(id);
 
@@ -54,12 +84,41 @@ class ExpenseRepository {
         .watch(fireImmediately: true);
   }
 
+  /// Expenses belonging to [context]'s month — the context-scoped route every
+  /// feature read resolves through (FR-004, context-router §4-I3).
+  Stream<List<Expense>> watchExpensesForContext(ContextRef context) {
+    return _isar.expenses
+        .filter()
+        .group(
+          (q) => context.isShared
+              ? q.sharedSpaceIdEqualTo(context.spaceId)
+              : q.profileIdEqualTo(context.profileKey),
+        )
+        .and()
+        .yearMonthEqualTo(context.yearMonth)
+        .watch(fireImmediately: true);
+  }
+
   Future<List<Expense>> getExpenses(int profileId, String yearMonth) {
     return _isar.expenses
         .filter()
         .profileIdEqualTo(profileId)
         .and()
         .yearMonthEqualTo(yearMonth)
+        .findAll();
+  }
+
+  /// One-shot variant of [watchExpensesForContext].
+  Future<List<Expense>> getExpensesForContext(ContextRef context) {
+    return _isar.expenses
+        .filter()
+        .group(
+          (q) => context.isShared
+              ? q.sharedSpaceIdEqualTo(context.spaceId)
+              : q.profileIdEqualTo(context.profileKey),
+        )
+        .and()
+        .yearMonthEqualTo(context.yearMonth)
         .findAll();
   }
 
@@ -78,6 +137,13 @@ class ExpenseRepository {
   /// A `null` [Reimbursement.expenseId] is preserved as-is: that is an orphan the
   /// user has to resolve, and quietly dropping it would lose money (FR-035).
   Future<void> addReimbursement(Reimbursement reimbursement) async {
+    var yearMonth = reimbursement.originYearMonth;
+    final preExpenseId = reimbursement.expenseId;
+    if (yearMonth.isEmpty && preExpenseId != null) {
+      final pre = await _isar.expenses.get(preExpenseId);
+      yearMonth = pre?.yearMonth ?? '';
+    }
+    await _guardWrite(reimbursement.sharedSpaceId, yearMonth);
     await _isar.writeTxn(() async {
       final expenseId = reimbursement.expenseId;
       if (expenseId != null) {
@@ -131,6 +197,10 @@ class ExpenseRepository {
 
   /// Discards an orphan the user chose to remove (FR-035).
   Future<void> discardOrphanReimbursement(int id) async {
+    final existing = await _isar.reimbursements.get(id);
+    if (existing != null) {
+      await _guardWrite(existing.sharedSpaceId, existing.originYearMonth);
+    }
     await _isar.writeTxn(() async {
       await _isar.reimbursements.delete(id);
     });
@@ -142,6 +212,13 @@ class ExpenseRepository {
     int expenseId,
   ) async {
     final expense = await _isar.expenses.get(expenseId);
+    final existing = await _isar.reimbursements.get(reimbursementId);
+    if (existing != null) {
+      await _guardWrite(
+        existing.sharedSpaceId,
+        expense?.yearMonth ?? existing.originYearMonth,
+      );
+    }
     await _isar.writeTxn(() async {
       final reimbursement = await _isar.reimbursements.get(reimbursementId);
       if (reimbursement == null) return;
@@ -186,10 +263,40 @@ class ExpenseRepository {
         .watch(fireImmediately: true);
   }
 
+  /// Context-scoped variant: reimbursements that *belong* to [context]'s month,
+  /// keyed on `originYearMonth` within that context (FR-004, data-model §3.4).
+  Stream<List<Reimbursement>> watchReimbursementsForContext(
+      ContextRef context) {
+    return _isar.reimbursements
+        .filter()
+        .group(
+          (q) => context.isShared
+              ? q.sharedSpaceIdEqualTo(context.spaceId)
+              : q.profileIdEqualTo(context.profileKey),
+        )
+        .and()
+        .originYearMonthEqualTo(context.yearMonth)
+        .watch(fireImmediately: true);
+  }
+
   Future<List<Reimbursement>> getReimbursementsForMonth(String yearMonth) {
     return _isar.reimbursements
         .filter()
         .originYearMonthEqualTo(yearMonth)
+        .findAll();
+  }
+
+  /// One-shot variant of [watchReimbursementsForContext].
+  Future<List<Reimbursement>> getReimbursementsForContext(ContextRef context) {
+    return _isar.reimbursements
+        .filter()
+        .group(
+          (q) => context.isShared
+              ? q.sharedSpaceIdEqualTo(context.spaceId)
+              : q.profileIdEqualTo(context.profileKey),
+        )
+        .and()
+        .originYearMonthEqualTo(context.yearMonth)
         .findAll();
   }
 }

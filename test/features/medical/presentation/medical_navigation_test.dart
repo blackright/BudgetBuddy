@@ -1,6 +1,7 @@
 import 'package:budget_buddy/core/models/currency_code.dart';
 import 'package:budget_buddy/core/models/medical_bill.dart';
 import 'package:budget_buddy/core/providers/active_budget_provider.dart';
+import 'package:budget_buddy/core/providers/budget_context_provider.dart';
 import 'package:budget_buddy/core/routing/app_router.dart';
 import 'package:budget_buddy/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:budget_buddy/features/engine/month_summary.dart';
@@ -36,6 +37,11 @@ void main() {
       ProviderScope(
         overrides: [
           activeBudgetProvider.overrideWith((ref) => Stream.value(null)),
+          // The dashboard's analytics placeholder reads the active context; this
+          // is a routing test, so pin a personal context instead of touching Isar.
+          budgetContextProvider.overrideWithValue(
+            ContextRef.personal(profileId: 1, yearMonth: '2026-01'),
+          ),
           // The dashboard renders the month summary, which otherwise reaches for
           // Isar. This is a routing test, so a fixed summary is enough.
           monthSummaryProvider.overrideWithValue(

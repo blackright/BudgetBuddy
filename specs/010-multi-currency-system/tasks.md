@@ -260,7 +260,7 @@ Flutter single project (per plan.md): source in `lib/`, tests in `test/`, CI in 
 - [x] T061 [UI] New `ThemeSettingSection` mirroring `lib/features/settings/presentation/font_setting_section.dart` (Card + Follow system / Light / Dark selector) writing via `AppThemeController.setThemeMode` (provider-backed Isar write, mirrors `MainCurrencyController`); registered in `lib/features/settings/presentation/settings_screen.dart`; `appThemeModeProvider` + `appThemeControllerProvider`/`AppThemeController` added to `settings_provider.dart`.
 - [x] T062 [App] Wire the themes into `lib/main.dart` — `MaterialApp.router` gains `darkTheme:`/`theme:` built via `buildAppTheme(brightness: ..., fontFamily: ...)` and `themeMode:` from `appThemeModeProvider`; both themes use the resolved `fontFamily`. Main app only; `_StartupSplash` / `DatabaseCorruptionScreen` themes untouched.
 - [x] T063 [Validate] Full gate from repo root — `dart format --output=none --set-exit-if-changed .` (139 files, 0 changed), `flutter analyze lib test` (no issues), `flutter test` (**361 passed / 1 skipped**, incl. new `app_theme_setting_test.dart`); widget test asserts selection persists across rebuild at the section level. Results recorded here.
-
+ 
 **Gateway**: after T058-T063, run the full gate above; then manual device check — switch Light/Dark/Follow system in Settings on a device and confirm every screen re-themes within a frame and the choice survives a restart.
 
 ---

@@ -42,13 +42,28 @@ const MonthlyBudgetSchema = CollectionSchema(
       name: r'openingBalanceConfirmed',
       type: IsarType.bool,
     ),
-    r'updatedAt': PropertySchema(
+    r'profileId': PropertySchema(
       id: 5,
+      name: r'profileId',
+      type: IsarType.long,
+    ),
+    r'sharedIncomeOverride': PropertySchema(
+      id: 6,
+      name: r'sharedIncomeOverride',
+      type: IsarType.long,
+    ),
+    r'sharedSpaceId': PropertySchema(
+      id: 7,
+      name: r'sharedSpaceId',
+      type: IsarType.long,
+    ),
+    r'updatedAt': PropertySchema(
+      id: 8,
       name: r'updatedAt',
       type: IsarType.dateTime,
     ),
     r'yearMonth': PropertySchema(
-      id: 6,
+      id: 9,
       name: r'yearMonth',
       type: IsarType.string,
     )
@@ -58,7 +73,31 @@ const MonthlyBudgetSchema = CollectionSchema(
   deserialize: _monthlyBudgetDeserialize,
   deserializeProp: _monthlyBudgetDeserializeProp,
   idName: r'id',
-  indexes: {},
+  indexes: {
+    r'profileId_sharedSpaceId_yearMonth': IndexSchema(
+      id: -1016589773913284345,
+      name: r'profileId_sharedSpaceId_yearMonth',
+      unique: true,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'profileId',
+          type: IndexType.value,
+          caseSensitive: false,
+        ),
+        IndexPropertySchema(
+          name: r'sharedSpaceId',
+          type: IndexType.value,
+          caseSensitive: false,
+        ),
+        IndexPropertySchema(
+          name: r'yearMonth',
+          type: IndexType.hash,
+          caseSensitive: true,
+        )
+      ],
+    )
+  },
   links: {},
   embeddedSchemas: {},
   getId: _monthlyBudgetGetId,
@@ -94,8 +133,11 @@ void _monthlyBudgetSerialize(
   writer.writeString(offsets[2], object.currency);
   writer.writeDouble(offsets[3], object.netSalaryOverride);
   writer.writeBool(offsets[4], object.openingBalanceConfirmed);
-  writer.writeDateTime(offsets[5], object.updatedAt);
-  writer.writeString(offsets[6], object.yearMonth);
+  writer.writeLong(offsets[5], object.profileId);
+  writer.writeLong(offsets[6], object.sharedIncomeOverride);
+  writer.writeLong(offsets[7], object.sharedSpaceId);
+  writer.writeDateTime(offsets[8], object.updatedAt);
+  writer.writeString(offsets[9], object.yearMonth);
 }
 
 MonthlyBudget _monthlyBudgetDeserialize(
@@ -111,8 +153,11 @@ MonthlyBudget _monthlyBudgetDeserialize(
   object.id = id;
   object.netSalaryOverride = reader.readDoubleOrNull(offsets[3]);
   object.openingBalanceConfirmed = reader.readBool(offsets[4]);
-  object.updatedAt = reader.readDateTime(offsets[5]);
-  object.yearMonth = reader.readString(offsets[6]);
+  object.profileId = reader.readLongOrNull(offsets[5]);
+  object.sharedIncomeOverride = reader.readLongOrNull(offsets[6]);
+  object.sharedSpaceId = reader.readLongOrNull(offsets[7]);
+  object.updatedAt = reader.readDateTime(offsets[8]);
+  object.yearMonth = reader.readString(offsets[9]);
   return object;
 }
 
@@ -134,8 +179,14 @@ P _monthlyBudgetDeserializeProp<P>(
     case 4:
       return (reader.readBool(offset)) as P;
     case 5:
-      return (reader.readDateTime(offset)) as P;
+      return (reader.readLongOrNull(offset)) as P;
     case 6:
+      return (reader.readLongOrNull(offset)) as P;
+    case 7:
+      return (reader.readLongOrNull(offset)) as P;
+    case 8:
+      return (reader.readDateTime(offset)) as P;
+    case 9:
       return (reader.readString(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -153,6 +204,116 @@ List<IsarLinkBase<dynamic>> _monthlyBudgetGetLinks(MonthlyBudget object) {
 void _monthlyBudgetAttach(
     IsarCollection<dynamic> col, Id id, MonthlyBudget object) {
   object.id = id;
+}
+
+extension MonthlyBudgetByIndex on IsarCollection<MonthlyBudget> {
+  Future<MonthlyBudget?> getByProfileIdSharedSpaceIdYearMonth(
+      int? profileId, int? sharedSpaceId, String yearMonth) {
+    return getByIndex(r'profileId_sharedSpaceId_yearMonth',
+        [profileId, sharedSpaceId, yearMonth]);
+  }
+
+  MonthlyBudget? getByProfileIdSharedSpaceIdYearMonthSync(
+      int? profileId, int? sharedSpaceId, String yearMonth) {
+    return getByIndexSync(r'profileId_sharedSpaceId_yearMonth',
+        [profileId, sharedSpaceId, yearMonth]);
+  }
+
+  Future<bool> deleteByProfileIdSharedSpaceIdYearMonth(
+      int? profileId, int? sharedSpaceId, String yearMonth) {
+    return deleteByIndex(r'profileId_sharedSpaceId_yearMonth',
+        [profileId, sharedSpaceId, yearMonth]);
+  }
+
+  bool deleteByProfileIdSharedSpaceIdYearMonthSync(
+      int? profileId, int? sharedSpaceId, String yearMonth) {
+    return deleteByIndexSync(r'profileId_sharedSpaceId_yearMonth',
+        [profileId, sharedSpaceId, yearMonth]);
+  }
+
+  Future<List<MonthlyBudget?>> getAllByProfileIdSharedSpaceIdYearMonth(
+      List<int?> profileIdValues,
+      List<int?> sharedSpaceIdValues,
+      List<String> yearMonthValues) {
+    final len = profileIdValues.length;
+    assert(sharedSpaceIdValues.length == len && yearMonthValues.length == len,
+        'All index values must have the same length');
+    final values = <List<dynamic>>[];
+    for (var i = 0; i < len; i++) {
+      values.add(
+          [profileIdValues[i], sharedSpaceIdValues[i], yearMonthValues[i]]);
+    }
+
+    return getAllByIndex(r'profileId_sharedSpaceId_yearMonth', values);
+  }
+
+  List<MonthlyBudget?> getAllByProfileIdSharedSpaceIdYearMonthSync(
+      List<int?> profileIdValues,
+      List<int?> sharedSpaceIdValues,
+      List<String> yearMonthValues) {
+    final len = profileIdValues.length;
+    assert(sharedSpaceIdValues.length == len && yearMonthValues.length == len,
+        'All index values must have the same length');
+    final values = <List<dynamic>>[];
+    for (var i = 0; i < len; i++) {
+      values.add(
+          [profileIdValues[i], sharedSpaceIdValues[i], yearMonthValues[i]]);
+    }
+
+    return getAllByIndexSync(r'profileId_sharedSpaceId_yearMonth', values);
+  }
+
+  Future<int> deleteAllByProfileIdSharedSpaceIdYearMonth(
+      List<int?> profileIdValues,
+      List<int?> sharedSpaceIdValues,
+      List<String> yearMonthValues) {
+    final len = profileIdValues.length;
+    assert(sharedSpaceIdValues.length == len && yearMonthValues.length == len,
+        'All index values must have the same length');
+    final values = <List<dynamic>>[];
+    for (var i = 0; i < len; i++) {
+      values.add(
+          [profileIdValues[i], sharedSpaceIdValues[i], yearMonthValues[i]]);
+    }
+
+    return deleteAllByIndex(r'profileId_sharedSpaceId_yearMonth', values);
+  }
+
+  int deleteAllByProfileIdSharedSpaceIdYearMonthSync(List<int?> profileIdValues,
+      List<int?> sharedSpaceIdValues, List<String> yearMonthValues) {
+    final len = profileIdValues.length;
+    assert(sharedSpaceIdValues.length == len && yearMonthValues.length == len,
+        'All index values must have the same length');
+    final values = <List<dynamic>>[];
+    for (var i = 0; i < len; i++) {
+      values.add(
+          [profileIdValues[i], sharedSpaceIdValues[i], yearMonthValues[i]]);
+    }
+
+    return deleteAllByIndexSync(r'profileId_sharedSpaceId_yearMonth', values);
+  }
+
+  Future<Id> putByProfileIdSharedSpaceIdYearMonth(MonthlyBudget object) {
+    return putByIndex(r'profileId_sharedSpaceId_yearMonth', object);
+  }
+
+  Id putByProfileIdSharedSpaceIdYearMonthSync(MonthlyBudget object,
+      {bool saveLinks = true}) {
+    return putByIndexSync(r'profileId_sharedSpaceId_yearMonth', object,
+        saveLinks: saveLinks);
+  }
+
+  Future<List<Id>> putAllByProfileIdSharedSpaceIdYearMonth(
+      List<MonthlyBudget> objects) {
+    return putAllByIndex(r'profileId_sharedSpaceId_yearMonth', objects);
+  }
+
+  List<Id> putAllByProfileIdSharedSpaceIdYearMonthSync(
+      List<MonthlyBudget> objects,
+      {bool saveLinks = true}) {
+    return putAllByIndexSync(r'profileId_sharedSpaceId_yearMonth', objects,
+        saveLinks: saveLinks);
+  }
 }
 
 extension MonthlyBudgetQueryWhereSort
@@ -232,6 +393,290 @@ extension MonthlyBudgetQueryWhere
         upper: upperId,
         includeUpper: includeUpper,
       ));
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterWhereClause>
+      profileIdIsNullAnySharedSpaceIdYearMonth() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'profileId_sharedSpaceId_yearMonth',
+        value: [null],
+      ));
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterWhereClause>
+      profileIdIsNotNullAnySharedSpaceIdYearMonth() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'profileId_sharedSpaceId_yearMonth',
+        lower: [null],
+        includeLower: false,
+        upper: [],
+      ));
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterWhereClause>
+      profileIdEqualToAnySharedSpaceIdYearMonth(int? profileId) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'profileId_sharedSpaceId_yearMonth',
+        value: [profileId],
+      ));
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterWhereClause>
+      profileIdNotEqualToAnySharedSpaceIdYearMonth(int? profileId) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'profileId_sharedSpaceId_yearMonth',
+              lower: [],
+              upper: [profileId],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'profileId_sharedSpaceId_yearMonth',
+              lower: [profileId],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'profileId_sharedSpaceId_yearMonth',
+              lower: [profileId],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'profileId_sharedSpaceId_yearMonth',
+              lower: [],
+              upper: [profileId],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterWhereClause>
+      profileIdGreaterThanAnySharedSpaceIdYearMonth(
+    int? profileId, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'profileId_sharedSpaceId_yearMonth',
+        lower: [profileId],
+        includeLower: include,
+        upper: [],
+      ));
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterWhereClause>
+      profileIdLessThanAnySharedSpaceIdYearMonth(
+    int? profileId, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'profileId_sharedSpaceId_yearMonth',
+        lower: [],
+        upper: [profileId],
+        includeUpper: include,
+      ));
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterWhereClause>
+      profileIdBetweenAnySharedSpaceIdYearMonth(
+    int? lowerProfileId,
+    int? upperProfileId, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'profileId_sharedSpaceId_yearMonth',
+        lower: [lowerProfileId],
+        includeLower: includeLower,
+        upper: [upperProfileId],
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterWhereClause>
+      profileIdEqualToSharedSpaceIdIsNullAnyYearMonth(int? profileId) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'profileId_sharedSpaceId_yearMonth',
+        value: [profileId, null],
+      ));
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterWhereClause>
+      profileIdEqualToSharedSpaceIdIsNotNullAnyYearMonth(int? profileId) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'profileId_sharedSpaceId_yearMonth',
+        lower: [profileId, null],
+        includeLower: false,
+        upper: [
+          profileId,
+        ],
+      ));
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterWhereClause>
+      profileIdSharedSpaceIdEqualToAnyYearMonth(
+          int? profileId, int? sharedSpaceId) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'profileId_sharedSpaceId_yearMonth',
+        value: [profileId, sharedSpaceId],
+      ));
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterWhereClause>
+      profileIdEqualToSharedSpaceIdNotEqualToAnyYearMonth(
+          int? profileId, int? sharedSpaceId) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'profileId_sharedSpaceId_yearMonth',
+              lower: [profileId],
+              upper: [profileId, sharedSpaceId],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'profileId_sharedSpaceId_yearMonth',
+              lower: [profileId, sharedSpaceId],
+              includeLower: false,
+              upper: [profileId],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'profileId_sharedSpaceId_yearMonth',
+              lower: [profileId, sharedSpaceId],
+              includeLower: false,
+              upper: [profileId],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'profileId_sharedSpaceId_yearMonth',
+              lower: [profileId],
+              upper: [profileId, sharedSpaceId],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterWhereClause>
+      profileIdEqualToSharedSpaceIdGreaterThanAnyYearMonth(
+    int? profileId,
+    int? sharedSpaceId, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'profileId_sharedSpaceId_yearMonth',
+        lower: [profileId, sharedSpaceId],
+        includeLower: include,
+        upper: [profileId],
+      ));
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterWhereClause>
+      profileIdEqualToSharedSpaceIdLessThanAnyYearMonth(
+    int? profileId,
+    int? sharedSpaceId, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'profileId_sharedSpaceId_yearMonth',
+        lower: [profileId],
+        upper: [profileId, sharedSpaceId],
+        includeUpper: include,
+      ));
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterWhereClause>
+      profileIdEqualToSharedSpaceIdBetweenAnyYearMonth(
+    int? profileId,
+    int? lowerSharedSpaceId,
+    int? upperSharedSpaceId, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'profileId_sharedSpaceId_yearMonth',
+        lower: [profileId, lowerSharedSpaceId],
+        includeLower: includeLower,
+        upper: [profileId, upperSharedSpaceId],
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterWhereClause>
+      profileIdSharedSpaceIdYearMonthEqualTo(
+          int? profileId, int? sharedSpaceId, String yearMonth) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'profileId_sharedSpaceId_yearMonth',
+        value: [profileId, sharedSpaceId, yearMonth],
+      ));
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterWhereClause>
+      profileIdSharedSpaceIdEqualToYearMonthNotEqualTo(
+          int? profileId, int? sharedSpaceId, String yearMonth) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'profileId_sharedSpaceId_yearMonth',
+              lower: [profileId, sharedSpaceId],
+              upper: [profileId, sharedSpaceId, yearMonth],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'profileId_sharedSpaceId_yearMonth',
+              lower: [profileId, sharedSpaceId, yearMonth],
+              includeLower: false,
+              upper: [profileId, sharedSpaceId],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'profileId_sharedSpaceId_yearMonth',
+              lower: [profileId, sharedSpaceId, yearMonth],
+              includeLower: false,
+              upper: [profileId, sharedSpaceId],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'profileId_sharedSpaceId_yearMonth',
+              lower: [profileId, sharedSpaceId],
+              upper: [profileId, sharedSpaceId, yearMonth],
+              includeUpper: false,
+            ));
+      }
     });
   }
 }
@@ -663,6 +1108,228 @@ extension MonthlyBudgetQueryFilter
   }
 
   QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterFilterCondition>
+      profileIdIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'profileId',
+      ));
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterFilterCondition>
+      profileIdIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'profileId',
+      ));
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterFilterCondition>
+      profileIdEqualTo(int? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'profileId',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterFilterCondition>
+      profileIdGreaterThan(
+    int? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'profileId',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterFilterCondition>
+      profileIdLessThan(
+    int? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'profileId',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterFilterCondition>
+      profileIdBetween(
+    int? lower,
+    int? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'profileId',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterFilterCondition>
+      sharedIncomeOverrideIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'sharedIncomeOverride',
+      ));
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterFilterCondition>
+      sharedIncomeOverrideIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'sharedIncomeOverride',
+      ));
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterFilterCondition>
+      sharedIncomeOverrideEqualTo(int? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'sharedIncomeOverride',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterFilterCondition>
+      sharedIncomeOverrideGreaterThan(
+    int? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'sharedIncomeOverride',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterFilterCondition>
+      sharedIncomeOverrideLessThan(
+    int? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'sharedIncomeOverride',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterFilterCondition>
+      sharedIncomeOverrideBetween(
+    int? lower,
+    int? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'sharedIncomeOverride',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterFilterCondition>
+      sharedSpaceIdIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'sharedSpaceId',
+      ));
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterFilterCondition>
+      sharedSpaceIdIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'sharedSpaceId',
+      ));
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterFilterCondition>
+      sharedSpaceIdEqualTo(int? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'sharedSpaceId',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterFilterCondition>
+      sharedSpaceIdGreaterThan(
+    int? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'sharedSpaceId',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterFilterCondition>
+      sharedSpaceIdLessThan(
+    int? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'sharedSpaceId',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterFilterCondition>
+      sharedSpaceIdBetween(
+    int? lower,
+    int? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'sharedSpaceId',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterFilterCondition>
       updatedAtEqualTo(DateTime value) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
@@ -931,6 +1598,47 @@ extension MonthlyBudgetQuerySortBy
     });
   }
 
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterSortBy> sortByProfileId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'profileId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterSortBy>
+      sortByProfileIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'profileId', Sort.desc);
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterSortBy>
+      sortBySharedIncomeOverride() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sharedIncomeOverride', Sort.asc);
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterSortBy>
+      sortBySharedIncomeOverrideDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sharedIncomeOverride', Sort.desc);
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterSortBy>
+      sortBySharedSpaceId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sharedSpaceId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterSortBy>
+      sortBySharedSpaceIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sharedSpaceId', Sort.desc);
+    });
+  }
+
   QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterSortBy> sortByUpdatedAt() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'updatedAt', Sort.asc);
@@ -1040,6 +1748,47 @@ extension MonthlyBudgetQuerySortThenBy
     });
   }
 
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterSortBy> thenByProfileId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'profileId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterSortBy>
+      thenByProfileIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'profileId', Sort.desc);
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterSortBy>
+      thenBySharedIncomeOverride() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sharedIncomeOverride', Sort.asc);
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterSortBy>
+      thenBySharedIncomeOverrideDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sharedIncomeOverride', Sort.desc);
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterSortBy>
+      thenBySharedSpaceId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sharedSpaceId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterSortBy>
+      thenBySharedSpaceIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sharedSpaceId', Sort.desc);
+    });
+  }
+
   QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterSortBy> thenByUpdatedAt() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'updatedAt', Sort.asc);
@@ -1103,6 +1852,26 @@ extension MonthlyBudgetQueryWhereDistinct
     });
   }
 
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QDistinct> distinctByProfileId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'profileId');
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QDistinct>
+      distinctBySharedIncomeOverride() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'sharedIncomeOverride');
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QDistinct>
+      distinctBySharedSpaceId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'sharedSpaceId');
+    });
+  }
+
   QueryBuilder<MonthlyBudget, MonthlyBudget, QDistinct> distinctByUpdatedAt() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'updatedAt');
@@ -1155,6 +1924,25 @@ extension MonthlyBudgetQueryProperty
       openingBalanceConfirmedProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'openingBalanceConfirmed');
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, int?, QQueryOperations> profileIdProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'profileId');
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, int?, QQueryOperations>
+      sharedIncomeOverrideProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'sharedIncomeOverride');
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, int?, QQueryOperations> sharedSpaceIdProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'sharedSpaceId');
     });
   }
 

@@ -6,6 +6,7 @@ import '../../../../core/models/expense.dart';
 import '../../../../core/models/money.dart';
 import '../../../../core/providers/active_budget_provider.dart';
 import '../../../../core/providers/active_profile_provider.dart';
+import '../../../../core/providers/budget_context_provider.dart';
 import '../../../../core/providers/selected_month_provider.dart';
 import '../../engine/currency_resolution.dart';
 import '../../engine/providers/rate_registry_provider.dart';
@@ -64,15 +65,16 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   void _saveExpense() {
     if (_formKey.currentState!.validate()) {
       final amount = _parseAmount(_amountController.text) ?? 0.0;
-      final profile = ref.read(activeProfileProvider).value;
+      final budgetContext = ref.read(budgetContextProvider);
       final budget = ref.read(activeBudgetProvider).value;
 
-      if (profile == null || budget == null) return;
+      if (budget == null) return;
 
       final code =
           CurrencyCode.tryParse(_effectiveCurrency) ?? CurrencyCode.huf;
       final expense = Expense(
-        profileId: profile.id,
+        profileId: budgetContext.isShared ? 0 : budgetContext.profileKey,
+        sharedSpaceId: budgetContext.spaceId,
         yearMonth: budget.yearMonth,
         title: _titleController.text,
         amount: Money.fromMajor(amount, code).minorUnits,

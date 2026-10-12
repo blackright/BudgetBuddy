@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/providers/active_profile_provider.dart';
 import '../../../core/providers/selected_month_provider.dart';
 import '../../settings/providers/settings_provider.dart';
 import '../../medical/presentation/medical_theme.dart';
@@ -35,7 +36,7 @@ class NetSalarySection extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Net salary', style: Theme.of(context).textTheme.titleMedium),
+            Text('My income', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 4),
             Text(
               'What you actually take home, after tax.',
@@ -48,8 +49,10 @@ class NetSalarySection extends ConsumerWidget {
               helper: 'Applies to every month without its own amount.',
               initialValue: ref.watch(defaultNetSalaryProvider),
               prefixText: '${currency.symbol} ',
-              onSubmitted: (amount) =>
-                  repository.saveDefaultNetSalary(amount ?? 0.0),
+              onSubmitted: (amount) => repository.saveDefaultNetSalary(
+                amount ?? 0.0,
+                profileId: ref.read(activeProfileProvider).value?.id,
+              ),
             ),
             const Divider(height: 28),
             _AmountField(

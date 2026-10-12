@@ -16,6 +16,7 @@ import '../../engine/currency_conversion.dart';
 import '../../engine/currency_resolution.dart';
 import '../../engine/providers/rate_registry_provider.dart';
 import '../../settings/providers/settings_provider.dart';
+import '../../spaces/providers/spaces_providers.dart';
 import '../models/reimbursement.dart';
 import '../providers/expenses_provider.dart';
 import '../providers/expense_filter_provider.dart';
@@ -29,6 +30,7 @@ class ExpensesScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final expensesAsync = ref.watch(filteredExpensesProvider);
     final categoriesAsync = ref.watch(categoriesProvider);
+    final canEdit = ref.watch(activeContextCanEditProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -36,9 +38,9 @@ class ExpensesScreen extends ConsumerWidget {
         // FR-035: money really did come back, so the return is kept. The user
         // decides whether to move it to another expense or drop it, rather than
         // having the app silently discard it with the target.
-        actions: const [
-          MonthConvertToMenu(),
-          _OrphanBannerButton(),
+        actions: [
+          if (canEdit) const MonthConvertToMenu(),
+          if (canEdit) const _OrphanBannerButton(),
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(110),
@@ -165,10 +167,12 @@ class ExpensesScreen extends ConsumerWidget {
           error: (err, stack) => Center(child: Text('Error: $err')),
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => context.push('/add_expense'),
-        child: const Icon(Icons.add),
-      ),
+      floatingActionButton: canEdit
+          ? FloatingActionButton(
+              onPressed: () => context.push('/add_expense'),
+              child: const Icon(Icons.add),
+            )
+          : null,
     );
   }
 }
@@ -434,6 +438,7 @@ class _ExpenseTile extends ConsumerWidget {
     final isReimbursed = expense.status == ExpenseStatus.reimbursed;
     final isPartiallyReimbursed =
         expense.status == ExpenseStatus.partiallyReimbursed;
+    final canEdit = ref.watch(activeContextCanEditProvider);
 
     // T055: each row converts to the month's display currency so the list
     // reads in one currency. Hides when the expense already is the display
@@ -475,55 +480,58 @@ class _ExpenseTile extends ConsumerWidget {
     return Slidable(
       key: ValueKey('slidable-${expense.id}'),
       groupTag: 'expenses',
-      // T009: left-to-right → toggle status (full swipe triggers it).
-      startActionPane: ActionPane(
-        motion: const BehindMotion(),
-        extentRatio: 0.3,
-        dismissible: DismissiblePane(
-          closeOnCancel: true,
-          confirmDismiss: () async {
-            if (!isReimbursed && !isPartiallyReimbursed) {
-              await _toggle(context, ref);
-            }
-            return false; // keep the row; it just changes status
-          },
-          onDismissed: () {},
-        ),
-        children: [
-          SlidableAction(
-            onPressed: (_) {
-              if (!isReimbursed && !isPartiallyReimbursed) {
-                _toggle(context, ref);
-              }
-            },
-            backgroundColor: isPaid ? Colors.orange : Colors.green,
-            foregroundColor: Colors.white,
-            icon: isPaid ? Icons.schedule : Icons.check_circle,
-            label: isPaid ? 'Planned' : 'Paid',
-          ),
-        ],
-      ),
+      startActionPane: canEdit
+          ? ActionPane(
+              motion: const BehindMotion(),
+              extentRatio: 0.3,
+              dismissible: DismissiblePane(
+                closeOnCancel: true,
+                confirmDismiss: () async {
+                  if (!isReimbursed && !isPartiallyReimbursed) {
+                    await _toggle(context, ref);
+                  }
+                  return false; // keep the row; it just changes status
+                },
+                onDismissed: () {},
+              ),
+              children: [
+                SlidableAction(
+                  onPressed: (_) {
+                    if (!isReimbursed && !isPartiallyReimbursed) {
+                      _toggle(context, ref);
+                    }
+                  },
+                  backgroundColor: isPaid ? Colors.orange : Colors.green,
+                  foregroundColor: Colors.white,
+                  icon: isPaid ? Icons.schedule : Icons.check_circle,
+                  label: isPaid ? 'Planned' : 'Paid',
+                ),
+              ],
+            )
+          : null,
       // T010: right-to-left → Edit / Delete.
-      endActionPane: ActionPane(
-        motion: const StretchMotion(),
-        extentRatio: 0.5,
-        children: [
-          SlidableAction(
-            onPressed: (_) => _openEdit(context),
-            backgroundColor: Colors.blueAccent,
-            foregroundColor: Colors.white,
-            icon: Icons.edit,
-            label: 'Edit',
-          ),
-          SlidableAction(
-            onPressed: (_) => _delete(context, ref),
-            backgroundColor: Colors.redAccent,
-            foregroundColor: Colors.white,
-            icon: Icons.delete,
-            label: 'Delete',
-          ),
-        ],
-      ),
+      endActionPane: canEdit
+          ? ActionPane(
+              motion: const StretchMotion(),
+              extentRatio: 0.5,
+              children: [
+                SlidableAction(
+                  onPressed: (_) => _openEdit(context),
+                  backgroundColor: Colors.blueAccent,
+                  foregroundColor: Colors.white,
+                  icon: Icons.edit,
+                  label: 'Edit',
+                ),
+                SlidableAction(
+                  onPressed: (_) => _delete(context, ref),
+                  backgroundColor: Colors.redAccent,
+                  foregroundColor: Colors.white,
+                  icon: Icons.delete,
+                  label: 'Delete',
+                ),
+              ],
+            )
+          : null,
       child: ListTile(
         onTap: () => _openDetail(context), // T017
         leading: AnimatedSwitcher(

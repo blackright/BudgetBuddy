@@ -17,6 +17,11 @@ class MedicalBill {
   @Index()
   int? profileId;
 
+  /// Owning shared space, or `null` for a personal bill. Exactly one of
+  /// [profileId] / [sharedSpaceId] is set (FR-003, data-model §3.5).
+  @Index()
+  int? sharedSpaceId;
+
   /// 1:1 link to `Expense.id`. The two are always written together, so their
   /// amounts and owning months can never drift apart (FR-056).
   @Index()

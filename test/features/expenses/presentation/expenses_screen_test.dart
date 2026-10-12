@@ -5,6 +5,7 @@ import 'package:budget_buddy/core/models/monthly_budget.dart';
 import 'package:budget_buddy/core/models/user_profile.dart';
 import 'package:budget_buddy/core/providers/active_budget_provider.dart';
 import 'package:budget_buddy/core/providers/active_profile_provider.dart';
+import 'package:budget_buddy/core/providers/budget_context_provider.dart';
 import 'package:budget_buddy/core/providers/selected_month_provider.dart';
 import 'package:budget_buddy/features/engine/providers/rate_registry_provider.dart';
 import 'package:budget_buddy/features/expenses/models/reimbursement.dart';
@@ -25,6 +26,10 @@ class StaticExpenseRepo extends ExpenseRepository {
   StaticExpenseRepo(super.isar, {this.expenses = const <Expense>[]});
 
   final List<Expense> expenses;
+
+  @override
+  Stream<List<Expense>> watchExpensesForContext(ContextRef context) =>
+      Stream.value(expenses);
 
   @override
   Stream<List<Expense>> watchExpenses(int profileId, String yearMonth) =>

@@ -5,14 +5,21 @@ import '../../../core/database/isar_helper.dart';
 import '../../../core/models/currency_code.dart';
 import '../../../core/models/user_profile.dart';
 import '../../../core/providers/active_profile_provider.dart';
+import '../../../core/providers/active_space_provider.dart';
 
-/// The active profile's main currency — the default display currency for every
-/// month and every screen (FR-009).
+/// The active context's main currency — the default display currency for every
+/// month and every screen (FR-009, context-router §4-I5).
 ///
-/// Watches the live profile stream, so changing the main currency re-renders
-/// every dependent screen within a frame and touches nothing persisted beyond
-/// the profile row (FR-010, SC-002). Falls back to HUF until a profile exists.
+/// In a shared context this is the space's shared currency; in a personal
+/// context it is the active profile's main currency. Watches the live rows, so
+/// changing either re-renders every dependent screen within a frame. Falls back
+/// to HUF until a context exists.
 final mainCurrencyProvider = Provider<CurrencyCode>((ref) {
+  final spaceId = ref.watch(activeSpaceIdProvider);
+  if (spaceId != null) {
+    return ref.watch(activeSpaceProvider).value?.currency.code ??
+        CurrencyCode.huf;
+  }
   final profile = ref.watch(activeProfileProvider).valueOrNull;
   return profile?.primaryCurrency.code ?? CurrencyCode.huf;
 });
@@ -42,13 +49,19 @@ class MainCurrencyController {
 
   final Isar _isar;
 
-  /// Persists [currency] as the active profile's main currency.
+  /// Persists [currency] as [profileId]'s main currency (the active profile —
+  /// US1 — falling back to the lowest-id one when none is named).
   ///
   /// Display-only: no stored amount, rate or month seal is read or written
   /// (FR-010).
-  Future<void> setMainCurrency(PrimaryCurrency currency) {
+  Future<void> setMainCurrency(
+    PrimaryCurrency currency, {
+    int? profileId,
+  }) {
     return _isar.writeTxn(() async {
-      final profile = await _isar.userProfiles.where().findFirst();
+      final profile = profileId != null
+          ? await _isar.userProfiles.get(profileId)
+          : await _isar.userProfiles.where().findFirst();
       if (profile == null) return;
       profile.primaryCurrency = currency;
       profile.updatedAt = DateTime.now();
@@ -67,10 +80,13 @@ class AppThemeController {
 
   final Isar _isar;
 
-  /// Persists [mode] as the active profile's theme preference.
-  Future<void> setThemeMode(AppThemeMode mode) {
+  /// Persists [mode] as [profileId]'s theme preference (the active profile —
+  /// US1 — falling back to the lowest-id one when none is named).
+  Future<void> setThemeMode(AppThemeMode mode, {int? profileId}) {
     return _isar.writeTxn(() async {
-      final profile = await _isar.userProfiles.where().findFirst();
+      final profile = profileId != null
+          ? await _isar.userProfiles.get(profileId)
+          : await _isar.userProfiles.where().findFirst();
       if (profile == null) return;
       profile.themeMode = mode;
       profile.updatedAt = DateTime.now();

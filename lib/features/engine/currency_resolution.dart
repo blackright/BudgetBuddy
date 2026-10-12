@@ -19,6 +19,15 @@ CurrencyCode resolveDisplayCurrency({
   return profileCode ?? CurrencyCode.huf;
 }
 
+/// Context-aware variant of [resolveDisplayCurrency]: styled by the given
+/// context [main] currency (the space's shared currency when a space is active)
+/// instead of a profile (context-router §4-I5).
+CurrencyCode resolveContextDisplayCurrency(
+    MonthlyBudget? month, CurrencyCode main) {
+  final convertTo = CurrencyCode.tryParse(month?.currency);
+  return convertTo ?? main;
+}
+
 /// The currency a profile's stored income and opening balance are in.
 ///
 /// Unlike expenses — which each carry their own stored currency — net salary

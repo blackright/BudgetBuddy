@@ -5,6 +5,8 @@ import '../models/user_profile.dart';
 import '../models/monthly_budget.dart';
 import '../../core/models/expense.dart';
 import '../../core/models/expense_template.dart';
+import '../../core/models/shared_member.dart';
+import '../../core/models/shared_space.dart';
 import '../../features/expenses/models/reimbursement.dart';
 import '../../features/vault/models/savings_vault.dart';
 import '../models/category.dart';
@@ -39,6 +41,8 @@ class IsarHelper {
         SchemaMigrationStampSchema,
         MonthRateSealSchema,
         LiveRateSetSchema,
+        SharedSpaceSchema,
+        SharedMemberSchema,
       ],
       directory: dir.path,
     );
