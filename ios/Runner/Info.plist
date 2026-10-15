@@ -26,6 +26,16 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSFaceIDUsageDescription</key>
+	<string>BudgetBuddy uses Face ID to unlock your local identity.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>BudgetBuddy uses the camera to scan a pairing QR code in person.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>BudgetBuddy finds your paired devices on the local network to exchange changes.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_buddybuddy._tcp</string>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

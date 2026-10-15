@@ -1,11 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/models/currency_code.dart';
 import '../../../../core/models/expense.dart';
+import '../../../../core/models/money.dart';
 import '../../../../core/providers/active_budget_provider.dart';
 import '../../../../core/providers/active_profile_provider.dart';
+import '../../../../core/providers/budget_context_provider.dart';
+import '../../../../core/providers/selected_month_provider.dart';
+import '../../../../shared/presentation/money_format.dart';
+import '../../../../shared/presentation/widgets/money_field.dart';
+import '../../engine/currency_resolution.dart';
+import '../../engine/providers/rate_registry_provider.dart';
+import '../../settings/providers/settings_provider.dart';
 import '../providers/expenses_provider.dart';
 import '../providers/category_provider.dart';
+import 'widgets/amount_conversion_hint.dart';
 import 'widgets/emotion_selector.dart';
 
 class AddExpenseScreen extends ConsumerStatefulWidget {
@@ -16,15 +26,28 @@ class AddExpenseScreen extends ConsumerStatefulWidget {
 }
 
 class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
+  static const _currencies = ['USD', 'EUR', 'HUF', 'CAD'];
+
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _amountController = TextEditingController();
 
-  String _currency = 'USD';
+  /// Null until the user picks a currency explicitly; the form then defaults to
+  /// the profile's main currency (T056) instead of hardcoded USD, so a HUF
+  /// expense can never be silently recorded as USD.
+  String? _currency;
   String _categoryId = Expense.defaultCategoryId;
   ExpenseStatus _status = ExpenseStatus.paid;
   bool _isReimbursable = false;
   GuiltLevel _guiltLevel = GuiltLevel.essential;
+
+  @override
+  void initState() {
+    super.initState();
+    // Rebuild on every keystroke so the live conversion hint below the Amount
+    // field tracks the input (T056).
+    _amountController.addListener(() => setState(() {}));
+  }
 
   @override
   void dispose() {
@@ -33,20 +56,30 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     super.dispose();
   }
 
+  static double? _parseAmount(String? raw) => parseMoneyInput(raw ?? '');
+
+  /// The currency the form records in: the user's pick, or the profile's main
+  /// currency until the user picks (T056).
+  String get _effectiveCurrency =>
+      _currency ?? ref.read(mainCurrencyProvider).code.toUpperCase();
+
   void _saveExpense() {
     if (_formKey.currentState!.validate()) {
-      final amount = double.tryParse(_amountController.text) ?? 0.0;
-      final profile = ref.read(activeProfileProvider).value;
+      final amount = _parseAmount(_amountController.text) ?? 0.0;
+      final budgetContext = ref.read(budgetContextProvider);
       final budget = ref.read(activeBudgetProvider).value;
 
-      if (profile == null || budget == null) return;
+      if (budget == null) return;
 
+      final code =
+          CurrencyCode.tryParse(_effectiveCurrency) ?? CurrencyCode.huf;
       final expense = Expense(
-        profileId: profile.id,
+        profileId: budgetContext.isShared ? 0 : budgetContext.profileKey,
+        sharedSpaceId: budgetContext.spaceId,
         yearMonth: budget.yearMonth,
         title: _titleController.text,
-        amount: amount,
-        currency: _currency,
+        amount: Money.fromMajor(amount, code).minorUnits,
+        currency: code.code.toUpperCase(),
         categoryId: _categoryId,
         status: _status,
         isReimbursable: _isReimbursable,
@@ -62,6 +95,13 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final budget = ref.watch(activeBudgetProvider).value;
+    final profile = ref.watch(activeProfileProvider).value;
+    final yearMonth = ref.watch(selectedYearMonthProvider);
+    final main = ref.watch(mainCurrencyProvider);
+    final display = resolveDisplayCurrency(month: budget, profile: profile);
+    final table = ref.watch(rateRegistryProvider).tableFor(yearMonth);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Add Expense'),
@@ -94,19 +134,15 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                 children: [
                   Expanded(
                     flex: 2,
-                    child: TextFormField(
+                    child: MoneyField(
+                      key: const Key('addExpenseAmountField'),
                       controller: _amountController,
-                      keyboardType:
-                          const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(
-                        labelText: 'Amount',
-                        border: OutlineInputBorder(),
-                      ),
+                      label: 'Amount',
                       validator: (value) {
                         if (value == null || value.isEmpty) return 'Required';
-                        if (double.tryParse(value) == null) {
-                          return 'Invalid amount';
-                        }
+                        final v = _parseAmount(value);
+                        if (v == null) return 'Invalid amount';
+                        if (v <= 0) return 'Must be > 0';
                         return null;
                       },
                     ),
@@ -114,12 +150,13 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                   const SizedBox(width: 16),
                   Expanded(
                     child: DropdownButtonFormField<String>(
-                      initialValue: _currency,
+                      key: ValueKey(_effectiveCurrency),
+                      initialValue: _effectiveCurrency,
                       decoration: const InputDecoration(
                         labelText: 'Currency',
                         border: OutlineInputBorder(),
                       ),
-                      items: ['USD', 'EUR', 'GBP', 'HUF', 'CAD']
+                      items: _currencies
                           .map(
                               (c) => DropdownMenuItem(value: c, child: Text(c)))
                           .toList(),
@@ -129,6 +166,13 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                     ),
                   ),
                 ],
+              ),
+              AmountConversionHint(
+                amount: _parseAmount(_amountController.text),
+                currency: CurrencyCode.tryParse(_effectiveCurrency),
+                display: display,
+                main: main,
+                table: table,
               ),
               const SizedBox(height: 16),
               ref.watch(categoriesProvider).when(

@@ -20,7 +20,7 @@ const ExpenseSchema = CollectionSchema(
     r'amount': PropertySchema(
       id: 0,
       name: r'amount',
-      type: IsarType.double,
+      type: IsarType.long,
     ),
     r'budgetId': PropertySchema(
       id: 1,
@@ -42,41 +42,41 @@ const ExpenseSchema = CollectionSchema(
       name: r'date',
       type: IsarType.dateTime,
     ),
-    r'exchangeRateToPrimary': PropertySchema(
-      id: 5,
-      name: r'exchangeRateToPrimary',
-      type: IsarType.double,
-    ),
     r'guiltLevel': PropertySchema(
-      id: 6,
+      id: 5,
       name: r'guiltLevel',
       type: IsarType.byte,
       enumMap: _ExpenseguiltLevelEnumValueMap,
     ),
     r'isReimbursable': PropertySchema(
-      id: 7,
+      id: 6,
       name: r'isReimbursable',
       type: IsarType.bool,
     ),
     r'notes': PropertySchema(
-      id: 8,
+      id: 7,
       name: r'notes',
       type: IsarType.string,
     ),
     r'paidAt': PropertySchema(
-      id: 9,
+      id: 8,
       name: r'paidAt',
       type: IsarType.dateTime,
     ),
     r'profileId': PropertySchema(
-      id: 10,
+      id: 9,
       name: r'profileId',
       type: IsarType.long,
     ),
     r'receiptPath': PropertySchema(
-      id: 11,
+      id: 10,
       name: r'receiptPath',
       type: IsarType.string,
+    ),
+    r'sharedSpaceId': PropertySchema(
+      id: 11,
+      name: r'sharedSpaceId',
+      type: IsarType.long,
     ),
     r'status': PropertySchema(
       id: 12,
@@ -115,6 +115,19 @@ const ExpenseSchema = CollectionSchema(
       properties: [
         IndexPropertySchema(
           name: r'profileId',
+          type: IndexType.value,
+          caseSensitive: false,
+        )
+      ],
+    ),
+    r'sharedSpaceId': IndexSchema(
+      id: 9187801792503633945,
+      name: r'sharedSpaceId',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'sharedSpaceId',
           type: IndexType.value,
           caseSensitive: false,
         )
@@ -173,18 +186,18 @@ void _expenseSerialize(
   List<int> offsets,
   Map<Type, List<int>> allOffsets,
 ) {
-  writer.writeDouble(offsets[0], object.amount);
+  writer.writeLong(offsets[0], object.amount);
   writer.writeLong(offsets[1], object.budgetId);
   writer.writeString(offsets[2], object.categoryId);
   writer.writeString(offsets[3], object.currency);
   writer.writeDateTime(offsets[4], object.date);
-  writer.writeDouble(offsets[5], object.exchangeRateToPrimary);
-  writer.writeByte(offsets[6], object.guiltLevel.index);
-  writer.writeBool(offsets[7], object.isReimbursable);
-  writer.writeString(offsets[8], object.notes);
-  writer.writeDateTime(offsets[9], object.paidAt);
-  writer.writeLong(offsets[10], object.profileId);
-  writer.writeString(offsets[11], object.receiptPath);
+  writer.writeByte(offsets[5], object.guiltLevel.index);
+  writer.writeBool(offsets[6], object.isReimbursable);
+  writer.writeString(offsets[7], object.notes);
+  writer.writeDateTime(offsets[8], object.paidAt);
+  writer.writeLong(offsets[9], object.profileId);
+  writer.writeString(offsets[10], object.receiptPath);
+  writer.writeLong(offsets[11], object.sharedSpaceId);
   writer.writeByte(offsets[12], object.status.index);
   writer.writeString(offsets[13], object.title);
   writer.writeByte(offsets[14], object.type.index);
@@ -198,21 +211,21 @@ Expense _expenseDeserialize(
   Map<Type, List<int>> allOffsets,
 ) {
   final object = Expense(
-    amount: reader.readDouble(offsets[0]),
+    amount: reader.readLong(offsets[0]),
     budgetId: reader.readLong(offsets[1]),
     categoryId: reader.readString(offsets[2]),
     currency: reader.readString(offsets[3]),
     date: reader.readDateTime(offsets[4]),
-    exchangeRateToPrimary: reader.readDoubleOrNull(offsets[5]) ?? 1.0,
     guiltLevel:
-        _ExpenseguiltLevelValueEnumMap[reader.readByteOrNull(offsets[6])] ??
+        _ExpenseguiltLevelValueEnumMap[reader.readByteOrNull(offsets[5])] ??
             GuiltLevel.essential,
     id: id,
-    isReimbursable: reader.readBoolOrNull(offsets[7]) ?? false,
-    notes: reader.readStringOrNull(offsets[8]),
-    paidAt: reader.readDateTimeOrNull(offsets[9]),
-    profileId: reader.readLong(offsets[10]),
-    receiptPath: reader.readStringOrNull(offsets[11]),
+    isReimbursable: reader.readBoolOrNull(offsets[6]) ?? false,
+    notes: reader.readStringOrNull(offsets[7]),
+    paidAt: reader.readDateTimeOrNull(offsets[8]),
+    profileId: reader.readLong(offsets[9]),
+    receiptPath: reader.readStringOrNull(offsets[10]),
+    sharedSpaceId: reader.readLongOrNull(offsets[11]),
     status: _ExpensestatusValueEnumMap[reader.readByteOrNull(offsets[12])] ??
         ExpenseStatus.paid,
     title: reader.readString(offsets[13]),
@@ -231,7 +244,7 @@ P _expenseDeserializeProp<P>(
 ) {
   switch (propertyId) {
     case 0:
-      return (reader.readDouble(offset)) as P;
+      return (reader.readLong(offset)) as P;
     case 1:
       return (reader.readLong(offset)) as P;
     case 2:
@@ -241,20 +254,20 @@ P _expenseDeserializeProp<P>(
     case 4:
       return (reader.readDateTime(offset)) as P;
     case 5:
-      return (reader.readDoubleOrNull(offset) ?? 1.0) as P;
-    case 6:
       return (_ExpenseguiltLevelValueEnumMap[reader.readByteOrNull(offset)] ??
           GuiltLevel.essential) as P;
-    case 7:
+    case 6:
       return (reader.readBoolOrNull(offset) ?? false) as P;
+    case 7:
+      return (reader.readStringOrNull(offset)) as P;
     case 8:
-      return (reader.readStringOrNull(offset)) as P;
-    case 9:
       return (reader.readDateTimeOrNull(offset)) as P;
-    case 10:
+    case 9:
       return (reader.readLong(offset)) as P;
-    case 11:
+    case 10:
       return (reader.readStringOrNull(offset)) as P;
+    case 11:
+      return (reader.readLongOrNull(offset)) as P;
     case 12:
       return (_ExpensestatusValueEnumMap[reader.readByteOrNull(offset)] ??
           ExpenseStatus.paid) as P;
@@ -284,11 +297,15 @@ const _ExpensestatusEnumValueMap = {
   'planned': 0,
   'paid': 1,
   'cancelled': 2,
+  'reimbursed': 3,
+  'partiallyReimbursed': 4,
 };
 const _ExpensestatusValueEnumMap = {
   0: ExpenseStatus.planned,
   1: ExpenseStatus.paid,
   2: ExpenseStatus.cancelled,
+  3: ExpenseStatus.reimbursed,
+  4: ExpenseStatus.partiallyReimbursed,
 };
 const _ExpensetypeEnumValueMap = {
   'standard': 0,
@@ -322,6 +339,14 @@ extension ExpenseQueryWhereSort on QueryBuilder<Expense, Expense, QWhere> {
     return QueryBuilder.apply(this, (query) {
       return query.addWhereClause(
         const IndexWhereClause.any(indexName: r'profileId'),
+      );
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterWhere> anySharedSpaceId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        const IndexWhereClause.any(indexName: r'sharedSpaceId'),
       );
     });
   }
@@ -483,6 +508,116 @@ extension ExpenseQueryWhere on QueryBuilder<Expense, Expense, QWhereClause> {
     });
   }
 
+  QueryBuilder<Expense, Expense, QAfterWhereClause> sharedSpaceIdIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'sharedSpaceId',
+        value: [null],
+      ));
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterWhereClause> sharedSpaceIdIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'sharedSpaceId',
+        lower: [null],
+        includeLower: false,
+        upper: [],
+      ));
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterWhereClause> sharedSpaceIdEqualTo(
+      int? sharedSpaceId) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'sharedSpaceId',
+        value: [sharedSpaceId],
+      ));
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterWhereClause> sharedSpaceIdNotEqualTo(
+      int? sharedSpaceId) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'sharedSpaceId',
+              lower: [],
+              upper: [sharedSpaceId],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'sharedSpaceId',
+              lower: [sharedSpaceId],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'sharedSpaceId',
+              lower: [sharedSpaceId],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'sharedSpaceId',
+              lower: [],
+              upper: [sharedSpaceId],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterWhereClause> sharedSpaceIdGreaterThan(
+    int? sharedSpaceId, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'sharedSpaceId',
+        lower: [sharedSpaceId],
+        includeLower: include,
+        upper: [],
+      ));
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterWhereClause> sharedSpaceIdLessThan(
+    int? sharedSpaceId, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'sharedSpaceId',
+        lower: [],
+        upper: [sharedSpaceId],
+        includeUpper: include,
+      ));
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterWhereClause> sharedSpaceIdBetween(
+    int? lowerSharedSpaceId,
+    int? upperSharedSpaceId, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'sharedSpaceId',
+        lower: [lowerSharedSpaceId],
+        includeLower: includeLower,
+        upper: [upperSharedSpaceId],
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
   QueryBuilder<Expense, Expense, QAfterWhereClause> yearMonthEqualTo(
       String yearMonth) {
     return QueryBuilder.apply(this, (query) {
@@ -532,54 +667,46 @@ extension ExpenseQueryWhere on QueryBuilder<Expense, Expense, QWhereClause> {
 extension ExpenseQueryFilter
     on QueryBuilder<Expense, Expense, QFilterCondition> {
   QueryBuilder<Expense, Expense, QAfterFilterCondition> amountEqualTo(
-    double value, {
-    double epsilon = Query.epsilon,
-  }) {
+      int value) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
         property: r'amount',
         value: value,
-        epsilon: epsilon,
       ));
     });
   }
 
   QueryBuilder<Expense, Expense, QAfterFilterCondition> amountGreaterThan(
-    double value, {
+    int value, {
     bool include = false,
-    double epsilon = Query.epsilon,
   }) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.greaterThan(
         include: include,
         property: r'amount',
         value: value,
-        epsilon: epsilon,
       ));
     });
   }
 
   QueryBuilder<Expense, Expense, QAfterFilterCondition> amountLessThan(
-    double value, {
+    int value, {
     bool include = false,
-    double epsilon = Query.epsilon,
   }) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.lessThan(
         include: include,
         property: r'amount',
         value: value,
-        epsilon: epsilon,
       ));
     });
   }
 
   QueryBuilder<Expense, Expense, QAfterFilterCondition> amountBetween(
-    double lower,
-    double upper, {
+    int lower,
+    int upper, {
     bool includeLower = true,
     bool includeUpper = true,
-    double epsilon = Query.epsilon,
   }) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.between(
@@ -588,7 +715,6 @@ extension ExpenseQueryFilter
         includeLower: includeLower,
         upper: upper,
         includeUpper: includeUpper,
-        epsilon: epsilon,
       ));
     });
   }
@@ -955,72 +1081,6 @@ extension ExpenseQueryFilter
         includeLower: includeLower,
         upper: upper,
         includeUpper: includeUpper,
-      ));
-    });
-  }
-
-  QueryBuilder<Expense, Expense, QAfterFilterCondition>
-      exchangeRateToPrimaryEqualTo(
-    double value, {
-    double epsilon = Query.epsilon,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'exchangeRateToPrimary',
-        value: value,
-        epsilon: epsilon,
-      ));
-    });
-  }
-
-  QueryBuilder<Expense, Expense, QAfterFilterCondition>
-      exchangeRateToPrimaryGreaterThan(
-    double value, {
-    bool include = false,
-    double epsilon = Query.epsilon,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.greaterThan(
-        include: include,
-        property: r'exchangeRateToPrimary',
-        value: value,
-        epsilon: epsilon,
-      ));
-    });
-  }
-
-  QueryBuilder<Expense, Expense, QAfterFilterCondition>
-      exchangeRateToPrimaryLessThan(
-    double value, {
-    bool include = false,
-    double epsilon = Query.epsilon,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.lessThan(
-        include: include,
-        property: r'exchangeRateToPrimary',
-        value: value,
-        epsilon: epsilon,
-      ));
-    });
-  }
-
-  QueryBuilder<Expense, Expense, QAfterFilterCondition>
-      exchangeRateToPrimaryBetween(
-    double lower,
-    double upper, {
-    bool includeLower = true,
-    bool includeUpper = true,
-    double epsilon = Query.epsilon,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.between(
-        property: r'exchangeRateToPrimary',
-        lower: lower,
-        includeLower: includeLower,
-        upper: upper,
-        includeUpper: includeUpper,
-        epsilon: epsilon,
       ));
     });
   }
@@ -1555,6 +1615,77 @@ extension ExpenseQueryFilter
     });
   }
 
+  QueryBuilder<Expense, Expense, QAfterFilterCondition> sharedSpaceIdIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'sharedSpaceId',
+      ));
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterFilterCondition>
+      sharedSpaceIdIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'sharedSpaceId',
+      ));
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterFilterCondition> sharedSpaceIdEqualTo(
+      int? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'sharedSpaceId',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterFilterCondition>
+      sharedSpaceIdGreaterThan(
+    int? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'sharedSpaceId',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterFilterCondition> sharedSpaceIdLessThan(
+    int? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'sharedSpaceId',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterFilterCondition> sharedSpaceIdBetween(
+    int? lower,
+    int? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'sharedSpaceId',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
   QueryBuilder<Expense, Expense, QAfterFilterCondition> statusEqualTo(
       ExpenseStatus value) {
     return QueryBuilder.apply(this, (query) {
@@ -1989,19 +2120,6 @@ extension ExpenseQuerySortBy on QueryBuilder<Expense, Expense, QSortBy> {
     });
   }
 
-  QueryBuilder<Expense, Expense, QAfterSortBy> sortByExchangeRateToPrimary() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'exchangeRateToPrimary', Sort.asc);
-    });
-  }
-
-  QueryBuilder<Expense, Expense, QAfterSortBy>
-      sortByExchangeRateToPrimaryDesc() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'exchangeRateToPrimary', Sort.desc);
-    });
-  }
-
   QueryBuilder<Expense, Expense, QAfterSortBy> sortByGuiltLevel() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'guiltLevel', Sort.asc);
@@ -2071,6 +2189,18 @@ extension ExpenseQuerySortBy on QueryBuilder<Expense, Expense, QSortBy> {
   QueryBuilder<Expense, Expense, QAfterSortBy> sortByReceiptPathDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'receiptPath', Sort.desc);
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterSortBy> sortBySharedSpaceId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sharedSpaceId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterSortBy> sortBySharedSpaceIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sharedSpaceId', Sort.desc);
     });
   }
 
@@ -2185,19 +2315,6 @@ extension ExpenseQuerySortThenBy
     });
   }
 
-  QueryBuilder<Expense, Expense, QAfterSortBy> thenByExchangeRateToPrimary() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'exchangeRateToPrimary', Sort.asc);
-    });
-  }
-
-  QueryBuilder<Expense, Expense, QAfterSortBy>
-      thenByExchangeRateToPrimaryDesc() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'exchangeRateToPrimary', Sort.desc);
-    });
-  }
-
   QueryBuilder<Expense, Expense, QAfterSortBy> thenByGuiltLevel() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'guiltLevel', Sort.asc);
@@ -2279,6 +2396,18 @@ extension ExpenseQuerySortThenBy
   QueryBuilder<Expense, Expense, QAfterSortBy> thenByReceiptPathDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'receiptPath', Sort.desc);
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterSortBy> thenBySharedSpaceId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sharedSpaceId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterSortBy> thenBySharedSpaceIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sharedSpaceId', Sort.desc);
     });
   }
 
@@ -2365,12 +2494,6 @@ extension ExpenseQueryWhereDistinct
     });
   }
 
-  QueryBuilder<Expense, Expense, QDistinct> distinctByExchangeRateToPrimary() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addDistinctBy(r'exchangeRateToPrimary');
-    });
-  }
-
   QueryBuilder<Expense, Expense, QDistinct> distinctByGuiltLevel() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'guiltLevel');
@@ -2409,6 +2532,12 @@ extension ExpenseQueryWhereDistinct
     });
   }
 
+  QueryBuilder<Expense, Expense, QDistinct> distinctBySharedSpaceId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'sharedSpaceId');
+    });
+  }
+
   QueryBuilder<Expense, Expense, QDistinct> distinctByStatus() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'status');
@@ -2444,7 +2573,7 @@ extension ExpenseQueryProperty
     });
   }
 
-  QueryBuilder<Expense, double, QQueryOperations> amountProperty() {
+  QueryBuilder<Expense, int, QQueryOperations> amountProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'amount');
     });
@@ -2471,13 +2600,6 @@ extension ExpenseQueryProperty
   QueryBuilder<Expense, DateTime, QQueryOperations> dateProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'date');
-    });
-  }
-
-  QueryBuilder<Expense, double, QQueryOperations>
-      exchangeRateToPrimaryProperty() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addPropertyName(r'exchangeRateToPrimary');
     });
   }
 
@@ -2514,6 +2636,12 @@ extension ExpenseQueryProperty
   QueryBuilder<Expense, String?, QQueryOperations> receiptPathProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'receiptPath');
+    });
+  }
+
+  QueryBuilder<Expense, int?, QQueryOperations> sharedSpaceIdProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'sharedSpaceId');
     });
   }
 

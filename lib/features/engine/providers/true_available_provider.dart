@@ -1,55 +1,70 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../expenses/repositories/expense_repository.dart';
+import '../../expenses/providers/reimbursement_provider.dart';
 import '../../../core/providers/active_budget_provider.dart';
-import '../../../core/providers/active_profile_provider.dart';
+import '../../../core/providers/budget_context_provider.dart';
+import '../../../core/providers/selected_month_provider.dart';
 import '../../../core/models/expense.dart';
+import '../../../core/models/money.dart';
 import '../../expenses/models/reimbursement.dart';
+import '../../settings/providers/settings_provider.dart';
+import '../currency_resolution.dart';
+import 'rate_registry_provider.dart';
 
 final monthlyExpensesProvider = StreamProvider<List<Expense>>((ref) {
-  final profile = ref.watch(activeProfileProvider).value;
+  final context = ref.watch(budgetContextProvider);
   final budget = ref.watch(activeBudgetProvider).value;
-  if (profile == null || budget == null) return Stream.value([]);
+  if (context.isShared && budget == null) return Stream.value([]);
 
   final repository = ref.watch(expenseRepositoryProvider);
-  return repository.watchExpenses(profile.id, budget.yearMonth);
+  return repository.watchExpensesForContext(context);
 });
 
+/// Reimbursements that *belong* to the selected month, keyed on
+/// `originYearMonth` (FR-032, FR-033).
+///
+/// Deliberately not derived from the viewed month's expense ids: a
+/// reimbursement recorded months after the expense it belongs to would then
+/// vanish from the month that actually spent the money. Keying on the origin
+/// month is what stops that (SC-005).
 final monthlyReimbursementsProvider =
     StreamProvider<List<Reimbursement>>((ref) {
-  final expenses = ref.watch(monthlyExpensesProvider).value ?? [];
-  if (expenses.isEmpty) return Stream.value([]);
+  final context = ref.watch(budgetContextProvider);
+  final budget = ref.watch(activeBudgetProvider).value;
+  if (context.isShared && budget == null) return Stream.value([]);
 
-  final expenseIds = expenses.map((e) => e.id).toList();
-  final repository = ref.watch(expenseRepositoryProvider);
-  return repository.watchReimbursementsForExpenses(expenseIds);
+  final repository = ref.watch(reimbursementRepositoryProvider);
+  return repository.watchReimbursementsForContext(context);
 });
 
+/// Money in the bank minus what has actually left, converted to the month's
+/// display currency through the registry table (FR-011, FR-013).
 final trueAvailableProvider = Provider<double>((ref) {
   final budget = ref.watch(activeBudgetProvider).value;
+  final yearMonth = ref.watch(selectedYearMonthProvider);
+  final table = ref.watch(rateRegistryProvider).tableFor(yearMonth);
   final expenses = ref.watch(monthlyExpensesProvider).value ?? [];
   final reimbursements = ref.watch(monthlyReimbursementsProvider).value ?? [];
 
   if (budget == null) return 0.0;
 
-  double baseAmount = budget.baseAvailableAmount;
+  final main = ref.watch(mainCurrencyProvider);
+  final display = resolveContextDisplayCurrency(budget, main);
+  final source = main;
+  var total = toDisplay(
+      Money.fromMajor(budget.baseAvailableAmount, source), display, table);
 
-  double totalPaid = 0.0;
   for (final exp in expenses) {
-    if (exp.status == ExpenseStatus.paid) {
-      // Amount is converted to primary currency
-      totalPaid += exp.amount * exp.exchangeRateToPrimary;
+    if (exp.status == ExpenseStatus.paid ||
+        exp.status == ExpenseStatus.reimbursed ||
+        exp.status == ExpenseStatus.partiallyReimbursed) {
+      total = total - expenseToDisplay(exp, display, table);
     }
   }
 
-  double totalReimbursements = 0.0;
   for (final reimb in reimbursements) {
-    // Find matching expense to get exchange rate (or assume reimbursement amount is already in primary currency? Wait, data model says Reimbursement amount must be <= Expense amount. Usually reimbursement is in the same currency, so we should convert it using the same exchange rate).
-    // Let's find the matching expense:
-    final expense = expenses.where((e) => e.id == reimb.expenseId).firstOrNull;
-    if (expense != null) {
-      totalReimbursements += reimb.amount * expense.exchangeRateToPrimary;
-    }
+    total = total + reimbursementToDisplay(reimb, display, table);
   }
 
-  return baseAmount - totalPaid + totalReimbursements;
+  return total.majorValue;
 });

@@ -1,138 +1,110 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
-import '../../engine/providers/true_available_provider.dart';
-import '../../engine/providers/safe_to_spend_provider.dart';
-import '../../../core/providers/active_budget_provider.dart';
-import '../../../core/models/user_profile.dart';
-import '../../../core/models/monthly_budget.dart';
-import '../../../core/database/isar_helper.dart';
 
+import '../../../core/providers/active_budget_provider.dart';
+import '../../../core/providers/active_profile_provider.dart';
+import '../../../core/providers/selected_month_provider.dart';
+import '../../../shared/presentation/widgets/analytics_placeholder_card.dart';
+import '../../../shared/presentation/widgets/month_incomplete_banner.dart';
+import '../../engine/currency_resolution.dart';
+import '../../spaces/presentation/move_month_sheet.dart';
+import '../../spaces/providers/spaces_providers.dart';
+import 'month_navigator.dart';
+import 'widgets/month_convert_to_menu.dart';
+import 'widgets/month_summary_card.dart';
+import 'widgets/month_summary_details.dart';
+
+/// The monthly financial verdict (FR-018).
+///
+/// Rebuilt around a single dominant figure — what the user kept this month —
+/// with everything else subordinate or collapsed. Safe to Spend and True
+/// Available are gone from this view (FR-023); their providers remain for the
+/// expense screens, which still need them.
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final trueAvailableAsync = ref.watch(trueAvailableProvider);
-    final safeToSpendAsync = ref.watch(safeToSpendProvider);
     final activeBudget = ref.watch(activeBudgetProvider).value;
-
-    String currencySymbol = '\$';
-    if (activeBudget != null) {
-      switch (activeBudget.currency) {
-        case PrimaryCurrency.huf:
-          currencySymbol = 'Ft';
-          break;
-        case PrimaryCurrency.usd:
-          currencySymbol = '\$';
-          break;
-        case PrimaryCurrency.cad:
-          currencySymbol = 'C\$';
-          break;
-        case PrimaryCurrency.eur:
-          currencySymbol = '€';
-          break;
-      }
-    }
+    final profile = ref.watch(activeProfileProvider).valueOrNull;
+    final canEdit = ref.watch(activeContextCanEditProvider);
+    final display =
+        resolveDisplayCurrency(month: activeBudget, profile: profile);
+    final symbol = display.symbol;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Dashboard'),
+        title: const MonthNavigator(),
         actions: [
-          if (activeBudget != null)
-            PopupMenuButton<PrimaryCurrency>(
-              initialValue: activeBudget.currency,
-              icon: const Icon(Icons.currency_exchange),
-              tooltip: 'Change Currency',
-              onSelected: (currency) async {
-                final isar = IsarHelper.instance;
-                await isar.writeTxn(() async {
-                  activeBudget.currency = currency;
-                  await isar.monthlyBudgets.put(activeBudget);
-                });
-              },
-              itemBuilder: (context) => const [
-                PopupMenuItem(
-                  value: PrimaryCurrency.usd,
-                  child: Text('USD (\$)'),
-                ),
-                PopupMenuItem(
-                  value: PrimaryCurrency.eur,
-                  child: Text('EUR (€)'),
-                ),
-                PopupMenuItem(
-                  value: PrimaryCurrency.cad,
-                  child: Text('CAD (C\$)'),
-                ),
-                PopupMenuItem(
-                  value: PrimaryCurrency.huf,
-                  child: Text('HUF (Ft)'),
-                ),
-              ],
+          if (activeBudget != null && canEdit) const MonthConvertToMenu(),
+          if (activeBudget != null && canEdit)
+            IconButton(
+              key: const Key('moveMonthButton'),
+              icon: const Icon(Icons.swap_horiz),
+              tooltip: 'Move this month',
+              onPressed: () => MoveMonthSheet.show(context),
             ),
         ],
       ),
-      body: CustomScrollView(
-        slivers: [
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Card(
-                elevation: 4,
-                child: Padding(
-                  padding: const EdgeInsets.all(24.0),
-                  child: Column(
-                    children: [
-                      const Text('Safe to Spend',
-                          style: TextStyle(fontSize: 16)),
-                      Text(
-                        '$currencySymbol ${NumberFormat('#,##0.00').format(safeToSpendAsync)}',
-                        style: const TextStyle(
-                            fontSize: 36,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.green),
-                      ),
-                      const Divider(height: 32),
-                      const Text('True Available',
-                          style: TextStyle(fontSize: 14, color: Colors.grey)),
-                      Text(
-                        '$currencySymbol ${NumberFormat('#,##0.00').format(trueAvailableAsync)}',
-                        style: const TextStyle(
-                            fontSize: 20, fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                ),
+      body: GestureDetector(
+        onHorizontalDragEnd: (details) {
+          if (details.primaryVelocity != null) {
+            if (details.primaryVelocity! < -300) {
+              ref
+                  .read(selectedYearMonthProvider.notifier)
+                  .update((state) => nextMonth(state));
+            } else if (details.primaryVelocity! > 300) {
+              ref
+                  .read(selectedYearMonthProvider.notifier)
+                  .update((state) => previousMonth(state));
+            }
+          }
+        },
+        child: RefreshIndicator(
+          onRefresh: () async {
+            await Future.delayed(const Duration(milliseconds: 500));
+          },
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              MonthIncompleteBanner(currencySymbol: symbol),
+              MonthSummaryCard(currency: display),
+              const SizedBox(height: 12),
+              MonthSummaryDetails(
+                currency: display,
+                // The selected month lives in a provider, so the Medical tab opens
+                // on the same month with no route parameter to carry (FR-022,
+                // FR-027).
+                onMedicalTap: () => context.go('/medical'),
               ),
-            ),
-          ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              const SizedBox(height: 12),
+              const AnalyticsPlaceholderCard(),
+              const SizedBox(height: 24),
+              const Text(
+                'Quick Actions',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  const Text('Quick Actions',
-                      style:
-                          TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      InkWell(
-                        onTap: () => context.push('/add_expense'),
-                        child: _buildActionButton(Icons.add, 'Add Expense'),
-                      ),
-                      _buildActionButton(Icons.medical_services, 'Medical'),
-                      _buildActionButton(Icons.history, 'History'),
-                    ],
+                  if (canEdit)
+                    InkWell(
+                      onTap: () => context.push('/add_expense'),
+                      child: _buildActionButton(Icons.add, 'Add Expense'),
+                    ),
+                  InkWell(
+                    onTap: () => context.go('/medical'),
+                    child:
+                        _buildActionButton(Icons.medical_services, 'Medical'),
                   ),
+                  _buildActionButton(Icons.history, 'History'),
                 ],
               ),
-            ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -140,10 +112,7 @@ class DashboardScreen extends ConsumerWidget {
   Widget _buildActionButton(IconData icon, String label) {
     return Column(
       children: [
-        CircleAvatar(
-          radius: 28,
-          child: Icon(icon, size: 28),
-        ),
+        CircleAvatar(radius: 28, child: Icon(icon, size: 28)),
         const SizedBox(height: 8),
         Text(label),
       ],

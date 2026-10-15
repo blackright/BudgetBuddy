@@ -17,29 +17,56 @@ const UserProfileSchema = CollectionSchema(
   name: r'UserProfile',
   id: 4738427352541298891,
   properties: {
-    r'createdAt': PropertySchema(
+    r'avatar': PropertySchema(
       id: 0,
+      name: r'avatar',
+      type: IsarType.string,
+    ),
+    r'createdAt': PropertySchema(
+      id: 1,
       name: r'createdAt',
       type: IsarType.dateTime,
     ),
+    r'defaultNetSalary': PropertySchema(
+      id: 2,
+      name: r'defaultNetSalary',
+      type: IsarType.double,
+    ),
+    r'fontFamily': PropertySchema(
+      id: 3,
+      name: r'fontFamily',
+      type: IsarType.byte,
+      enumMap: _UserProfilefontFamilyEnumValueMap,
+    ),
+    r'lastActiveAt': PropertySchema(
+      id: 4,
+      name: r'lastActiveAt',
+      type: IsarType.dateTime,
+    ),
     r'monthlyAvailableAmount': PropertySchema(
-      id: 1,
+      id: 5,
       name: r'monthlyAvailableAmount',
       type: IsarType.double,
     ),
     r'name': PropertySchema(
-      id: 2,
+      id: 6,
       name: r'name',
       type: IsarType.string,
     ),
     r'primaryCurrency': PropertySchema(
-      id: 3,
+      id: 7,
       name: r'primaryCurrency',
       type: IsarType.byte,
       enumMap: _UserProfileprimaryCurrencyEnumValueMap,
     ),
+    r'themeMode': PropertySchema(
+      id: 8,
+      name: r'themeMode',
+      type: IsarType.byte,
+      enumMap: _UserProfilethemeModeEnumValueMap,
+    ),
     r'updatedAt': PropertySchema(
-      id: 4,
+      id: 9,
       name: r'updatedAt',
       type: IsarType.dateTime,
     )
@@ -64,6 +91,7 @@ int _userProfileEstimateSize(
   Map<Type, List<int>> allOffsets,
 ) {
   var bytesCount = offsets.last;
+  bytesCount += 3 + object.avatar.length * 3;
   bytesCount += 3 + object.name.length * 3;
   return bytesCount;
 }
@@ -74,11 +102,16 @@ void _userProfileSerialize(
   List<int> offsets,
   Map<Type, List<int>> allOffsets,
 ) {
-  writer.writeDateTime(offsets[0], object.createdAt);
-  writer.writeDouble(offsets[1], object.monthlyAvailableAmount);
-  writer.writeString(offsets[2], object.name);
-  writer.writeByte(offsets[3], object.primaryCurrency.index);
-  writer.writeDateTime(offsets[4], object.updatedAt);
+  writer.writeString(offsets[0], object.avatar);
+  writer.writeDateTime(offsets[1], object.createdAt);
+  writer.writeDouble(offsets[2], object.defaultNetSalary);
+  writer.writeByte(offsets[3], object.fontFamily.index);
+  writer.writeDateTime(offsets[4], object.lastActiveAt);
+  writer.writeDouble(offsets[5], object.monthlyAvailableAmount);
+  writer.writeString(offsets[6], object.name);
+  writer.writeByte(offsets[7], object.primaryCurrency.index);
+  writer.writeByte(offsets[8], object.themeMode.index);
+  writer.writeDateTime(offsets[9], object.updatedAt);
 }
 
 UserProfile _userProfileDeserialize(
@@ -88,14 +121,23 @@ UserProfile _userProfileDeserialize(
   Map<Type, List<int>> allOffsets,
 ) {
   final object = UserProfile();
-  object.createdAt = reader.readDateTime(offsets[0]);
+  object.avatar = reader.readString(offsets[0]);
+  object.createdAt = reader.readDateTime(offsets[1]);
+  object.defaultNetSalary = reader.readDouble(offsets[2]);
+  object.fontFamily =
+      _UserProfilefontFamilyValueEnumMap[reader.readByteOrNull(offsets[3])] ??
+          AppFontFamily.system;
   object.id = id;
-  object.monthlyAvailableAmount = reader.readDouble(offsets[1]);
-  object.name = reader.readString(offsets[2]);
+  object.lastActiveAt = reader.readDateTimeOrNull(offsets[4]);
+  object.monthlyAvailableAmount = reader.readDouble(offsets[5]);
+  object.name = reader.readString(offsets[6]);
   object.primaryCurrency = _UserProfileprimaryCurrencyValueEnumMap[
-          reader.readByteOrNull(offsets[3])] ??
+          reader.readByteOrNull(offsets[7])] ??
       PrimaryCurrency.huf;
-  object.updatedAt = reader.readDateTime(offsets[4]);
+  object.themeMode =
+      _UserProfilethemeModeValueEnumMap[reader.readByteOrNull(offsets[8])] ??
+          AppThemeMode.system;
+  object.updatedAt = reader.readDateTime(offsets[9]);
   return object;
 }
 
@@ -107,22 +149,48 @@ P _userProfileDeserializeProp<P>(
 ) {
   switch (propertyId) {
     case 0:
-      return (reader.readDateTime(offset)) as P;
-    case 1:
-      return (reader.readDouble(offset)) as P;
-    case 2:
       return (reader.readString(offset)) as P;
+    case 1:
+      return (reader.readDateTime(offset)) as P;
+    case 2:
+      return (reader.readDouble(offset)) as P;
     case 3:
+      return (_UserProfilefontFamilyValueEnumMap[
+              reader.readByteOrNull(offset)] ??
+          AppFontFamily.system) as P;
+    case 4:
+      return (reader.readDateTimeOrNull(offset)) as P;
+    case 5:
+      return (reader.readDouble(offset)) as P;
+    case 6:
+      return (reader.readString(offset)) as P;
+    case 7:
       return (_UserProfileprimaryCurrencyValueEnumMap[
               reader.readByteOrNull(offset)] ??
           PrimaryCurrency.huf) as P;
-    case 4:
+    case 8:
+      return (_UserProfilethemeModeValueEnumMap[
+              reader.readByteOrNull(offset)] ??
+          AppThemeMode.system) as P;
+    case 9:
       return (reader.readDateTime(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
   }
 }
 
+const _UserProfilefontFamilyEnumValueMap = {
+  'system': 0,
+  'roboto': 1,
+  'inter': 2,
+  'openSans': 3,
+};
+const _UserProfilefontFamilyValueEnumMap = {
+  0: AppFontFamily.system,
+  1: AppFontFamily.roboto,
+  2: AppFontFamily.inter,
+  3: AppFontFamily.openSans,
+};
 const _UserProfileprimaryCurrencyEnumValueMap = {
   'huf': 0,
   'usd': 1,
@@ -134,6 +202,16 @@ const _UserProfileprimaryCurrencyValueEnumMap = {
   1: PrimaryCurrency.usd,
   2: PrimaryCurrency.cad,
   3: PrimaryCurrency.eur,
+};
+const _UserProfilethemeModeEnumValueMap = {
+  'system': 0,
+  'light': 1,
+  'dark': 2,
+};
+const _UserProfilethemeModeValueEnumMap = {
+  0: AppThemeMode.system,
+  1: AppThemeMode.light,
+  2: AppThemeMode.dark,
 };
 
 Id _userProfileGetId(UserProfile object) {
@@ -229,6 +307,140 @@ extension UserProfileQueryWhere
 
 extension UserProfileQueryFilter
     on QueryBuilder<UserProfile, UserProfile, QFilterCondition> {
+  QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition> avatarEqualTo(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'avatar',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition>
+      avatarGreaterThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'avatar',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition> avatarLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'avatar',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition> avatarBetween(
+    String lower,
+    String upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'avatar',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition>
+      avatarStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'avatar',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition> avatarEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'avatar',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition> avatarContains(
+      String value,
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'avatar',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition> avatarMatches(
+      String pattern,
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'avatar',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition>
+      avatarIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'avatar',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition>
+      avatarIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'avatar',
+        value: '',
+      ));
+    });
+  }
+
   QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition>
       createdAtEqualTo(DateTime value) {
     return QueryBuilder.apply(this, (query) {
@@ -285,6 +497,128 @@ extension UserProfileQueryFilter
     });
   }
 
+  QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition>
+      defaultNetSalaryEqualTo(
+    double value, {
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'defaultNetSalary',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition>
+      defaultNetSalaryGreaterThan(
+    double value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'defaultNetSalary',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition>
+      defaultNetSalaryLessThan(
+    double value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'defaultNetSalary',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition>
+      defaultNetSalaryBetween(
+    double lower,
+    double upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'defaultNetSalary',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition>
+      fontFamilyEqualTo(AppFontFamily value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'fontFamily',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition>
+      fontFamilyGreaterThan(
+    AppFontFamily value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'fontFamily',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition>
+      fontFamilyLessThan(
+    AppFontFamily value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'fontFamily',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition>
+      fontFamilyBetween(
+    AppFontFamily lower,
+    AppFontFamily upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'fontFamily',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
   QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition> idEqualTo(
       Id value) {
     return QueryBuilder.apply(this, (query) {
@@ -330,6 +664,80 @@ extension UserProfileQueryFilter
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.between(
         property: r'id',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition>
+      lastActiveAtIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'lastActiveAt',
+      ));
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition>
+      lastActiveAtIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'lastActiveAt',
+      ));
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition>
+      lastActiveAtEqualTo(DateTime? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'lastActiveAt',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition>
+      lastActiveAtGreaterThan(
+    DateTime? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'lastActiveAt',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition>
+      lastActiveAtLessThan(
+    DateTime? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'lastActiveAt',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition>
+      lastActiveAtBetween(
+    DateTime? lower,
+    DateTime? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'lastActiveAt',
         lower: lower,
         includeLower: includeLower,
         upper: upper,
@@ -592,6 +1000,62 @@ extension UserProfileQueryFilter
   }
 
   QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition>
+      themeModeEqualTo(AppThemeMode value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'themeMode',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition>
+      themeModeGreaterThan(
+    AppThemeMode value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'themeMode',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition>
+      themeModeLessThan(
+    AppThemeMode value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'themeMode',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition>
+      themeModeBetween(
+    AppThemeMode lower,
+    AppThemeMode upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'themeMode',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition>
       updatedAtEqualTo(DateTime value) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
@@ -656,6 +1120,18 @@ extension UserProfileQueryLinks
 
 extension UserProfileQuerySortBy
     on QueryBuilder<UserProfile, UserProfile, QSortBy> {
+  QueryBuilder<UserProfile, UserProfile, QAfterSortBy> sortByAvatar() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'avatar', Sort.asc);
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterSortBy> sortByAvatarDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'avatar', Sort.desc);
+    });
+  }
+
   QueryBuilder<UserProfile, UserProfile, QAfterSortBy> sortByCreatedAt() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'createdAt', Sort.asc);
@@ -665,6 +1141,45 @@ extension UserProfileQuerySortBy
   QueryBuilder<UserProfile, UserProfile, QAfterSortBy> sortByCreatedAtDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'createdAt', Sort.desc);
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterSortBy>
+      sortByDefaultNetSalary() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'defaultNetSalary', Sort.asc);
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterSortBy>
+      sortByDefaultNetSalaryDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'defaultNetSalary', Sort.desc);
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterSortBy> sortByFontFamily() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'fontFamily', Sort.asc);
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterSortBy> sortByFontFamilyDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'fontFamily', Sort.desc);
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterSortBy> sortByLastActiveAt() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'lastActiveAt', Sort.asc);
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterSortBy>
+      sortByLastActiveAtDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'lastActiveAt', Sort.desc);
     });
   }
 
@@ -707,6 +1222,18 @@ extension UserProfileQuerySortBy
     });
   }
 
+  QueryBuilder<UserProfile, UserProfile, QAfterSortBy> sortByThemeMode() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'themeMode', Sort.asc);
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterSortBy> sortByThemeModeDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'themeMode', Sort.desc);
+    });
+  }
+
   QueryBuilder<UserProfile, UserProfile, QAfterSortBy> sortByUpdatedAt() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'updatedAt', Sort.asc);
@@ -722,6 +1249,18 @@ extension UserProfileQuerySortBy
 
 extension UserProfileQuerySortThenBy
     on QueryBuilder<UserProfile, UserProfile, QSortThenBy> {
+  QueryBuilder<UserProfile, UserProfile, QAfterSortBy> thenByAvatar() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'avatar', Sort.asc);
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterSortBy> thenByAvatarDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'avatar', Sort.desc);
+    });
+  }
+
   QueryBuilder<UserProfile, UserProfile, QAfterSortBy> thenByCreatedAt() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'createdAt', Sort.asc);
@@ -734,6 +1273,32 @@ extension UserProfileQuerySortThenBy
     });
   }
 
+  QueryBuilder<UserProfile, UserProfile, QAfterSortBy>
+      thenByDefaultNetSalary() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'defaultNetSalary', Sort.asc);
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterSortBy>
+      thenByDefaultNetSalaryDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'defaultNetSalary', Sort.desc);
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterSortBy> thenByFontFamily() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'fontFamily', Sort.asc);
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterSortBy> thenByFontFamilyDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'fontFamily', Sort.desc);
+    });
+  }
+
   QueryBuilder<UserProfile, UserProfile, QAfterSortBy> thenById() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'id', Sort.asc);
@@ -743,6 +1308,19 @@ extension UserProfileQuerySortThenBy
   QueryBuilder<UserProfile, UserProfile, QAfterSortBy> thenByIdDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'id', Sort.desc);
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterSortBy> thenByLastActiveAt() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'lastActiveAt', Sort.asc);
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterSortBy>
+      thenByLastActiveAtDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'lastActiveAt', Sort.desc);
     });
   }
 
@@ -785,6 +1363,18 @@ extension UserProfileQuerySortThenBy
     });
   }
 
+  QueryBuilder<UserProfile, UserProfile, QAfterSortBy> thenByThemeMode() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'themeMode', Sort.asc);
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterSortBy> thenByThemeModeDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'themeMode', Sort.desc);
+    });
+  }
+
   QueryBuilder<UserProfile, UserProfile, QAfterSortBy> thenByUpdatedAt() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'updatedAt', Sort.asc);
@@ -800,9 +1390,35 @@ extension UserProfileQuerySortThenBy
 
 extension UserProfileQueryWhereDistinct
     on QueryBuilder<UserProfile, UserProfile, QDistinct> {
+  QueryBuilder<UserProfile, UserProfile, QDistinct> distinctByAvatar(
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'avatar', caseSensitive: caseSensitive);
+    });
+  }
+
   QueryBuilder<UserProfile, UserProfile, QDistinct> distinctByCreatedAt() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'createdAt');
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QDistinct>
+      distinctByDefaultNetSalary() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'defaultNetSalary');
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QDistinct> distinctByFontFamily() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'fontFamily');
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QDistinct> distinctByLastActiveAt() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'lastActiveAt');
     });
   }
 
@@ -827,6 +1443,12 @@ extension UserProfileQueryWhereDistinct
     });
   }
 
+  QueryBuilder<UserProfile, UserProfile, QDistinct> distinctByThemeMode() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'themeMode');
+    });
+  }
+
   QueryBuilder<UserProfile, UserProfile, QDistinct> distinctByUpdatedAt() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'updatedAt');
@@ -842,9 +1464,36 @@ extension UserProfileQueryProperty
     });
   }
 
+  QueryBuilder<UserProfile, String, QQueryOperations> avatarProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'avatar');
+    });
+  }
+
   QueryBuilder<UserProfile, DateTime, QQueryOperations> createdAtProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'createdAt');
+    });
+  }
+
+  QueryBuilder<UserProfile, double, QQueryOperations>
+      defaultNetSalaryProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'defaultNetSalary');
+    });
+  }
+
+  QueryBuilder<UserProfile, AppFontFamily, QQueryOperations>
+      fontFamilyProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'fontFamily');
+    });
+  }
+
+  QueryBuilder<UserProfile, DateTime?, QQueryOperations>
+      lastActiveAtProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'lastActiveAt');
     });
   }
 
@@ -865,6 +1514,13 @@ extension UserProfileQueryProperty
       primaryCurrencyProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'primaryCurrency');
+    });
+  }
+
+  QueryBuilder<UserProfile, AppThemeMode, QQueryOperations>
+      themeModeProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'themeMode');
     });
   }
 

@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import '../../../core/models/user_profile.dart';
+import '../../../core/providers/active_profile_provider.dart';
+import '../../../shared/presentation/widgets/money_field.dart';
+import '../../spaces/presentation/space_switcher.dart';
 import '../providers/budget_setup_provider.dart';
 
 class BudgetSetupScreen extends ConsumerStatefulWidget {
@@ -38,7 +42,8 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
       await ref.read(budgetSetupProvider.notifier).loadAutoFillData();
       final state = ref.read(budgetSetupProvider);
       if (state.amount != null) {
-        _amountController.text = state.amount.toString();
+        _amountController.text =
+            NumberFormat('#,##0.00', 'en_US').format(state.amount!);
       }
       if (state.yearMonth != null) {
         try {
@@ -87,16 +92,11 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
                 ),
               ),
             const SizedBox(height: 16),
-            TextField(
+            MoneyField(
+              key: const Key('monthlyAvailableAmountField'),
               controller: _amountController,
-              decoration: const InputDecoration(
-                labelText: 'Monthly Available Amount',
-                border: OutlineInputBorder(),
-              ),
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              onChanged: (value) {
-                final amount = double.tryParse(value);
+              label: 'Monthly Available Amount',
+              onChanged: (amount) {
                 if (amount != null) {
                   notifier.setAmount(amount);
                 }
@@ -160,13 +160,52 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
                   ? null
                   : () async {
                       final success = await notifier.saveBudget();
-                      if (success && context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                              content: Text('Budget saved successfully')),
-                        );
-                        context.go('/dashboard');
+                      if (!success || !context.mounted) return;
+
+                      // Onboarding creates the first profile; it may also create
+                      // a shared space immediately (spec edge "First launch / no
+                      // profile yet", T057). Resolve the fresh profile, then
+                      // offer the space before landing on the dashboard.
+                      final profile =
+                          await ref.read(activeProfileProvider.future);
+                      if (profile != null) {
+                        ref.read(activeProfileIdProvider.notifier).state =
+                            profile.id;
                       }
+                      if (!context.mounted) return;
+
+                      final wantsSpace = await showDialog<bool>(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: const Text('Create a shared space?'),
+                          content: const Text(
+                            'A shared space lets you and other profiles share '
+                            'one budget. You can also do this later from the '
+                            'context switcher.',
+                          ),
+                          actions: [
+                            TextButton(
+                              key: const Key('skipCreateSpaceButton'),
+                              onPressed: () => Navigator.of(context).pop(false),
+                              child: const Text('Not now'),
+                            ),
+                            FilledButton(
+                              key: const Key('createSpaceNowButton'),
+                              onPressed: () => Navigator.of(context).pop(true),
+                              child: const Text('Create a space'),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (wantsSpace == true && context.mounted) {
+                        await showCreateSpaceFlow(context, ref);
+                      }
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                            content: Text('Budget saved successfully')),
+                      );
+                      context.go('/dashboard');
                     },
               child: state.isSaving
                   ? const CircularProgressIndicator()

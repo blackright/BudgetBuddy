@@ -1,5 +1,7 @@
 import 'package:isar/isar.dart';
 
+import 'currency_code.dart';
+
 part 'expense.g.dart';
 
 @collection
@@ -11,16 +13,27 @@ class Expense {
   @Index()
   late int profileId;
 
+  /// Owning shared space, or `null` for a personal expense. Exactly one of
+  /// [profileId] / [sharedSpaceId] is set (FR-003, data-model §3.3).
+  @Index()
+  int? sharedSpaceId;
+
   @Index()
   late String yearMonth;
-
-  double exchangeRateToPrimary = 1.0;
 
   @enumerated
   ExpenseType type = ExpenseType.standard;
 
   String title;
-  double amount;
+
+  /// Amount in **whole minor units** of [currency] (HUF: forint, others: the
+  /// cent-scale unit) — the single money representation (FR-015, data-model
+  /// §4.3). A legacy `double` value is converted by migration step 9.
+  int amount;
+
+  /// Persisted currency code. Kept as the raw string (not the enum) so a legacy
+  /// value the app no longer understands survives verbatim (FR-021, §4.4);
+  /// resolve it through [currencyCode].
   String currency;
   String categoryId;
   @enumerated
@@ -40,8 +53,8 @@ class Expense {
   Expense({
     this.id = Isar.autoIncrement,
     required this.profileId,
+    this.sharedSpaceId,
     required this.yearMonth,
-    this.exchangeRateToPrimary = 1.0,
     this.type = ExpenseType.standard,
     required this.title,
     required this.amount,
@@ -56,12 +69,19 @@ class Expense {
     required this.budgetId,
     this.paidAt,
   });
+
+  /// The parsed currency, or `null` for a legacy/unsupported code that must be
+  /// preserved and excluded from converted totals (FR-021, data-model §4.4).
+  @ignore
+  CurrencyCode? get currencyCode => CurrencyCode.tryParse(currency);
 }
 
 enum ExpenseStatus {
   planned,
   paid,
   cancelled,
+  reimbursed,
+  partiallyReimbursed,
 }
 
 enum ExpenseType {
