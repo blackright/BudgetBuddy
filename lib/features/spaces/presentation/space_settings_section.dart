@@ -7,6 +7,10 @@ import '../../../core/models/currency_code.dart';
 import '../../../core/models/user_profile.dart';
 import '../../../core/providers/active_profile_provider.dart';
 import '../../../core/providers/active_space_provider.dart';
+import '../../../shared/presentation/money_format.dart';
+import '../../../shared/presentation/widgets/money_field.dart';
+import '../../../shared/presentation/widgets/sync_status_chip.dart';
+import '../../pairing/presentation/pair_device_screen.dart';
 import '../providers/spaces_providers.dart';
 import '../repositories/space_role_guard.dart';
 import '../repositories/spaces_repository.dart';
@@ -97,15 +101,11 @@ class _IncomeDialogState extends State<_IncomeDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text('Our income'),
-      content: TextField(
+      content: MoneyField(
         key: const Key('ourIncomeField'),
         controller: _income,
         autofocus: true,
-        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        decoration: InputDecoration(
-          border: const OutlineInputBorder(),
-          prefixText: '${widget.currency.code.symbol} ',
-        ),
+        prefixText: '${widget.currency.code.symbol} ',
       ),
       actions: [
         TextButton(
@@ -115,8 +115,7 @@ class _IncomeDialogState extends State<_IncomeDialog> {
         FilledButton(
           key: const Key('saveOurIncomeButton'),
           onPressed: () {
-            final major =
-                double.tryParse(_income.text.trim().replaceAll(',', ''));
+            final major = parseMoneyInput(_income.text);
             if (major == null || major < 0) return;
             Navigator.of(context).pop(
               (major * widget.currency.code.minorUnitsPerMajor).round(),
@@ -430,6 +429,19 @@ class SpaceSettingsSection extends ConsumerWidget {
                         icon: const Icon(Icons.swap_horiz, size: 18),
                         label: const Text('Make someone else the Owner'),
                       ),
+                      FilledButton.tonalIcon(
+                        key: const Key('pairDeviceFromSpaceButton'),
+                        onPressed: () {
+                          Navigator.of(context, rootNavigator: true).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) =>
+                                  PairDeviceScreen(spaceId: space.id),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.qr_code_2, size: 18),
+                        label: const Text('Pair a device'),
+                      ),
                       OutlinedButton.icon(
                         key: const Key('deleteSpaceButton'),
                         onPressed: () => _delete(context, ref),
@@ -458,6 +470,7 @@ class SpaceSettingsSection extends ConsumerWidget {
               '${space.currency.code.symbol}'
               '${NumberFormat('#,##0.00').format(space.defaultIncome / space.currency.code.minorUnitsPerMajor)}',
             ),
+            trailing: const SyncStatusChip(),
           ),
         ),
         const SizedBox(height: 8),

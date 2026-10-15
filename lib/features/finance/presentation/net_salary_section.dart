@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
 import '../../../core/providers/active_profile_provider.dart';
+import '../../../core/providers/active_space_provider.dart';
 import '../../../core/providers/selected_month_provider.dart';
+import '../../../shared/presentation/widgets/money_field.dart';
 import '../../settings/providers/settings_provider.dart';
 import '../../medical/presentation/medical_theme.dart';
 import '../providers/finance_providers.dart';
@@ -16,8 +17,11 @@ import '../repositories/month_finance_repository.dart';
 /// specific month, which is how an irregular month — bonus, holiday, unpaid
 /// stretch — is handled without editing history (FR-001, FR-005).
 ///
-/// Changing the default never rewrites months that already exist (FR-004); a
-/// month only stops following it once it carries its own override.
+/// The header names the active profile so it is never mistaken for a global
+/// figure (FR-005, US3). Each field carries a `syncKey` bound to the active
+/// profile, the selected month and the active context, so switching any of them
+/// re-syncs the text to the new context instead of leaving the last context's
+/// number behind (FR-010).
 class NetSalarySection extends ConsumerWidget {
   const NetSalarySection({super.key});
 
@@ -26,9 +30,13 @@ class NetSalarySection extends ConsumerWidget {
     final yearMonth = ref.watch(selectedYearMonthProvider);
     final repository = ref.watch(monthFinanceRepositoryProvider);
     final resolved = ref.watch(resolvedIncomeProvider);
+    final profile = ref.watch(activeProfileProvider).value;
+    final spaceId = ref.watch(activeSpaceIdProvider);
     // Salary is kept in the profile's main currency; show its symbol on entry
     // rather than a hardcoded default (FR-009, defect D5).
     final currency = ref.watch(mainCurrencyProvider);
+    // Identity of the data behind these fields: changing any part re-syncs them.
+    final syncKey = (profile?.id, yearMonth, spaceId);
 
     return Card(
       child: Padding(
@@ -39,29 +47,43 @@ class NetSalarySection extends ConsumerWidget {
             Text('My income', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 4),
             Text(
+              profile?.name ?? '',
+              key: const Key('incomeProfileName'),
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 4),
+            Text(
               'What you actually take home, after tax.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: 16),
-            _AmountField(
+            Text('Default salary',
+                style: Theme.of(context).textTheme.labelLarge),
+            const SizedBox(height: 6),
+            MoneyField(
               key: const Key('defaultSalaryField'),
-              label: 'Default salary',
-              helper: 'Applies to every month without its own amount.',
               initialValue: ref.watch(defaultNetSalaryProvider),
+              fractionDigits: 2,
+              syncKey: syncKey,
+              helperText: 'Applies to every month without its own amount.',
               prefixText: '${currency.symbol} ',
               onSubmitted: (amount) => repository.saveDefaultNetSalary(
                 amount ?? 0.0,
-                profileId: ref.read(activeProfileProvider).value?.id,
+                profileId: profile?.id,
               ),
             ),
             const Divider(height: 28),
-            _AmountField(
+            Text('${monthLabel(yearMonth)} only',
+                style: Theme.of(context).textTheme.labelLarge),
+            const SizedBox(height: 6),
+            MoneyField(
               key: const Key('monthOverrideField'),
-              label: '${monthLabel(yearMonth)} only',
-              helper: resolved.usesOverride
+              initialValue: resolved.usesOverride ? resolved.amount : null,
+              fractionDigits: 2,
+              syncKey: syncKey,
+              helperText: resolved.usesOverride
                   ? 'Currently overridden for this month.'
                   : 'Leave empty to follow the default salary.',
-              initialValue: resolved.usesOverride ? resolved.amount : null,
               prefixText: '${currency.symbol} ',
               onSubmitted: (amount) =>
                   repository.saveNetSalaryOverride(yearMonth, amount),
@@ -76,77 +98,5 @@ class NetSalarySection extends ConsumerWidget {
         ),
       ),
     );
-  }
-}
-
-/// A numeric field that reports `null` when cleared, so an override can be
-/// removed without typing a zero.
-class _AmountField extends StatefulWidget {
-  const _AmountField({
-    super.key,
-    required this.label,
-    required this.helper,
-    required this.initialValue,
-    required this.onSubmitted,
-    this.prefixText,
-  });
-
-  final String label;
-  final String helper;
-  final double? initialValue;
-  final ValueChanged<double?> onSubmitted;
-  final String? prefixText;
-
-  @override
-  State<_AmountField> createState() => _AmountFieldState();
-}
-
-class _AmountFieldState extends State<_AmountField> {
-  late final TextEditingController _controller =
-      TextEditingController(text: _format(widget.initialValue));
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _submit() {
-    final raw = _controller.text.trim().replaceAll(',', '');
-    if (raw.isEmpty) {
-      widget.onSubmitted(null);
-      return;
-    }
-    final parsed = double.tryParse(raw);
-    if (parsed == null || parsed < 0) return;
-    widget.onSubmitted(parsed);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(widget.label, style: Theme.of(context).textTheme.labelLarge),
-        const SizedBox(height: 6),
-        TextField(
-          controller: _controller,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: InputDecoration(
-            border: const OutlineInputBorder(),
-            helperText: widget.helper,
-            helperMaxLines: 2,
-            prefixText: widget.prefixText,
-          ),
-          onSubmitted: (_) => _submit(),
-          onEditingComplete: _submit,
-        ),
-      ],
-    );
-  }
-
-  static String _format(double? amount) {
-    if (amount == null) return '';
-    return NumberFormat('#,##0.00').format(amount);
   }
 }

@@ -4,6 +4,7 @@ import '../../../../core/models/currency_code.dart';
 import '../../../../core/models/expense.dart';
 import '../../../../core/models/money.dart';
 import '../../../../shared/presentation/money_format.dart';
+import '../../../../shared/presentation/widgets/money_field.dart';
 import '../../providers/reimbursement_provider.dart';
 import '../../repositories/expense_repository.dart';
 import '../../models/reimbursement.dart';
@@ -53,8 +54,7 @@ class _ReimbursementEntrySheetState
   }
 
   Future<void> _submit(int maxAllowed) async {
-    final amountText = _amountController.text.replaceAll(',', '');
-    final amount = double.tryParse(amountText);
+    final amount = parseMoneyInput(_amountController.text);
     if (amount == null || amount <= 0) return;
 
     final expenseCode =
@@ -187,16 +187,15 @@ class _ReimbursementEntrySheetState
                     children: [
                       Expanded(
                         flex: 2,
-                        child: TextField(
+                        child: MoneyField(
+                          key: const Key('reimbursementAmountField'),
                           controller: _amountController,
-                          keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true),
+                          autofocus: true,
                           decoration: const InputDecoration(
                             labelText: 'Amount',
                             border: OutlineInputBorder(),
                             prefixIcon: Icon(Icons.attach_money),
                           ),
-                          autofocus: true,
                         ),
                       ),
                       const SizedBox(width: 16),

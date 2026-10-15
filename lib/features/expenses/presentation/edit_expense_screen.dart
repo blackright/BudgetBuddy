@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import '../../../core/models/currency_code.dart';
 import '../../../core/models/expense.dart';
 import '../../../core/models/money.dart';
@@ -9,6 +10,7 @@ import '../../../core/providers/active_budget_provider.dart';
 import '../../../core/providers/active_profile_provider.dart';
 import '../../../core/providers/selected_month_provider.dart';
 import '../../../shared/presentation/money_format.dart';
+import '../../../shared/presentation/widgets/money_field.dart';
 import '../../engine/currency_resolution.dart';
 import '../../engine/expense_delta.dart';
 import '../../engine/providers/rate_registry_provider.dart';
@@ -73,10 +75,9 @@ class _EditExpenseScreenState extends ConsumerState<EditExpenseScreen> {
   }
 
   static String _formatEditable(double v) =>
-      v == v.roundToDouble() ? v.toInt().toString() : v.toString();
+      NumberFormat('#,##0.##', 'en_US').format(v);
 
-  static double? _parseAmount(String? raw) =>
-      double.tryParse((raw ?? '').replaceAll(RegExp(r'[,\s]'), ''));
+  static double? _parseAmount(String? raw) => parseMoneyInput(raw ?? '');
 
   Future<void> _onCurrencyChanged(String currency) async {
     setState(() => _currency = currency);
@@ -227,14 +228,10 @@ class _EditExpenseScreenState extends ConsumerState<EditExpenseScreen> {
                 children: [
                   Expanded(
                     flex: 2,
-                    child: TextFormField(
+                    child: MoneyField(
+                      key: const Key('editExpenseAmountField'),
                       controller: _amountController,
-                      keyboardType:
-                          const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(
-                        labelText: 'Amount',
-                        border: OutlineInputBorder(),
-                      ),
+                      label: 'Amount',
                       validator: (value) {
                         if (value == null || value.isEmpty) return 'Required';
                         final v = _parseAmount(value);

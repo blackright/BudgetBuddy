@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../finance/presentation/net_salary_section.dart';
+import '../../identity/presentation/identity_section.dart';
+import '../../pairing/presentation/paired_devices_section.dart';
 import '../../spaces/presentation/space_settings_section.dart';
 import 'font_setting_section.dart';
 import 'profile_switcher_section.dart';
@@ -19,6 +21,11 @@ class SettingsScreen extends StatelessWidget {
           // US2: renders only when a space is active; personal context shows
           // nothing here (T036).
           SpaceSettingsSection(),
+          SizedBox(height: 16),
+          IdentitySection(),
+          SizedBox(height: 16),
+          // US3: shows only once an identity exists.
+          PairedDevicesSection(),
           SizedBox(height: 16),
           ProfileSwitcherSection(),
           SizedBox(height: 16),

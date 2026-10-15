@@ -59,20 +59,32 @@ String formatMoneyWithOriginal({
   return '${formatMoney(converted)} · ${formatMoney(original)}';
 }
 
+/// Parses a free-text amount field into a major-unit `double`, ignoring
+/// thousands separators and whitespace (`1,234.56` and `1 234.56` → `1234.56`).
+///
+/// This is the one input parser every amount field shares (FR-007): the grouping
+/// formatter may insert `,`, so a screen must never feed the raw text straight to
+/// `double.tryParse`. Returns `null` for empty or non-numeric text — callers
+/// decide whether a `null`/blank means "clear" or "zero"; negative values are
+/// passed through so the screen's own validator can reject them.
+double? parseMoneyInput(String raw) {
+  final cleaned = raw.trim().replaceAll(RegExp(r'[,\s]'), '');
+  if (cleaned.isEmpty) return null;
+  final value = double.tryParse(cleaned);
+  if (value == null || value.isNaN || !value.isFinite) return null;
+  return value;
+}
+
 /// Parses user input ("1 234,50", "12.34", "1,234.56") into a [Money] in
 /// [currency].
 ///
 /// Returns `null` when the text is not a number or resolves to a non-positive
 /// amount — amounts ≤ 0 are rejected at input (data-model §1.2). Rounding to
-/// the currency's exponent happens here, at the input boundary.
+/// the currency's exponent happens here, at the input boundary. Delegates the
+/// separator handling to [parseMoneyInput] so there is one stripping rule.
 Money? tryParseMoneyInput(String raw, CurrencyCode currency) {
-  final cleaned = raw
-      .trim()
-      .replaceAll(RegExp(r'[\s,]'), '')
-      .replaceAll(currency.symbol.trim(), '');
-  if (cleaned.isEmpty) return null;
-  final value = double.tryParse(cleaned);
-  if (value == null || value.isNaN || !value.isFinite) return null;
-  if (value <= 0) return null;
+  final withoutSymbol = raw.replaceAll(currency.symbol.trim(), '');
+  final value = parseMoneyInput(withoutSymbol);
+  if (value == null || value <= 0) return null;
   return Money.fromMajor(value, currency);
 }

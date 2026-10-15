@@ -13,6 +13,13 @@ import 'package:budget_buddy/core/models/month_rate_seal.dart';
 import 'package:budget_buddy/core/models/monthly_budget.dart';
 import 'package:budget_buddy/core/models/shared_member.dart';
 import 'package:budget_buddy/core/models/shared_space.dart';
+import 'package:budget_buddy/core/models/identity.dart';
+import 'package:budget_buddy/core/models/consent_record.dart';
+import 'package:budget_buddy/core/models/paired_peer.dart';
+import 'package:budget_buddy/core/models/paired_context.dart';
+import 'package:budget_buddy/core/models/pairing_token.dart';
+import 'package:budget_buddy/core/models/change_record.dart';
+import 'package:budget_buddy/core/models/sync_cursor.dart';
 import 'package:budget_buddy/core/models/user_profile.dart';
 import 'package:budget_buddy/features/engine/providers/rate_registry_provider.dart';
 import 'package:budget_buddy/features/expenses/models/reimbursement.dart';
@@ -89,6 +96,13 @@ class MedicalTestHarness {
         SchemaMigrationStampSchema,
         MonthRateSealSchema,
         LiveRateSetSchema,
+        IdentitySchema,
+        ConsentRecordSchema,
+        PairedPeerSchema,
+        PairedContextSchema,
+        PairingTokenSchema,
+        ChangeRecordSchema,
+        SyncCursorSchema,
       ],
       directory: directory.path,
       name: 'medical_${_nextInstance++}',

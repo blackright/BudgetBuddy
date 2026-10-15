@@ -12,6 +12,8 @@ import '../../../core/models/medical_bill.dart';
 import '../../../core/models/medical_service_type.dart';
 import '../../../core/models/money.dart';
 import '../../../core/providers/active_profile_provider.dart';
+import '../../../shared/presentation/money_format.dart';
+import '../../../shared/presentation/widgets/money_field.dart';
 import '../providers/medical_providers.dart';
 import 'medical_theme.dart';
 
@@ -137,6 +139,10 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
 
   CurrencyCode? _selectedCurrency;
 
+  /// FR-009: the patient-share field is a percentage — select-all-on-focus but
+  /// no comma grouping.
+  late final FocusNode _patientShareFocus;
+
   bool _saving = false;
 
   bool get _isEditing => widget.existingBill != null;
@@ -149,15 +155,16 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
   @override
   void initState() {
     super.initState();
+    _patientShareFocus = selectAllOnFocus(_patientShareController);
     final bill = widget.existingBill;
     if (bill == null) {
       _patientShareController.text = '20';
       return;
     }
-    _amountController.text =
-        Money(bill.billedAmount, bill.currencyCode ?? CurrencyCode.huf)
-            .majorValue
-            .toStringAsFixed(2);
+    _amountController.text = NumberFormat('#,##0.00', 'en_US').format(
+      Money(bill.billedAmount, bill.currencyCode ?? CurrencyCode.huf)
+          .majorValue,
+    );
     _patientShareController.text = bill.patientSharePercent.toStringAsFixed(0);
     _selectedProviderId = bill.providerId;
     _selectedFamilyMemberId = bill.familyMemberId;
@@ -167,10 +174,10 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
     _insurerReplyPath = bill.insurerReplyPath;
     _serviceDate = bill.serviceDate ?? DateTime.now();
     _state = bill.state;
-    _reimbursementController.text =
-        (Money(bill.reimbursedAmount, bill.currencyCode ?? CurrencyCode.huf)
-                .majorValue)
-            .toStringAsFixed(2);
+    _reimbursementController.text = NumberFormat('#,##0.00', 'en_US').format(
+      Money(bill.reimbursedAmount, bill.currencyCode ?? CurrencyCode.huf)
+          .majorValue,
+    );
     _selectedCurrency = bill.currencyCode;
   }
 
@@ -178,6 +185,7 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
   void dispose() {
     _amountController.dispose();
     _patientShareController.dispose();
+    _patientShareFocus.dispose();
     _providerNameController.dispose();
     _memberNameController.dispose();
     _reimbursementController.dispose();
@@ -235,7 +243,7 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
   // Derived values (T013)
   // -----------------------------------------------------------------------------
 
-  double get _amount => double.tryParse(_amountController.text.trim()) ?? 0.0;
+  double get _amount => parseMoneyInput(_amountController.text) ?? 0.0;
 
   CurrencyCode get _currencyCode {
     if (_selectedCurrency != null) return _selectedCurrency!;
@@ -347,7 +355,7 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
       // FR-034: editing a reimbursed bill corrects the payout rather than
       // stacking a second one.
       if (saved.reimbursedAmount > 0) {
-        final amount = double.tryParse(_reimbursementController.text.trim());
+        final amount = parseMoneyInput(_reimbursementController.text);
         if (amount != null && amount > 0) {
           final code = saved.currencyCode ?? _currencyCode;
           final amountMinor = Money.fromMajor(amount, code).minorUnits;
@@ -491,17 +499,13 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
               children: [
                 Expanded(
                   flex: 2,
-                  child: TextFormField(
+                  child: MoneyField(
+                    key: const Key('medicalBilledAmountField'),
                     controller: _amountController,
-                    decoration: InputDecoration(
-                      labelText: 'Billed amount',
-                      prefixText: '${_currencyCode.symbol} ',
-                      border: const OutlineInputBorder(),
-                    ),
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
+                    label: 'Billed amount',
+                    prefixText: '${_currencyCode.symbol} ',
                     validator: (value) {
-                      final parsed = double.tryParse(value?.trim() ?? '');
+                      final parsed = parseMoneyInput(value ?? '');
                       if (parsed == null) return 'Enter the billed amount';
                       if (parsed <= 0) return 'Must be greater than zero';
                       return null;
@@ -572,6 +576,7 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
             TextFormField(
               key: const Key('patientShareField'),
               controller: _patientShareController,
+              focusNode: _patientShareFocus,
               decoration: const InputDecoration(
                 labelText: 'Your share (%)',
                 helperText: 'The percentage you pay, not the insurer\'s.',
@@ -669,18 +674,14 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
             ),
             if (showReimbursement) ...[
               const SizedBox(height: 16),
-              TextFormField(
+              MoneyField(
+                key: const Key('medicalReimbursementField'),
                 controller: _reimbursementController,
-                decoration: const InputDecoration(
-                  labelText: 'Reimbursed amount',
-                  border: OutlineInputBorder(),
-                  helperText:
-                      'Already reimbursed - edit to correct the payout.',
-                ),
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
+                label: 'Reimbursed amount',
+                prefixText: '${_currencyCode.symbol} ',
+                helperText: 'Already reimbursed - edit to correct the payout.',
                 validator: (value) {
-                  final parsed = double.tryParse(value?.trim() ?? '');
+                  final parsed = parseMoneyInput(value ?? '');
                   // 0 is a valid "not reimbursed yet" state on a self-paid
                   // bill; without this the Edit form could never save one.
                   if (parsed == null || parsed < 0) return 'Enter an amount';

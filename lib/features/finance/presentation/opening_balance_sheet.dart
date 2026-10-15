@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../../../core/models/monthly_budget.dart';
 import '../../../core/providers/selected_month_provider.dart';
+import '../../../shared/presentation/money_format.dart';
+import '../../../shared/presentation/widgets/money_field.dart';
 import '../repositories/month_finance_repository.dart';
 
 class OpeningBalanceSheet extends ConsumerStatefulWidget {
@@ -25,7 +28,7 @@ class _OpeningBalanceSheetState extends ConsumerState<OpeningBalanceSheet> {
     final initial = widget.initialBudget?.baseAvailableAmount ?? 0.0;
     _balanceController = TextEditingController(
       text: widget.initialBudget?.openingBalanceConfirmed == true
-          ? initial.toStringAsFixed(2)
+          ? NumberFormat('#,##0.00', 'en_US').format(initial)
           : '',
     );
   }
@@ -59,18 +62,13 @@ class _OpeningBalanceSheetState extends ConsumerState<OpeningBalanceSheet> {
               const SizedBox(height: 8),
               const Text('Money in the bank at the start of this month.'),
               const SizedBox(height: 16),
-              TextFormField(
+              MoneyField(
                 key: const Key('openingBalanceField'),
                 controller: _balanceController,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(
-                  labelText: 'Amount',
-                  border: OutlineInputBorder(),
-                ),
+                label: 'Amount',
                 validator: (v) {
                   if (v == null || v.trim().isEmpty) return 'Required';
-                  final parsed = double.tryParse(v.trim());
+                  final parsed = parseMoneyInput(v);
                   if (parsed == null) return 'Enter a valid number';
                   if (parsed < 0) return 'Cannot be negative';
                   return null;
@@ -90,7 +88,7 @@ class _OpeningBalanceSheetState extends ConsumerState<OpeningBalanceSheet> {
 
   void _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    final amount = double.parse(_balanceController.text.trim());
+    final amount = parseMoneyInput(_balanceController.text) ?? 0.0;
     final yearMonth = ref.read(selectedYearMonthProvider);
     await ref
         .read(monthFinanceRepositoryProvider)

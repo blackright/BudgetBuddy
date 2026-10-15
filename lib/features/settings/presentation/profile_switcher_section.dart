@@ -13,6 +13,8 @@ import '../../../core/models/shared_space.dart';
 import '../../../core/models/user_profile.dart';
 import '../../../core/providers/active_profile_provider.dart';
 import '../../../core/providers/active_space_provider.dart';
+import '../../../shared/presentation/money_format.dart';
+import '../../../shared/presentation/widgets/money_field.dart';
 import '../../expenses/models/reimbursement.dart';
 import '../../medical/repositories/medical_repository.dart';
 import '../../spaces/presentation/delete_space_sheet.dart';
@@ -86,18 +88,22 @@ class ProfileSwitcherController {
   /// Puts a brand-new profile with sensible defaults and seeds its medical
   /// service types (FR-039), mirroring what onboarding seeds for id 1.
   ///
+  /// [startingSalary] is optional (FR-006): it becomes the profile's
+  /// `defaultNetSalary` so a fresh profile can start with a real take-home
+  /// figure; leaving it out (or blank in the dialog) keeps the `0` default.
+  ///
   /// The insert and the seed run as **sequential** transactions: seeding opens
   /// its own writeTxn (see [MedicalRepository.ensureDefaultServiceTypes]), and
   /// Isar forbids nested transactions, so putting them inside one txn would
   /// blow up on-device.
-  Future<int> createProfile(String name) async {
+  Future<int> createProfile(String name, {double startingSalary = 0}) async {
     final now = DateTime.now();
     final profile = UserProfile()
       ..name = name.trim()
       ..avatar = '👤'
       ..primaryCurrency = PrimaryCurrency.huf
       ..monthlyAvailableAmount = 0
-      ..defaultNetSalary = 0
+      ..defaultNetSalary = startingSalary < 0 ? 0 : startingSalary
       ..createdAt = now
       ..updatedAt = now
       ..lastActiveAt = now;
@@ -282,20 +288,22 @@ class ProfileSwitcherSection extends ConsumerWidget {
         .ignore();
   }
 
-  // The dialog owns the text controller and disposes it only when its own
+  // The dialog owns the text controllers and disposes them only when its own
   // element unmounts — that is, once the route's exit transition has fully
   // closed. Disposing it here instead (right after `showDialog` resolves)
   // races the exit animation and blows up with "used after being disposed".
   Future<void> _createProfile(BuildContext context, WidgetRef ref) async {
-    final name = await showDialog<String>(
+    final result = await showDialog<_NewProfileDraft>(
       context: context,
       builder: (_) => const _NewProfileDialog(),
     );
-    final trimmed = name?.trim() ?? '';
+    if (result == null) return;
+    final trimmed = result.name.trim();
     if (trimmed.isEmpty) return;
-    final id = await ref
-        .read(profileSwitcherControllerProvider)
-        .createProfile(trimmed);
+    final id = await ref.read(profileSwitcherControllerProvider).createProfile(
+          trimmed,
+          startingSalary: result.startingSalary,
+        );
     ref.read(activeProfileIdProvider.notifier).state = id;
     ref.read(activeSpaceIdProvider.notifier).state = null;
   }
@@ -509,7 +517,16 @@ class _AddProfileTile extends StatelessWidget {
   }
 }
 
-/// The "New profile" dialog. Owns its [TextEditingController]: disposal happens
+/// The "New profile" dialog's result: the chosen name plus an optional starting
+/// salary (0 when the user leaves it blank).
+class _NewProfileDraft {
+  const _NewProfileDraft({required this.name, required this.startingSalary});
+
+  final String name;
+  final double startingSalary;
+}
+
+/// The "New profile" dialog. Owns its [TextEditingController]s: disposal happens
 /// in `State.dispose()`, which runs only when the dialog's element is unmounted
 /// — after the route's exit transition finishes — so the animating `TextField`
 /// never builds against a disposed controller.
@@ -522,25 +539,46 @@ class _NewProfileDialog extends StatefulWidget {
 
 class _NewProfileDialogState extends State<_NewProfileDialog> {
   final _name = TextEditingController();
+  final _salary = TextEditingController();
 
   @override
   void dispose() {
     _name.dispose();
+    _salary.dispose();
     super.dispose();
   }
 
-  void _save() => Navigator.of(context).pop(_name.text.trim());
+  void _save() {
+    // Blank salary means "start at 0" (FR-006) — not an error.
+    final salary = parseMoneyInput(_salary.text) ?? 0.0;
+    Navigator.of(context).pop(
+      _NewProfileDraft(name: _name.text.trim(), startingSalary: salary),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text('New profile'),
-      content: TextField(
-        key: const Key('profileNameField'),
-        controller: _name,
-        autofocus: true,
-        decoration: const InputDecoration(labelText: 'Profile name'),
-        onSubmitted: (_) => _save(),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            key: const Key('profileNameField'),
+            controller: _name,
+            autofocus: true,
+            decoration: const InputDecoration(labelText: 'Profile name'),
+            onSubmitted: (_) => _save(),
+          ),
+          const SizedBox(height: 16),
+          MoneyField(
+            key: const Key('startingSalaryField'),
+            controller: _salary,
+            label: 'Starting salary (optional)',
+            helperText: 'You can change this any time in Settings.',
+            onSubmitted: (_) => _save(),
+          ),
+        ],
       ),
       actions: [
         TextButton(

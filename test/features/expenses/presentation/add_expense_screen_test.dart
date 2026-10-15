@@ -109,4 +109,18 @@ void main() {
 
     expect(find.textContaining('at 1 \$ = 345 Ft'), findsNothing);
   });
+
+  testWidgets('groups a large amount while typing (US1, SC-001)',
+      (WidgetTester tester) async {
+    final profile = makeProfile(PrimaryCurrency.usd);
+    final budget = makeBudget(currency: 'usd');
+    await tester.pumpWidget(pump(tester, profile: profile, budget: budget));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(amountField(), '1000000');
+    await tester.pump();
+
+    expect(
+        tester.widget<TextField>(amountField()).controller!.text, '1,000,000');
+  });
 }

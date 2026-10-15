@@ -5,6 +5,7 @@ import '../models/expense.dart';
 import '../models/insurance_profile.dart';
 import '../models/medical_service_type.dart';
 import '../models/monthly_budget.dart';
+import '../models/shared_member.dart';
 import '../models/user_profile.dart';
 import '../../features/expenses/models/reimbursement.dart';
 import '../models/medical_bill.dart';
@@ -13,7 +14,7 @@ part 'schema_migrations.g.dart';
 
 /// Schema version this build expects. Bump whenever a numbered step is added to
 /// [_applySteps]; databases stamped at or above it are left untouched.
-const int schemaVersion = 13;
+const int schemaVersion = 15;
 
 const String schemaVersionKey = 'schema_version';
 
@@ -104,6 +105,51 @@ Future<void> _applySteps(Isar isar) async {
   await _step11AddThemePreference(isar);
   await _step12AddSpacesAndContextColumns(isar);
   await _step13BackfillContextOwnership(isar);
+  await _step14AddSyncCollections(isar);
+  await _step15BackfillMembershipSyncColumns(isar);
+}
+
+/// Step 14 (012-cross-device-shared-spaces, data-model §7, research R9) —
+/// additive only: the seven sync collections appear (`Identity`,
+/// `ConsentRecord`, `PairedPeer`, `PairedContext`, `PairingToken`,
+/// `ChangeRecord`, `SyncCursor`) and `SharedMember` gains its sync columns
+/// (`version`/`updatedAt`/`authorIdentityId`/`signature`/`revokedAt`).
+///
+/// Isar reconciles the stored schema on open, so new collections and columns
+/// materialise with their declared defaults before this runs; there is no data
+/// to rewrite. No monetary amount, seal or month total is touched (011 SC-003
+/// preserved). Step 15 then does the explicit, idempotent backfill.
+Future<void> _step14AddSyncCollections(Isar isar) async {
+  // Intentionally empty: additive schema only — see doc comment.
+}
+
+/// Step 15 (012-cross-device-shared-spaces, data-model §7, research R5/R9) —
+/// idempotent backfill/guard so installs that pre-date pairing have consistent
+/// membership sync columns.
+///
+/// A pre-existing membership arrives with `version = 0`, `authorIdentityId =
+/// null` and `revokedAt = null` (Isar's declared defaults). The one field that
+/// would otherwise stay at the epoch sentinel is `updatedAt`, so it is stamped
+/// from the row's own `joinedAt`. Nothing else changes, and a second run finds
+/// every row already stamped and writes nothing (idempotent). No amount, seal or
+/// month total is rewritten.
+Future<void> _step15BackfillMembershipSyncColumns(Isar isar) async {
+  final members = await isar.sharedMembers.where().findAll();
+  if (members.isEmpty) return;
+
+  var changed = false;
+  for (final member in members) {
+    final stamped = member.updatedAt;
+    if (stamped == null || stamped.millisecondsSinceEpoch <= 0) {
+      member.updatedAt = member.joinedAt;
+      changed = true;
+    }
+    if (member.version < 0) {
+      member.version = 0;
+      changed = true;
+    }
+  }
+  if (changed) await isar.sharedMembers.putAll(members);
 }
 
 /// Step 10 (FR-009, FR-010, FR-011, data-model §4.2/§6) — reconcile the old,

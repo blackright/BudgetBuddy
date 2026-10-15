@@ -182,6 +182,24 @@ void main() {
     }
   });
 
+  test(
+      'createProfile stores the optional starting salary as defaultNetSalary '
+      'and defaults to zero when none is given (FR-006)', () async {
+    final harness = await MedicalTestHarness.create();
+    try {
+      final controller = ProfileSwitcherController(harness.isar);
+      final withSalary =
+          await controller.createProfile('Bea', startingSalary: 4200);
+      final bare = await controller.createProfile('Cara');
+      final bea = await harness.isar.userProfiles.get(withSalary);
+      final cara = await harness.isar.userProfiles.get(bare);
+      expect(bea!.defaultNetSalary, 4200);
+      expect(cara!.defaultNetSalary, 0);
+    } finally {
+      await harness.close();
+    }
+  });
+
   testWidgets('switching profiles re-derives every screen in the same frame',
       (WidgetTester tester) async {
     // Isar I/O must not run under the widget-test fake clock; every real read
@@ -634,7 +652,8 @@ class _StubProfileSwitcherController implements ProfileSwitcherController {
   final int nextId;
 
   @override
-  Future<int> createProfile(String name) async => nextId;
+  Future<int> createProfile(String name, {double startingSalary = 0}) async =>
+      nextId;
 
   @override
   Future<void> touchLastActiveAt(int profileId) async {}

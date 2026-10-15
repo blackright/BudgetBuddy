@@ -14,6 +14,7 @@ import 'core/providers/database_integrity_provider.dart';
 import 'core/routing/router_providers.dart';
 import 'features/engine/providers/sweep_provider.dart';
 import 'features/engine/seal_coordinator.dart';
+import 'features/identity/presentation/app_lock_gate.dart';
 import 'features/settings/providers/settings_provider.dart';
 
 import 'core/services/reminder_notification_service.dart';
@@ -121,6 +122,11 @@ class MyApp extends ConsumerWidget {
       ),
       themeMode: themeMode,
       routerConfig: router,
+      // US1 (FR-002 AC2): when the user has an identity and has granted device
+      // auth, the app opens behind the phone's own authentication. Inert
+      // otherwise, so existing (identity-less) installs are unchanged.
+      builder: (context, child) =>
+          AppLockGate(child: child ?? const SizedBox.shrink()),
     );
   }
 }

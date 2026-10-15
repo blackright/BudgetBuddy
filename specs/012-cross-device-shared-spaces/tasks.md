@@ -29,8 +29,8 @@ description: "Task list for Cross-Device Shared Spaces (Peer-to-Peer) implementa
 
 **Purpose**: Verify the baseline and add the peer-to-peer dependency set (research R1/R2/R7).
 
-- [ ] T001 [P] Verify baseline is green before any change: from repo root run `flutter pub get`, `dart run build_runner build --delete-conflicting-outputs`, `dart format --output=none --set-exit-if-changed .`, `flutter analyze`, `flutter test` and confirm zero failures (011 gate: 393 pass / 1 skip / 0 fail)
-- [ ] T002 Add new dependencies to `pubspec.yaml`: `local_auth`, `flutter_secure_storage`, `cryptography`, `mobile_scanner`, `qr_flutter`, `multicast_dns`, `share_plus`; then run `flutter pub get` (research R1/R2/R7; no server SDK)
+- [x] T001 [P] Verify baseline is green before any change: from repo root run `flutter pub get`, `dart run build_runner build --delete-conflicting-outputs`, `dart format --output=none --set-exit-if-changed .`, `flutter analyze`, `flutter test` and confirm zero failures (011 gate: 393 pass / 1 skip / 0 fail)
+- [x] T002 Add new dependencies to `pubspec.yaml`: `local_auth`, `flutter_secure_storage`, `cryptography`, `mobile_scanner`, `qr_flutter`, `multicast_dns`, `share_plus`; then run `flutter pub get` (research R1/R2/R7; no server SDK)
 
 ---
 
@@ -42,39 +42,39 @@ description: "Task list for Cross-Device Shared Spaces (Peer-to-Peer) implementa
 
 ### Models (Isar collections, data-model §2)
 
-- [ ] T003 [P] Create `Identity` model in `lib/core/models/identity.dart` — username, publicKey, keyAlgorithm, localProfileId (`@Index(unique: true)`), fingerprint, createdAt/updatedAt; private key NOT stored here (data-model §2.1, FR-001/016)
-- [ ] T004 [P] Create `ConsentRecord` model in `lib/core/models/consent_record.dart` — noticeVersion, deviceAuthGranted, decidedAt, updatedAt (data-model §2.2, FR-002)
-- [ ] T005 [P] Create `PairedPeer` model in `lib/core/models/paired_peer.dart` — peerIdentityId (`@Index(unique: true)`), peerUsername, peerPublicKey, peerFingerprint, pairedAt, lastSeenAt (data-model §2.3)
-- [ ] T006 [P] Create `PairedContext` model in `lib/core/models/paired_context.dart` — peerId, contextKind `@enumerated`, contextLocalId, peerRole `@enumerated`, pairedAt, active; composite unique `[peerId, contextKind, contextLocalId]` (data-model §2.4)
-- [ ] T007 [P] Create `PairingToken` model in `lib/core/models/pairing_token.dart` — token (`@Index(unique: true)`), spaceId, offeredRole `@enumerated`, direction `@enumerated`, peerFingerprint?, createdAt/expiresAt, usedAt? (data-model §2.5, FR-005)
-- [ ] T008 [P] Create `ChangeRecord` model in `lib/core/models/change_record.dart` — contextKind, contextLocalId `@Index`, entityType, entityLocalId, op, payload, hlcMillis/hlcCounter, deviceId, authorIdentityId `@Index`, signature, createdAt (data-model §2.6, FR-006)
-- [ ] T009 [P] Create `SyncCursor` model in `lib/core/models/sync_cursor.dart` — peerId, contextLocalId, lastSent*/lastReceived* HLC watermarks, conflictCount, updatedAt (data-model §2.7, FR-013)
-- [ ] T010 [P] Create `ContextKind` and `PairingDirection` enums in `lib/core/models/context_kind.dart` (data-model §1.1/1.2)
-- [ ] T011 [P] Add sync columns to `SharedMember` in `lib/core/models/shared_member.dart`: `version int`, `updatedAt DateTime`, `authorIdentityId String?`, `signature String?`, `revokedAt DateTime?` (data-model §3.1, R5)
+- [x] T003 [P] Create `Identity` model in `lib/core/models/identity.dart` — username, publicKey, keyAlgorithm, localProfileId (`@Index(unique: true)`), fingerprint, createdAt/updatedAt; private key NOT stored here (data-model §2.1, FR-001/016)
+- [x] T004 [P] Create `ConsentRecord` model in `lib/core/models/consent_record.dart` — noticeVersion, deviceAuthGranted, decidedAt, updatedAt (data-model §2.2, FR-002)
+- [x] T005 [P] Create `PairedPeer` model in `lib/core/models/paired_peer.dart` — peerIdentityId (`@Index(unique: true)`), peerUsername, peerPublicKey, peerFingerprint, pairedAt, lastSeenAt (data-model §2.3)
+- [x] T006 [P] Create `PairedContext` model in `lib/core/models/paired_context.dart` — peerId, contextKind `@enumerated`, contextLocalId, peerRole `@enumerated`, pairedAt, active; composite unique `[peerId, contextKind, contextLocalId]` (data-model §2.4)
+- [x] T007 [P] Create `PairingToken` model in `lib/core/models/pairing_token.dart` — token (`@Index(unique: true)`), spaceId, offeredRole `@enumerated`, direction `@enumerated`, peerFingerprint?, createdAt/expiresAt, usedAt? (data-model §2.5, FR-005)
+- [x] T008 [P] Create `ChangeRecord` model in `lib/core/models/change_record.dart` — contextKind, contextLocalId `@Index`, entityType, entityLocalId, op, payload, hlcMillis/hlcCounter, deviceId, authorIdentityId `@Index`, signature, createdAt (data-model §2.6, FR-006)
+- [x] T009 [P] Create `SyncCursor` model in `lib/core/models/sync_cursor.dart` — peerId, contextLocalId, lastSent*/lastReceived* HLC watermarks, conflictCount, updatedAt (data-model §2.7, FR-013)
+- [x] T010 [P] Create `ContextKind` and `PairingDirection` enums in `lib/core/models/context_kind.dart` (data-model §1.1/1.2)
+- [x] T011 [P] Add sync columns to `SharedMember` in `lib/core/models/shared_member.dart`: `version int`, `updatedAt DateTime`, `authorIdentityId String?`, `signature String?`, `revokedAt DateTime?` (data-model §3.1, R5)
 
 ### Schema registration + codegen + migration
 
-- [ ] T012 Register the seven new `*Schema`s alongside the existing collections in the `Isar.open(...)` list in `lib/core/database/isar_helper.dart` (data-model §2)
-- [ ] T013 Run `dart run build_runner build --delete-conflicting-outputs` to regenerate all `*.g.dart` for the new/modified models (required after T003–T012)
-- [ ] T014 Add migration step 14 (additive: create the seven collections + add `SharedMember` sync columns) and step 15 (idempotent backfill: stamp pre-existing memberships `version = 0`, `authorIdentityId = null`, `revokedAt = null`), then bump `schemaVersion` 13 → 15 in `lib/core/database/schema_migrations.dart` (data-model §7, R9)
+- [x] T012 Register the seven new `*Schema`s alongside the existing collections in the `Isar.open(...)` list in `lib/core/database/isar_helper.dart` (data-model §2)
+- [x] T013 Run `dart run build_runner build --delete-conflicting-outputs` to regenerate all `*.g.dart` for the new/modified models (required after T003–T012)
+- [x] T014 Add migration step 14 (additive: create the seven collections + add `SharedMember` sync columns) and step 15 (idempotent backfill: stamp pre-existing memberships `version = 0`, `authorIdentityId = null`, `revokedAt = null`), then bump `schemaVersion` 13 → 15 in `lib/core/database/schema_migrations.dart` (data-model §7, R9)
 
 ### Sync core abstractions (research R3/R4/R6)
 
-- [ ] T015 [P] Create the `Hlc` value type (millis/counter/deviceId, total-order compare, `tick(now)` via injected clock) in `lib/features/sync/domain/hlc.dart` (data-model §1.3, sync-protocol §2)
-- [ ] T016 [P] Create the `SyncCodec` interface + per-entity codecs (canonical `toPayload`/`fromPayload`) for the covered entity types in `lib/features/sync/domain/sync_codec.dart` and `lib/features/sync/domain/codecs/` (data-model §2.6, sync-protocol §5)
-- [ ] T017 [P] Create the `Transport` abstraction (discover/connect/send/receive) with an in-memory `FakeTransport` for tests in `lib/features/sync/transport/transport.dart` and `test/features/sync/support/fake_transport.dart` (research R2; keeps CI hermetic)
-- [ ] T018 [P] Create `IdentityService` (generate ed25519 keypair, persist public key in Isar, store private key via `flutter_secure_storage`, expose a session unlock) in `lib/features/identity/repositories/identity_service.dart` (research R1, FR-001)
-- [ ] T019 [P] Create `ConsentService` (record/show/revoke device-auth consent against a notice version) in `lib/features/identity/repositories/consent_service.dart` (research R8, FR-002)
+- [x] T015 [P] Create the `Hlc` value type (millis/counter/deviceId, total-order compare, `tick(now)` via injected clock) in `lib/features/sync/domain/hlc.dart` (data-model §1.3, sync-protocol §2)
+- [x] T016 [P] Create the `SyncCodec` interface + per-entity codecs (canonical `toPayload`/`fromPayload`) for the covered entity types in `lib/features/sync/domain/sync_codec.dart` and `lib/features/sync/domain/codecs/` (data-model §2.6, sync-protocol §5)
+- [x] T017 [P] Create the `Transport` abstraction (discover/connect/send/receive) with an in-memory `FakeTransport` for tests in `lib/features/sync/transport/transport.dart` and `test/features/sync/support/fake_transport.dart` (research R2; keeps CI hermetic)
+- [x] T018 [P] Create `IdentityService` (generate ed25519 keypair, persist public key in Isar, store private key via `flutter_secure_storage`, expose a session unlock) in `lib/features/identity/repositories/identity_service.dart` (research R1, FR-001)
+- [x] T019 [P] Create `ConsentService` (record/show/revoke device-auth consent against a notice version) in `lib/features/identity/repositories/consent_service.dart` (research R8, FR-002)
 
 ### Providers + sync-recorder seam
 
-- [ ] T020 [P] Create identity/consent providers (`identityProvider`, `consentProvider`, `deviceAuthEnabledProvider`) in `lib/core/providers/identity_provider.dart` (data-model §2.1/2.2)
-- [ ] T021 Create the `SyncRecorder` seam in `lib/features/sync/repositories/sync_recorder.dart` and wire it into `lib/features/spaces/repositories/spaces_repository.dart` writes so every paired-shared-context write appends a `ChangeRecord` (research R3, FR-006)
+- [x] T020 [P] Create identity/consent providers (`identityProvider`, `consentProvider`, `deviceAuthEnabledProvider`) in `lib/core/providers/identity_provider.dart` (data-model §2.1/2.2)
+- [x] T021 Create the `SyncRecorder` seam in `lib/features/sync/repositories/sync_recorder.dart` and wire it into `lib/features/spaces/repositories/spaces_repository.dart` writes so every paired-shared-context write appends a `ChangeRecord` (research R3, FR-006)
 
 ### Harnesses + migration tests
 
-- [ ] T022 Add the seven new schemas to `test/features/medical/repositories/medical_test_harness.dart` and add an in-memory-peer harness with the `FakeTransport` in `test/features/sync/support/sync_harness.dart` (extends the 011 harness pattern)
-- [ ] T023 [P] Write migration test: fresh install at v15 and upgrade from v13 both succeed; existing amounts/seals/totals are byte-identical; step 14 is additive and step 15 is idempotent (SC-003) in `test/core/database/migration_cross_device_test.dart`
+- [x] T022 Add the seven new schemas to `test/features/medical/repositories/medical_test_harness.dart` and add an in-memory-peer harness with the `FakeTransport` in `test/features/sync/support/sync_harness.dart` (extends the 011 harness pattern)
+- [x] T023 [P] Write migration test: fresh install at v15 and upgrade from v13 both succeed; existing amounts/seals/totals are byte-identical; step 14 is additive and step 15 is idempotent (SC-003) in `test/core/database/migration_cross_device_test.dart`
 
 **Checkpoint**: Foundation ready — user stories can now begin.
 
@@ -88,14 +88,30 @@ description: "Task list for Cross-Device Shared Spaces (Peer-to-Peer) implementa
 
 ### Tests for User Story 1 (MUST fail before implementation)
 
-- [ ] T024 [P] [US1] Write identity creation test: username + device-generated keypair, public key persisted, private key only via secure storage (fake), exactly one profile linked, no server contact (FR-001/016, SC-008) in `test/features/identity/identity_creation_test.dart`
-- [ ] T025 [P] [US1] Write consent/device-auth test: notice shown, grant/decline recorded locally, warning present when off, revocation updates the record, app usable without it (FR-002) in `test/features/identity/consent_test.dart`
+- [x] T024 [P] [US1] Write identity creation test: username + device-generated keypair, public key persisted, private key only via secure storage (fake), exactly one profile linked, no server contact (FR-001/016, SC-008) in `test/features/identity/identity_creation_test.dart`
+- [x] T025 [P] [US1] Write consent/device-auth test: notice shown, grant/decline recorded locally, warning present when off, revocation updates the record, app usable without it (FR-002) in `test/features/identity/consent_test.dart`
 
 ### Implementation for User Story 1
 
-- [ ] T026 [P] [US1] Build identity onboarding UI (username entry + optional device-auth toggle + warning text + consent notice) in `lib/features/identity/presentation/identity_onboarding_screen.dart`
-- [ ] T027 [US1] Wire the `local_auth` app lock (session unlock of the identity key) and persist the consent decision via `ConsentService`, including revocation from settings, in `lib/features/identity/repositories/identity_service.dart` + `consent_service.dart` (FR-002)
-- [ ] T028 [US1] Link the identity to exactly one profile (`localProfileId`); keep additional local profiles local-only and never paired in `lib/features/identity/repositories/identity_service.dart` (FR-016)
+- [x] T026 [P] [US1] Build identity onboarding UI (username entry + optional device-auth toggle + warning text + consent notice) in `lib/features/identity/presentation/identity_onboarding_screen.dart`
+- [x] T027 [US1] Wire the `local_auth` app lock (session unlock of the identity key) and persist the consent decision via `ConsentService`, including revocation from settings, in `lib/features/identity/repositories/identity_service.dart` + `consent_service.dart` (FR-002)
+- [x] T028 [US1] Link the identity to exactly one profile (`localProfileId`); keep additional local profiles local-only and never paired in `lib/features/identity/repositories/identity_service.dart` (FR-016)
+
+### Phase 3.1 — Device-auth platform wiring (follow-up found in the playground test)
+
+**Why**: US1's device-auth toggle calls `local_auth`. On Android the PIN/biometric prompt needs (a) the host activity to be a `FlutterFragmentActivity` and (b) the `USE_BIOMETRIC` permission; on iOS it needs a Face ID usage string. Without these the OS-side prompt fails **natively**, so Dart `try/catch` cannot catch it and the app crashes the moment the toggle is touched (reported in Troubleshoot.md). No Dart code changes are required.
+
+- [x] T028a [US1] Change `MainActivity` to extend `FlutterFragmentActivity` in `android/app/src/main/kotlin/com/example/budget_buddy/MainActivity.kt` (local_auth Android requirement)
+- [x] T028b [P] [US1] Add `<uses-permission android:name="android.permission.USE_BIOMETRIC"/>` to `android/app/src/main/AndroidManifest.xml` (local_auth Android requirement)
+- [x] T028c [P] [US1] (Only if testing on an iPhone) Add `NSFaceIDUsageDescription` to `ios/Runner/Info.plist` (local_auth iOS requirement)
+- [x] T028d [US1] Playground-verify on the SM G965F: touching "Use my phone's PIN or biometrics" shows the OS prompt and does **not** crash; cancelling leaves the toggle off with the "was not set up" message; `flutter analyze` + `flutter test` stay green (manual device test — not coverable by unit/widget tests)
+
+### Phase 3.1.1 — `androidx.core` version pin (launch crash found in the playground test)
+
+**Why**: Making `MainActivity` a `FlutterFragmentActivity` (T028a) pulled in the `androidx.activity`/`androidx.fragment` superclass chain, whose `ComponentActivity` references `androidx.core.app.PictureInPictureProvider`. The project pins `androidx.core` **down** to 1.15.0, which lacks that class, so the app crashed on launch with `ClassNotFoundException: com.example.budget_buddy.MainActivity` (found in Troubleshoot.md). Fix: stop pinning core down. No Dart changes.
+
+- [x] T028e [US1] Remove the stale `androidx.core` `force(...)` downgrade block (`configurations.all { resolutionStrategy { force(...) } }`) in `android/app/build.gradle.kts` so the packaged `androidx.core` is the version that contains `androidx.core.app.PictureInPictureProvider` (present from 1.18.0). Fallback if removing introduces a conflict: change both pins to `1.18.0`.
+- [x] T028f [US1] Playground-verify on the SM G965F: the app **launches** (no `ClassNotFoundException`) before any toggle is touched (manual device test).
 
 **Checkpoint**: User Story 1 fully functional and testable independently. **STOP and VALIDATE (MVP).**
 
@@ -109,16 +125,16 @@ description: "Task list for Cross-Device Shared Spaces (Peer-to-Peer) implementa
 
 ### Tests for User Story 2 (MUST fail before implementation)
 
-- [ ] T029 [P] [US2] Write codec round-trip test: every covered entity `toPayload`→`fromPayload` is lossless, money fields byte-identical (FR-010) in `test/features/sync/sync_codec_test.dart`
-- [ ] T030 [P] [US2] Write HLC determinism + merge test: identical winning outcome regardless of arrival order; losing change counted and surfaced (FR-007, SC-002) in `test/features/sync/merge_determinism_test.dart`
-- [ ] T031 [P] [US2] Write tombstone test: delete beats a concurrent upsert; a strictly later upsert recreates; no resurrection (FR-006/007) in `test/features/sync/tombstone_test.dart`
-- [ ] T032 [P] [US2] Write offline + convergence integration test with `FakeTransport`: edits queue offline, converge on co-presence, no duplicate copy, no half-apply (FR-003/010/013, SC-001/003) in `test/features/sync/convergence_integration_test.dart`
+- [x] T029 [P] [US2] Write codec round-trip test: every covered entity `toPayload`→`fromPayload` is lossless, money fields byte-identical (FR-010) in `test/features/sync/sync_codec_test.dart`
+- [x] T030 [P] [US2] Write HLC determinism + merge test: identical winning outcome regardless of arrival order; losing change counted and surfaced (FR-007, SC-002) in `test/features/sync/merge_determinism_test.dart`
+- [x] T031 [P] [US2] Write tombstone test: delete beats a concurrent upsert; a strictly later upsert recreates; no resurrection (FR-006/007) in `test/features/sync/tombstone_test.dart`
+- [x] T032 [P] [US2] Write offline + convergence integration test with `FakeTransport`: edits queue offline, converge on co-presence, no duplicate copy, no half-apply (FR-003/010/013, SC-001/003) in `test/features/sync/convergence_integration_test.dart`
 
 ### Implementation for User Story 2
 
-- [ ] T033 [US2] Implement `SyncEngine` (exchange loop, verify→merge by HLC→apply through the same repositories, advance `SyncCursor`) in `lib/features/sync/repositories/sync_engine.dart` (sync-protocol §3/§4, FR-006/007)
-- [ ] T034 [US2] Extend `SyncRecorder` coverage to every covered entity type (month budget/income, expense, reimbursement, medical bill + lifecycle, directory rows) via their `SyncCodec`s in `lib/features/sync/repositories/sync_recorder.dart` (FR-010)
-- [ ] T035 [US2] Create the sync status model/provider (`waitingForPeer`/`syncing`/`converged`/`conflicts(n)`) in `lib/features/sync/providers/sync_status_provider.dart` and a status chip widget in `lib/shared/presentation/widgets/sync_status_chip.dart`, surfaced on the shared space view (FR-013)
+- [x] T033 [US2] Implement `SyncEngine` (exchange loop, verify→merge by HLC→apply through the same repositories, advance `SyncCursor`) in `lib/features/sync/repositories/sync_engine.dart` (sync-protocol §3/§4, FR-006/007)
+- [x] T034 [US2] Extend `SyncRecorder` coverage to every covered entity type (month budget/income, expense, reimbursement, medical bill + lifecycle, directory rows) via their `SyncCodec`s in `lib/features/sync/repositories/sync_recorder.dart` (FR-010)
+- [x] T035 [US2] Create the sync status model/provider (`waitingForPeer`/`syncing`/`converged`/`conflicts(n)`) in `lib/features/sync/providers/sync_status_provider.dart` and a status chip widget in `lib/shared/presentation/widgets/sync_status_chip.dart`, surfaced on the shared space view (FR-013)
 
 **Checkpoint**: User Stories 1 AND 2 both work independently.
 
@@ -132,15 +148,15 @@ description: "Task list for Cross-Device Shared Spaces (Peer-to-Peer) implementa
 
 ### Tests for User Story 3 (MUST fail before implementation)
 
-- [ ] T036 [P] [US3] Write pairing-token test: single-use (`usedAt`), expiry enforced, cancellation invalidates, duplicate/reuse refused (FR-005, SC-006) in `test/features/pairing/pairing_token_test.dart`
-- [ ] T037 [P] [US3] Write pairing handshake test: fingerprint shown/confirmed, claim creates `PairedPeer`+`PairedContext` and a signed membership with the offered role, mismatched fingerprint rejected (FR-004/005) in `test/features/pairing/pairing_handshake_test.dart`
+- [x] T036 [P] [US3] Write pairing-token test: single-use (`usedAt`), expiry enforced, cancellation invalidates, duplicate/reuse refused (FR-005, SC-006) in `test/features/pairing/pairing_token_test.dart`
+- [x] T037 [P] [US3] Write pairing handshake test: fingerprint shown/confirmed, claim creates `PairedPeer`+`PairedContext` and a signed membership with the offered role, mismatched fingerprint rejected (FR-004/005) in `test/features/pairing/pairing_handshake_test.dart`
 
 ### Implementation for User Story 3
 
-- [ ] T038 [US3] Implement `PairingService` (create token; claim validation single-use/expiry/cancel/duplicate; create signed `SharedMember`; persist `PairedPeer`/`PairedContext`; open `SyncCursor`) in `lib/features/pairing/repositories/pairing_service.dart` (pairing §2–§4, FR-004/005)
-- [ ] T039 [US3] Build QR presentation + scan UI (`qr_flutter` display, `mobile_scanner` scan, fingerprint confirmation) in `lib/features/pairing/presentation/pair_device_screen.dart` (pairing §2, FR-004)
-- [ ] T040 [US3] Implement the LAN `Transport` (mDNS discovery via `multicast_dns`/`nsd` + pinned-TLS socket verified against the paired public key) behind the `Transport` interface in `lib/features/sync/transport/lan_transport.dart` (research R2, pairing §3)
-- [ ] T041 [US3] Create the "Paired devices" section in space settings (list peers, pair, unpair, role) and register it in `lib/features/spaces/presentation/space_settings_section.dart` + `lib/features/settings/presentation/settings_screen.dart` (pairing §4, FR-014)
+- [x] T038 [US3] Implement `PairingService` (create token; claim validation single-use/expiry/cancel/duplicate; create signed `SharedMember`; persist `PairedPeer`/`PairedContext`; open `SyncCursor`) in `lib/features/pairing/repositories/pairing_service.dart` (pairing §2–§4, FR-004/005)
+- [x] T039 [US3] Build QR presentation + scan UI (`qr_flutter` display, `mobile_scanner` scan, fingerprint confirmation) in `lib/features/pairing/presentation/pair_device_screen.dart` (pairing §2, FR-004)
+- [x] T040 [US3] Implement the LAN `Transport` (mDNS discovery via `multicast_dns`/`nsd` + pinned-TLS socket verified against the paired public key) behind the `Transport` interface in `lib/features/sync/transport/lan_transport.dart` (research R2, pairing §3)
+- [x] T041 [US3] Create the "Paired devices" section in space settings (list peers, pair, unpair, role) and register it in `lib/features/spaces/presentation/space_settings_section.dart` + `lib/features/settings/presentation/settings_screen.dart` (pairing §4, FR-014)
 
 **Checkpoint**: User Stories 1–3 independently functional (real pairing over LAN).
 
@@ -154,15 +170,16 @@ description: "Task list for Cross-Device Shared Spaces (Peer-to-Peer) implementa
 
 ### Tests for User Story 4 (MUST fail before implementation)
 
-- [ ] T042 [P] [US4] Write apply-time authorization test: removed/demoted author's later changes dropped by every peer; Viewer money/directory change dropped; last-Owner/transfer rules hold off-device (FR-008/009, SC-005) in `test/features/spaces/apply_time_authorization_test.dart`
-- [ ] T043 [P] [US4] Write sealed-month invariance test across devices: content exchanged once then refused on both paths; totals identical in every currency from each device's own seals (FR-011, SC-004) in `test/features/spaces/sealed_month_invariance_test.dart`
+- [x] T042 [P] [US4] Write apply-time authorization test: removed/demoted author's later changes dropped by every peer; Viewer money/directory change dropped; last-Owner/transfer rules hold off-device (FR-008/009, SC-005) in `test/features/spaces/apply_time_authorization_test.dart`
+- [x] T043 [P] [US4] Write sealed-month invariance test across devices: content exchanged once then refused on both paths; totals identical in every currency from each device's own seals (FR-011, SC-004) in `test/features/spaces/sealed_month_invariance_test.dart`
 
 ### Implementation for User Story 4
 
-- [ ] T044 [US4] Extend `SpaceAccessGuard` with `assertAuthorizedAt(change, membershipHead)` (author valid member/role as of the change HLC; sealed-month refusal) in `lib/features/spaces/repositories/space_role_guard.dart` (role-authorization §3, FR-008/009)
-- [ ] T045 [US4] Make membership writes signed + versioned (create/role/remove/transfer authored by the acting Owner with a fresh HLC `version` + signature; revocations via `revokedAt`) in `lib/features/spaces/repositories/spaces_repository.dart` (role-authorization §2/§4, FR-008)
-- [ ] T046 [US4] Wire apply-time enforcement (signature → `assertAuthorizedAt` → month-seal) into the `SyncEngine` apply path in `lib/features/sync/repositories/sync_engine.dart` (FR-008/009/011, SC-005)
-- [ ] T047 [US4] Enforce sealed-month content immutability on the apply path (no role) so a sealed month's records are exchanged once then refused everywhere in `lib/features/sync/repositories/sync_engine.dart` (FR-011, R6)
+- [x] T044a [US4] Make the shared-membership key uniform: add a single helper `sharedMemberKey(identityId) => remoteProfileIdFor(identityId)` and `sharedMemberKeyForLocalProfile(profileId)` (look up `Identity.localProfileId`; fall back to the raw profile id when no identity exists, so pre-012 installs are unchanged). Key `createSpace` (creator), `invite`, and the `_member` lookups by it; extract the mapping into a shared domain helper so `features/spaces` need not import `features/pairing` (data-model §3.1; decision: uniform derived id, 2026-10-15)
+- [x] T044b [US4] Extend `SpaceAccessGuard` with `assertAuthorizedAt(change, {required SharedMember? membershipHead, required bool sealed})` — author valid member (revokedAt == null as of the change HLC), role permits the entityType/op (money/directory ⇒ owner|editor; membership/space ⇒ owner), and the target month is unsealed in `lib/features/spaces/repositories/space_role_guard.dart` (role-authorization §3, FR-008/009)
+- [x] T045 [US4] Make membership writes signed + versioned (create/role/remove/transfer/leave authored by the acting identity with a fresh HLC `version`, `authorIdentityId`, a `membershipCanonicalBytes` `signature`, and revocations via `revokedAt`) and record them through the `SyncRecorder` seam in `lib/features/spaces/repositories/spaces_repository.dart` (role-authorization §2/§4, FR-008)
+- [x] T046 [US4] Wire apply-time enforcement (signature → `assertAuthorizedAt` → month-seal) into the `SyncEngine` apply path in `lib/features/sync/repositories/sync_engine.dart` (FR-008/009/011, SC-005)
+- [x] T047 [US4] Enforce sealed-month content immutability on the apply path (no role) so a sealed month's records are exchanged once then refused everywhere in `lib/features/sync/repositories/sync_engine.dart` (FR-011, R6)
 
 **Checkpoint**: User Stories 1–4 independently functional (full cross-device role safety).
 

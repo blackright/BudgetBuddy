@@ -15,6 +15,13 @@ import '../models/insurance_profile.dart';
 import '../models/medical_service_type.dart';
 import '../models/month_rate_seal.dart';
 import '../models/live_rate_set.dart';
+import '../models/identity.dart';
+import '../models/consent_record.dart';
+import '../models/paired_peer.dart';
+import '../models/paired_context.dart';
+import '../models/pairing_token.dart';
+import '../models/change_record.dart';
+import '../models/sync_cursor.dart';
 import 'schema_migrations.dart';
 
 class IsarHelper {
@@ -43,6 +50,13 @@ class IsarHelper {
         LiveRateSetSchema,
         SharedSpaceSchema,
         SharedMemberSchema,
+        IdentitySchema,
+        ConsentRecordSchema,
+        PairedPeerSchema,
+        PairedContextSchema,
+        PairingTokenSchema,
+        ChangeRecordSchema,
+        SyncCursorSchema,
       ],
       directory: dir.path,
     );

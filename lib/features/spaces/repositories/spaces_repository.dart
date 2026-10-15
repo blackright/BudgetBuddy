@@ -13,6 +13,11 @@ import '../../../core/models/user_profile.dart';
 import '../../../core/providers/budget_context_provider.dart';
 import '../../engine/providers/rate_registry_provider.dart';
 import '../../expenses/models/reimbursement.dart';
+import '../../sync/domain/change_signing.dart';
+import '../../sync/domain/hlc.dart';
+import '../../sync/providers/sync_recorder_provider.dart';
+import '../../sync/repositories/sync_recorder.dart';
+import '../domain/shared_member_key.dart';
 import '../models/bring_in_past.dart';
 import 'month_move_operations.dart';
 import 'space_role_guard.dart';
@@ -36,11 +41,18 @@ class SpacesRepository {
     this._isar, {
     SpaceAccessGuard guard = const SpaceAccessGuard(),
     MonthMoveOperations? monthMoves,
+    SyncRecorder? syncRecorder,
   })  : _guard = guard,
-        _monthMoves = monthMoves;
+        _monthMoves = monthMoves,
+        _syncRecorder = syncRecorder;
 
   final Isar _isar;
   final SpaceAccessGuard _guard;
+
+  /// Appends a signed change for a paired shared context on every write
+  /// (FR-006). Optional and inert when no signer/identity is attached, so 011's
+  /// behaviour and its tests are unchanged.
+  final SyncRecorder? _syncRecorder;
 
   /// The month-move engine used to bring past months in at creation. Optional
   /// so a caller that never creates with a bring-in choice (or a test fake)
@@ -89,10 +101,18 @@ class SpacesRepository {
 
       final creator = SharedMember()
         ..sharedSpaceId = space.id
-        ..profileId = createdByProfileId
+        ..profileId = await sharedMemberKeyForLocalProfile(
+          _isar,
+          createdByProfileId,
+        )
         ..role = SharedMemberRole.owner
-        ..joinedAt = clock;
+        ..joinedAt = clock
+        ..updatedAt = clock;
+      await _authorMembership(creator, clock);
       await _isar.sharedMembers.put(creator);
+
+      await _syncRecorder?.recordSpace(space, now: clock);
+      await _syncRecorder?.recordMember(creator, now: clock);
 
       await _bringInPast(
         spaceId: space.id,
@@ -195,6 +215,7 @@ class SpacesRepository {
         space.defaultIncome = defaultIncome;
       }
       await _isar.sharedSpaces.put(space);
+      await _syncRecorder?.recordSpace(space);
     });
   }
 
@@ -209,7 +230,7 @@ class SpacesRepository {
   }) {
     return _isar.writeTxn(() async {
       _guard.assertManage(await _member(spaceId, actingProfileId));
-      await _requireSpace(spaceId);
+      final space = await _requireSpace(spaceId);
 
       final hasMoney = await _isar.monthlyBudgets
                   .filter()
@@ -235,6 +256,10 @@ class SpacesRepository {
         );
       }
 
+      final members = await _isar.sharedMembers
+          .filter()
+          .sharedSpaceIdEqualTo(spaceId)
+          .findAll();
       await _isar.sharedMembers
           .filter()
           .sharedSpaceIdEqualTo(spaceId)
@@ -258,6 +283,11 @@ class SpacesRepository {
           .sharedSpaceIdEqualTo(spaceId)
           .deleteAll();
       await _isar.sharedSpaces.delete(spaceId);
+
+      for (final member in members) {
+        await _syncRecorder?.recordMemberRemoved(member);
+      }
+      await _syncRecorder?.recordSpaceRemoved(space);
     });
   }
 
@@ -276,22 +306,26 @@ class SpacesRepository {
     return _isar.writeTxn(() async {
       _guard.assertManage(await _member(spaceId, actingProfileId));
       await _requireSpace(spaceId);
+      final key = await sharedMemberKeyForLocalProfile(_isar, profileId);
       final existing = await _isar.sharedMembers
           .filter()
           .sharedSpaceIdEqualTo(spaceId)
-          .profileIdEqualTo(profileId)
+          .profileIdEqualTo(key)
           .findFirst();
       if (existing != null) {
         throw ArgumentError.value(
             profileId, 'profileId', 'Already a member of this space');
       }
-      await _isar.sharedMembers.put(
-        SharedMember()
-          ..sharedSpaceId = spaceId
-          ..profileId = profileId
-          ..role = role
-          ..joinedAt = DateTime.now(),
-      );
+      final clock = DateTime.now();
+      final member = SharedMember()
+        ..sharedSpaceId = spaceId
+        ..profileId = key
+        ..role = role
+        ..joinedAt = clock
+        ..updatedAt = clock;
+      await _authorMembership(member, clock);
+      await _isar.sharedMembers.put(member);
+      await _syncRecorder?.recordMember(member, now: clock);
     });
   }
 
@@ -319,7 +353,11 @@ class SpacesRepository {
         }
       }
       member.role = role;
+      final clock = DateTime.now();
+      member.updatedAt = clock;
+      await _authorMembership(member, clock);
       await _isar.sharedMembers.put(member);
+      await _syncRecorder?.recordMember(member, now: clock);
     });
   }
 
@@ -341,6 +379,16 @@ class SpacesRepository {
           'a space must always have at least one Owner; transfer ownership '
           'first (FR-006/FR-014)',
         );
+      }
+      if (_syncRecorder?.signer != null) {
+        // Authoritative removal: a signed, re-versioned upsert with `revokedAt`
+        // set, so no peer applies this member's later changes (role-auth §2).
+        final clock = DateTime.now();
+        member.revokedAt = clock;
+        await _authorMembership(member, clock);
+        await _syncRecorder?.recordMember(member, now: clock);
+      } else {
+        await _syncRecorder?.recordMemberRemoved(member);
       }
       await _isar.sharedMembers.delete(member.id);
     });
@@ -364,10 +412,17 @@ class SpacesRepository {
       }
       final former = await _member(spaceId, actingProfileId);
       newOwner.role = SharedMemberRole.owner;
+      final clock = DateTime.now();
+      newOwner.updatedAt = clock;
+      await _authorMembership(newOwner, clock);
       await _isar.sharedMembers.put(newOwner);
+      await _syncRecorder?.recordMember(newOwner, now: clock);
       if (former != null && former.id != newOwner.id) {
         former.role = SharedMemberRole.editor;
+        former.updatedAt = clock;
+        await _authorMembership(former, clock);
         await _isar.sharedMembers.put(former);
+        await _syncRecorder?.recordMember(former, now: clock);
       }
     });
   }
@@ -388,6 +443,15 @@ class SpacesRepository {
           'before leaving (FR-014)',
         );
       }
+      if (_syncRecorder?.signer != null) {
+        // A leave is an authoritative self-removal: signed `revokedAt` upsert.
+        final clock = DateTime.now();
+        member.revokedAt = clock;
+        await _authorMembership(member, clock);
+        await _syncRecorder?.recordMember(member, now: clock);
+      } else {
+        await _syncRecorder?.recordMemberRemoved(member);
+      }
       await _isar.sharedMembers.delete(member.id);
     });
   }
@@ -396,12 +460,37 @@ class SpacesRepository {
   // Internals
   // ---------------------------------------------------------------------------
 
-  Future<SharedMember?> _member(int spaceId, int profileId) =>
-      _isar.sharedMembers
-          .filter()
-          .sharedSpaceIdEqualTo(spaceId)
-          .profileIdEqualTo(profileId)
-          .findFirst();
+  Future<SharedMember?> _member(int spaceId, int profileId) async {
+    final key = await sharedMemberKeyForLocalProfile(_isar, profileId);
+    return _isar.sharedMembers
+        .filter()
+        .sharedSpaceIdEqualTo(spaceId)
+        .profileIdEqualTo(key)
+        .findFirst();
+  }
+
+  /// The HLC generator used to version a membership change. Only reached when a
+  /// signer is attached, which means the recorder (and its clock) is present.
+  HlcClock get _membershipClock => _syncRecorder!.clock;
+
+  /// Authors a membership row for the change-log when a signer is attached
+  /// (T045, role-authorization §2/§4).
+  ///
+  /// Stamps a fresh HLC [SharedMember.version], the acting identity, [updatedAt]
+  /// and an ed25519 signature over [membershipCanonicalBytes], so every peer can
+  /// verify the role (and any removal) against the signer. A no-op when no signer
+  /// is attached (the recorder is inert), so 011's local-only rows are unchanged.
+  Future<SharedMember> _authorMembership(
+      SharedMember member, DateTime now) async {
+    final signer = _syncRecorder?.signer;
+    if (signer == null) return member;
+    member
+      ..version = _membershipClock.tick(now).millis
+      ..authorIdentityId = signer.authorIdentityId
+      ..updatedAt = now;
+    member.signature = await signer.sign(membershipCanonicalBytes(member));
+    return member;
+  }
 
   Future<int> _ownerCount(int spaceId) => _isar.sharedMembers
       .filter()
@@ -428,6 +517,7 @@ final spacesRepositoryProvider = Provider<SpacesRepository>(
         rateRegistry: ref.watch(rateRegistryProvider),
         guard: ref.watch(spaceRoleGuardProvider),
       ),
+      syncRecorder: ref.watch(syncRecorderProvider),
     );
   },
 );

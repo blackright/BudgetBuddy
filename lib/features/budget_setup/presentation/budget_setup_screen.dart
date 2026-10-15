@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import '../../../core/models/user_profile.dart';
 import '../../../core/providers/active_profile_provider.dart';
+import '../../../shared/presentation/widgets/money_field.dart';
 import '../../spaces/presentation/space_switcher.dart';
 import '../providers/budget_setup_provider.dart';
 
@@ -40,7 +42,8 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
       await ref.read(budgetSetupProvider.notifier).loadAutoFillData();
       final state = ref.read(budgetSetupProvider);
       if (state.amount != null) {
-        _amountController.text = state.amount.toString();
+        _amountController.text =
+            NumberFormat('#,##0.00', 'en_US').format(state.amount!);
       }
       if (state.yearMonth != null) {
         try {
@@ -89,16 +92,11 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
                 ),
               ),
             const SizedBox(height: 16),
-            TextField(
+            MoneyField(
+              key: const Key('monthlyAvailableAmountField'),
               controller: _amountController,
-              decoration: const InputDecoration(
-                labelText: 'Monthly Available Amount',
-                border: OutlineInputBorder(),
-              ),
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              onChanged: (value) {
-                final amount = double.tryParse(value);
+              label: 'Monthly Available Amount',
+              onChanged: (amount) {
                 if (amount != null) {
                   notifier.setAmount(amount);
                 }

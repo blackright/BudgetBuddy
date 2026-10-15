@@ -176,6 +176,20 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byKey(const Key('spaceIncomeField')), '1000');
+    await tester.pump();
+
+    // US1: the shared field groups while typing; the draft still carries the
+    // exact number (asserted below as 1000 * 100 minor units).
+    expect(
+      tester
+          .widget<TextField>(find.descendant(
+            of: find.byKey(const Key('spaceIncomeField')),
+            matching: find.byType(TextField),
+          ))
+          .controller!
+          .text,
+      '1,000',
+    );
 
     // The create button pops the sheet and runs the stubbed repository call —
     // both complete under the fake clock (routing stays on the fake clock).
@@ -380,7 +394,8 @@ class _StubProfileController implements ProfileSwitcherController {
   const _StubProfileController();
 
   @override
-  Future<int> createProfile(String name) async => throw StateError('unused');
+  Future<int> createProfile(String name, {double startingSalary = 0}) async =>
+      throw StateError('unused');
 
   @override
   Future<void> touchLastActiveAt(int profileId) async {}

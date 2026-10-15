@@ -16,7 +16,9 @@ import '../../engine/providers/rate_registry_provider.dart';
 import '../../settings/providers/settings_provider.dart';
 import '../../spaces/providers/spaces_providers.dart';
 import '../../dashboard/presentation/widgets/month_convert_to_menu.dart';
+import '../../../shared/presentation/money_format.dart';
 import '../../../shared/presentation/widgets/conversion_footnote.dart';
+import '../../../shared/presentation/widgets/money_field.dart';
 import '../providers/medical_providers.dart';
 import '../repositories/medical_repository.dart';
 import 'medical_theme.dart';
@@ -286,6 +288,10 @@ class _InsuranceProfileSheetState extends State<_InsuranceProfileSheet> {
   late final TextEditingController _insurer;
   late final TextEditingController _plan;
 
+  /// FR-009: the patient-share field is a percentage, not money — it selects
+  /// all on focus but is never comma-grouped.
+  late final FocusNode _patientShareFocus;
+
   @override
   void initState() {
     super.initState();
@@ -293,6 +299,7 @@ class _InsuranceProfileSheetState extends State<_InsuranceProfileSheet> {
     _patientShare = TextEditingController(
       text: (p?.defaultPatientPercent ?? 20).toStringAsFixed(0),
     );
+    _patientShareFocus = selectAllOnFocus(_patientShare);
     _insurer = TextEditingController(text: p?.insurerName ?? '');
     _plan = TextEditingController(text: p?.planName ?? '');
   }
@@ -300,6 +307,7 @@ class _InsuranceProfileSheetState extends State<_InsuranceProfileSheet> {
   @override
   void dispose() {
     _patientShare.dispose();
+    _patientShareFocus.dispose();
     _insurer.dispose();
     _plan.dispose();
     super.dispose();
@@ -338,6 +346,7 @@ class _InsuranceProfileSheetState extends State<_InsuranceProfileSheet> {
               TextFormField(
                 key: const Key('defaultPatientShareField'),
                 controller: _patientShare,
+                focusNode: _patientShareFocus,
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
                 decoration: const InputDecoration(
@@ -405,7 +414,7 @@ class _InsuranceProfileSheetState extends State<_InsuranceProfileSheet> {
     if (raw == null || raw.trim().isEmpty) {
       return allowEmpty ? null : 'Required';
     }
-    final parsed = double.tryParse(raw.trim());
+    final parsed = parseMoneyInput(raw);
     if (parsed == null) return 'Enter a number';
     if (parsed < 0) return 'Cannot be negative';
     return null;
@@ -414,7 +423,7 @@ class _InsuranceProfileSheetState extends State<_InsuranceProfileSheet> {
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
     final profile = widget.initial ?? InsuranceProfile();
-    profile.defaultPatientPercent = double.parse(_patientShare.text.trim());
+    profile.defaultPatientPercent = parseMoneyInput(_patientShare.text) ?? 0;
     profile.setPlanDetails(
       insurerName: _insurer.text,
       planName: _plan.text,

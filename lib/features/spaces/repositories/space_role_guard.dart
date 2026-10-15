@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/models/change_record.dart';
 import '../../../core/models/shared_member.dart';
 
 /// Thrown by [SpaceAccessGuard] when a shared-space write is refused
@@ -80,6 +81,63 @@ class SpaceAccessGuard {
     if (sealed) {
       throw const UnauthorizedSpaceAction(
         'sealed months are frozen for every role; no write may land',
+      );
+    }
+  }
+
+  /// The entity types whose author must be the **Owner** (people and space
+  /// settings); every other covered type is a money/directory write open to
+  /// Owner or Editor (`contracts/role-authorization.md` §1).
+  static const Set<String> _ownerOnlyEntityTypes = {
+    'SharedMember',
+    'SharedSpace',
+  };
+
+  /// Whether [member]'s role may author a change of [entityType] at apply time
+  /// (`role-authorization.md` §1/§3).
+  ///
+  /// Money and directory entity types need Owner or Editor; `SharedMember` and
+  /// `SharedSpace` are Owner-only.
+  bool canAuthor(SharedMember? member, String entityType) =>
+      _ownerOnlyEntityTypes.contains(entityType)
+          ? canManage(member)
+          : canEdit(member);
+
+  /// Apply-time authorization for one incoming change (`role-authorization.md`
+  /// §3, FR-008/009/011).
+  ///
+  /// Called by the sync engine for every change in a **signed (012-managed)
+  /// space**, where [membershipHead] is the author's local membership resolved
+  /// by their identity and [sealed] says the change targets a sealed month.
+  /// Refuses, in order: an unknown author; an author revoked at or before the
+  /// change's HLC; a role that may not author [ChangeRecord.entityType]; and any
+  /// change to a sealed month — for every role. The engine turns a refusal into
+  /// a drop, so nothing is silently applied.
+  void assertAuthorizedAt(
+    ChangeRecord change, {
+    required SharedMember? membershipHead,
+    required bool sealed,
+  }) {
+    final author = membershipHead;
+    if (author == null) {
+      throw const UnauthorizedSpaceAction(
+        'the author is not a member of this space',
+      );
+    }
+    if (author.revokedAt != null && change.hlcMillis >= author.version) {
+      throw const UnauthorizedSpaceAction(
+        'the author was removed before this change',
+      );
+    }
+    if (!canAuthor(author, change.entityType)) {
+      throw UnauthorizedSpaceAction(
+        'SharedMember.role "${author.role.name}" may not write '
+        '${change.entityType}',
+      );
+    }
+    if (sealed) {
+      throw const UnauthorizedSpaceAction(
+        'sealed months are frozen for every role; no change may be applied',
       );
     }
   }

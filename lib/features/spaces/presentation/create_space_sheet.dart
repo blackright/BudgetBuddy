@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/models/currency_code.dart';
 import '../../../core/models/user_profile.dart';
+import '../../../shared/presentation/money_format.dart';
+import '../../../shared/presentation/widgets/money_field.dart';
 import '../../settings/providers/settings_provider.dart';
 import '../models/bring_in_past.dart';
 
@@ -67,9 +69,8 @@ class _CreateSpaceSheetState extends ConsumerState<CreateSpaceSheet> {
   }
 
   int? _parseIncomeMinor() {
-    final raw = _income.text.trim().replaceAll(',', '');
-    if (raw.isEmpty) return 0;
-    final major = double.tryParse(raw);
+    final text = _income.text.trim();
+    final major = text.isEmpty ? 0.0 : parseMoneyInput(text);
     if (major == null || major < 0) return null;
     return (major * _currency.code.minorUnitsPerMajor).round();
   }
@@ -157,19 +158,13 @@ class _CreateSpaceSheetState extends ConsumerState<CreateSpaceSheet> {
                 },
               ),
               const SizedBox(height: 16),
-              TextField(
+              MoneyField(
                 key: const Key('spaceIncomeField'),
                 controller: _income,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                decoration: InputDecoration(
-                  labelText: 'Our income',
-                  helperText:
-                      'What the space takes home together per month, in '
-                      '${_currency.code.symbol}.',
-                  prefixText: '${_currency.code.symbol} ',
-                  border: const OutlineInputBorder(),
-                ),
+                label: 'Our income',
+                helperText: 'What the space takes home together per month, in '
+                    '${_currency.code.symbol}.',
+                prefixText: '${_currency.code.symbol} ',
               ),
               const SizedBox(height: 16),
               Text('Bring in the past',

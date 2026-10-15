@@ -202,7 +202,8 @@ class _StubProfileController implements ProfileSwitcherController {
   int? deletedProfileId;
 
   @override
-  Future<int> createProfile(String name) async => throw StateError('unused');
+  Future<int> createProfile(String name, {double startingSalary = 0}) async =>
+      throw StateError('unused');
 
   @override
   Future<void> touchLastActiveAt(int profileId) async {}

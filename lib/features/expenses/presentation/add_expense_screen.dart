@@ -8,6 +8,8 @@ import '../../../../core/providers/active_budget_provider.dart';
 import '../../../../core/providers/active_profile_provider.dart';
 import '../../../../core/providers/budget_context_provider.dart';
 import '../../../../core/providers/selected_month_provider.dart';
+import '../../../../shared/presentation/money_format.dart';
+import '../../../../shared/presentation/widgets/money_field.dart';
 import '../../engine/currency_resolution.dart';
 import '../../engine/providers/rate_registry_provider.dart';
 import '../../settings/providers/settings_provider.dart';
@@ -54,8 +56,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     super.dispose();
   }
 
-  static double? _parseAmount(String? raw) =>
-      double.tryParse((raw ?? '').replaceAll(RegExp(r'[,\s]'), ''));
+  static double? _parseAmount(String? raw) => parseMoneyInput(raw ?? '');
 
   /// The currency the form records in: the user's pick, or the profile's main
   /// currency until the user picks (T056).
@@ -133,14 +134,10 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                 children: [
                   Expanded(
                     flex: 2,
-                    child: TextFormField(
+                    child: MoneyField(
+                      key: const Key('addExpenseAmountField'),
                       controller: _amountController,
-                      keyboardType:
-                          const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(
-                        labelText: 'Amount',
-                        border: OutlineInputBorder(),
-                      ),
+                      label: 'Amount',
                       validator: (value) {
                         if (value == null || value.isEmpty) return 'Required';
                         final v = _parseAmount(value);
