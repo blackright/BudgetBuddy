@@ -31,7 +31,7 @@ WARNING: java.lang.System::load has been called by net.rubygrapefruit.platform.i
 WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
 WARNING: Restricted methods will be blocked in a future release unless native access is enabled
 
-WARNING: Your app uses the following plugins that apply Kotlin Gradle Plugin (KGP): device_calendar
+WARNING: Your app uses the following plugins that apply Kotlin Gradle Plugin (KGP): device_calendar, nsd_android
 Future versions of Flutter will fail to build if your app uses plugins that apply KGP.
 
 Please check the changelogs of these plugins and upgrade to a version that supports Built-in Kotlin.
@@ -39,125 +39,182 @@ If no such version exists, report the issue to the plugin. If necessary, here is
 an issue against a plugin: https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-app-developers#report-incompatible-kotlin-gradle-plugin-usage-to-plugin-authors
 
 If you are a plugin author, please migrate your plugin to Built-in Kotlin using this guide: https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-plugin-authors
-Running Gradle task 'assembleDebug'...                              8.6s
+Running Gradle task 'assembleDebug'...                             25.7s
 √ Built build\app\outputs\flutter-apk\app-debug.apk
-Installing build\app\outputs\flutter-apk\app-debug.apk...          60.2s
-E/AndroidRuntime(19368): FATAL EXCEPTION: main
-E/AndroidRuntime(19368): Process: com.example.budget_buddy, PID: 19368
-E/AndroidRuntime(19368): java.lang.RuntimeException: Unable to instantiate activity ComponentInfo{com.example.budget_buddy/com.example.budget_buddy.MainActivity}: java.lang.ClassNotFoundException: Didn't find class "com.example.budget_buddy.MainActivity" on path: DexPathList[[zip file "/data/app/com.example.budget_buddy-fakkysD5mkFVqbpygTMKJA==/base.apk"],nativeLibraryDirectories=[/data/app/com.example.budget_buddy-fakkysD5mkFVqbpygTMKJA==/lib/arm64, /data/app/com.example.budget_buddy-fakkysD5mkFVqbpygTMKJA==/base.apk!/lib/arm64-v8a, /system/lib64]]
-E/AndroidRuntime(19368):        at android.app.ActivityThread.performLaunchActivity(ActivityThread.java:3547)
-E/AndroidRuntime(19368):        at android.app.ActivityThread.handleLaunchActivity(ActivityThread.java:3806)
-E/AndroidRuntime(19368):        at android.app.servertransaction.LaunchActivityItem.execute(LaunchActivityItem.java:83)
-E/AndroidRuntime(19368):        at android.app.servertransaction.TransactionExecutor.executeCallbacks(TransactionExecutor.java:135)
-E/AndroidRuntime(19368):        at android.app.servertransaction.TransactionExecutor.execute(TransactionExecutor.java:95)
-E/AndroidRuntime(19368):        at android.app.ActivityThread$H.handleMessage(ActivityThread.java:2267)
-E/AndroidRuntime(19368):        at android.os.Handler.dispatchMessage(Handler.java:107)
-E/AndroidRuntime(19368):        at android.os.Looper.loop(Looper.java:237)
-E/AndroidRuntime(19368):        at android.app.ActivityThread.main(ActivityThread.java:8167)
-E/AndroidRuntime(19368):        at java.lang.reflect.Method.invoke(Native Method)
-E/AndroidRuntime(19368):        at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:496)
-E/AndroidRuntime(19368):        at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:1100)
-E/AndroidRuntime(19368): Caused by: java.lang.ClassNotFoundException: Didn't find class "com.example.budget_buddy.MainActivity" on path: DexPathList[[zip file "/data/app/com.example.budget_buddy-fakkysD5mkFVqbpygTMKJA==/base.apk"],nativeLibraryDirectories=[/data/app/com.example.budget_buddy-fakkysD5mkFVqbpygTMKJA==/lib/arm64, /data/app/com.example.budget_buddy-fakkysD5mkFVqbpygTMKJA==/base.apk!/lib/arm64-v8a, /system/lib64]]
-E/AndroidRuntime(19368):        at dalvik.system.BaseDexClassLoader.findClass(BaseDexClassLoader.java:196)
-E/AndroidRuntime(19368):        at java.lang.ClassLoader.loadClass(ClassLoader.java:379)
-E/AndroidRuntime(19368):        at java.lang.ClassLoader.loadClass(ClassLoader.java:312)
-E/AndroidRuntime(19368):        at android.app.AppComponentFactory.instantiateActivity(AppComponentFactory.java:95)
-E/AndroidRuntime(19368):        at androidx.core.app.CoreComponentFactory.instantiateActivity(CoreComponentFactory.java:44)
-E/AndroidRuntime(19368):        at android.app.Instrumentation.newActivity(Instrumentation.java:1251)
-E/AndroidRuntime(19368):        at android.app.ActivityThread.performLaunchActivity(ActivityThread.java:3535)
-E/AndroidRuntime(19368):        ... 11 more
-E/AndroidRuntime(19368):        Suppressed: java.lang.NoClassDefFoundError: Failed resolution of: Lio/flutter/embedding/android/FlutterFragmentActivity;
-E/AndroidRuntime(19368):                at java.lang.VMClassLoader.findLoadedClass(Native Method)
-E/AndroidRuntime(19368):                at java.lang.ClassLoader.findLoadedClass(ClassLoader.java:738)
-E/AndroidRuntime(19368):                at java.lang.ClassLoader.loadClass(ClassLoader.java:363)
-E/AndroidRuntime(19368):                ... 16 more
-E/AndroidRuntime(19368):        Caused by: java.lang.ClassNotFoundException: io.flutter.embedding.android.FlutterFragmentActivity
-E/AndroidRuntime(19368):                at java.lang.VMClassLoader.findLoadedClass(Native Method)
-E/AndroidRuntime(19368):                at java.lang.ClassLoader.findLoadedClass(ClassLoader.java:738)
-E/AndroidRuntime(19368):                at java.lang.ClassLoader.loadClass(ClassLoader.java:363)
-E/AndroidRuntime(19368):                at java.lang.ClassLoader.loadClass(ClassLoader.java:312)
-E/AndroidRuntime(19368):                ... 19 more
-E/AndroidRuntime(19368):        Caused by: java.lang.NoClassDefFoundError: Failed resolution of: Landroidx/fragment/app/FragmentActivity;
-E/AndroidRuntime(19368):                ... 19 more
-E/AndroidRuntime(19368):        Caused by: java.lang.ClassNotFoundException: androidx.fragment.app.FragmentActivity
-E/AndroidRuntime(19368):                at java.lang.VMClassLoader.findLoadedClass(Native Method)
-E/AndroidRuntime(19368):                at java.lang.ClassLoader.findLoadedClass(ClassLoader.java:738)
-E/AndroidRuntime(19368):                at java.lang.ClassLoader.loadClass(ClassLoader.java:363)
-E/AndroidRuntime(19368):                at java.lang.ClassLoader.loadClass(ClassLoader.java:312)
-E/AndroidRuntime(19368):                ... 19 more
-E/AndroidRuntime(19368):        Caused by: java.lang.NoClassDefFoundError: Failed resolution of: Landroidx/activity/ComponentActivity;
-E/AndroidRuntime(19368):                ... 19 more
-E/AndroidRuntime(19368):        Caused by: java.lang.ClassNotFoundException: androidx.activity.ComponentActivity
-E/AndroidRuntime(19368):                at java.lang.VMClassLoader.findLoadedClass(Native Method)
-E/AndroidRuntime(19368):                at java.lang.ClassLoader.findLoadedClass(ClassLoader.java:738)
-E/AndroidRuntime(19368):                at java.lang.ClassLoader.loadClass(ClassLoader.java:363)
-E/AndroidRuntime(19368):                at java.lang.ClassLoader.loadClass(ClassLoader.java:312)
-E/AndroidRuntime(19368):                ... 19 more
-E/AndroidRuntime(19368):        Caused by: java.lang.NoClassDefFoundError: Failed resolution of: Landroidx/core/app/PictureInPictureProvider;
-E/AndroidRuntime(19368):                ... 19 more
-E/AndroidRuntime(19368):        Caused by: java.lang.ClassNotFoundException: Didn't find class "androidx.core.app.PictureInPictureProvider" on path: DexPathList[[zip file "/data/app/com.example.budget_buddy-fakkysD5mkFVqbpygTMKJA==/base.apk"],nativeLibraryDirectories=[/data/app/com.example.budget_buddy-fakkysD5mkFVqbpygTMKJA==/lib/arm64, /data/app/com.example.budget_buddy-fakkysD5mkFVqbpygTMKJA==/base.apk!/lib/arm64-v8a, /system/lib64]]
-E/AndroidRuntime(19368):                at dalvik.system.BaseDexClassLoader.findClass(BaseDexClassLoader.java:196)
-E/AndroidRuntime(19368):                at java.lang.ClassLoader.loadClass(ClassLoader.java:379)
-E/AndroidRuntime(19368):                at java.lang.ClassLoader.loadClass(ClassLoader.java:312)
-E/AndroidRuntime(19368):                ... 19 more
-E/AndroidRuntime(20042): FATAL EXCEPTION: main
-E/AndroidRuntime(20042): Process: com.example.budget_buddy, PID: 20042
-E/AndroidRuntime(20042): java.lang.RuntimeException: Unable to instantiate activity ComponentInfo{com.example.budget_buddy/com.example.budget_buddy.MainActivity}: java.lang.ClassNotFoundException: Didn't find class "com.example.budget_buddy.MainActivity" on path: DexPathList[[zip file "/data/app/com.example.budget_buddy-fakkysD5mkFVqbpygTMKJA==/base.apk"],nativeLibraryDirectories=[/data/app/com.example.budget_buddy-fakkysD5mkFVqbpygTMKJA==/lib/arm64, /data/app/com.example.budget_buddy-fakkysD5mkFVqbpygTMKJA==/base.apk!/lib/arm64-v8a, /system/lib64]]
-E/AndroidRuntime(20042):        at android.app.ActivityThread.performLaunchActivity(ActivityThread.java:3547)
-E/AndroidRuntime(20042):        at android.app.ActivityThread.handleLaunchActivity(ActivityThread.java:3806)
-E/AndroidRuntime(20042):        at android.app.servertransaction.LaunchActivityItem.execute(LaunchActivityItem.java:83)
-E/AndroidRuntime(20042):        at android.app.servertransaction.TransactionExecutor.executeCallbacks(TransactionExecutor.java:135)
-E/AndroidRuntime(20042):        at android.app.servertransaction.TransactionExecutor.execute(TransactionExecutor.java:95)
-E/AndroidRuntime(20042):        at android.app.ActivityThread$H.handleMessage(ActivityThread.java:2267)
-E/AndroidRuntime(20042):        at android.os.Handler.dispatchMessage(Handler.java:107)
-E/AndroidRuntime(20042):        at android.os.Looper.loop(Looper.java:237)
-E/AndroidRuntime(20042):        at android.app.ActivityThread.main(ActivityThread.java:8167)
-E/AndroidRuntime(20042):        at java.lang.reflect.Method.invoke(Native Method)
-E/AndroidRuntime(20042):        at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:496)
-E/AndroidRuntime(20042):        at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:1100)
-E/AndroidRuntime(20042): Caused by: java.lang.ClassNotFoundException: Didn't find class "com.example.budget_buddy.MainActivity" on path: DexPathList[[zip file "/data/app/com.example.budget_buddy-fakkysD5mkFVqbpygTMKJA==/base.apk"],nativeLibraryDirectories=[/data/app/com.example.budget_buddy-fakkysD5mkFVqbpygTMKJA==/lib/arm64, /data/app/com.example.budget_buddy-fakkysD5mkFVqbpygTMKJA==/base.apk!/lib/arm64-v8a, /system/lib64]]
-E/AndroidRuntime(20042):        at dalvik.system.BaseDexClassLoader.findClass(BaseDexClassLoader.java:196)
-E/AndroidRuntime(20042):        at java.lang.ClassLoader.loadClass(ClassLoader.java:379)
-E/AndroidRuntime(20042):        at java.lang.ClassLoader.loadClass(ClassLoader.java:312)
-E/AndroidRuntime(20042):        at android.app.AppComponentFactory.instantiateActivity(AppComponentFactory.java:95)
-E/AndroidRuntime(20042):        at androidx.core.app.CoreComponentFactory.instantiateActivity(CoreComponentFactory.java:44)
-E/AndroidRuntime(20042):        at android.app.Instrumentation.newActivity(Instrumentation.java:1251)
-E/AndroidRuntime(20042):        at android.app.ActivityThread.performLaunchActivity(ActivityThread.java:3535)
-E/AndroidRuntime(20042):        ... 11 more
-E/AndroidRuntime(20042):        Suppressed: java.lang.NoClassDefFoundError: Failed resolution of: Lio/flutter/embedding/android/FlutterFragmentActivity;
-E/AndroidRuntime(20042):                at java.lang.VMClassLoader.findLoadedClass(Native Method)
-E/AndroidRuntime(20042):                at java.lang.ClassLoader.findLoadedClass(ClassLoader.java:738)
-E/AndroidRuntime(20042):                at java.lang.ClassLoader.loadClass(ClassLoader.java:363)
-E/AndroidRuntime(20042):                ... 16 more
-E/AndroidRuntime(20042):        Caused by: java.lang.ClassNotFoundException: io.flutter.embedding.android.FlutterFragmentActivity
-E/AndroidRuntime(20042):                at java.lang.VMClassLoader.findLoadedClass(Native Method)
-E/AndroidRuntime(20042):                at java.lang.ClassLoader.findLoadedClass(ClassLoader.java:738)
-E/AndroidRuntime(20042):                at java.lang.ClassLoader.loadClass(ClassLoader.java:363)
-E/AndroidRuntime(20042):                at java.lang.ClassLoader.loadClass(ClassLoader.java:312)
-E/AndroidRuntime(20042):                ... 19 more
-E/AndroidRuntime(20042):        Caused by: java.lang.NoClassDefFoundError: Failed resolution of: Landroidx/fragment/app/FragmentActivity;
-E/AndroidRuntime(20042):                ... 19 more
-E/AndroidRuntime(20042):        Caused by: java.lang.ClassNotFoundException: androidx.fragment.app.FragmentActivity
-E/AndroidRuntime(20042):                at java.lang.VMClassLoader.findLoadedClass(Native Method)
-E/AndroidRuntime(20042):                at java.lang.ClassLoader.findLoadedClass(ClassLoader.java:738)
-E/AndroidRuntime(20042):                at java.lang.ClassLoader.loadClass(ClassLoader.java:363)
-E/AndroidRuntime(20042):                at java.lang.ClassLoader.loadClass(ClassLoader.java:312)
-E/AndroidRuntime(20042):                ... 19 more
-E/AndroidRuntime(20042):        Caused by: java.lang.NoClassDefFoundError: Failed resolution of: Landroidx/activity/ComponentActivity;
-E/AndroidRuntime(20042):                ... 19 more
-E/AndroidRuntime(20042):        Caused by: java.lang.ClassNotFoundException: androidx.activity.ComponentActivity
-E/AndroidRuntime(20042):                at java.lang.VMClassLoader.findLoadedClass(Native Method)
-E/AndroidRuntime(20042):                at java.lang.ClassLoader.findLoadedClass(ClassLoader.java:738)
-E/AndroidRuntime(20042):                at java.lang.ClassLoader.loadClass(ClassLoader.java:363)
-E/AndroidRuntime(20042):                at java.lang.ClassLoader.loadClass(ClassLoader.java:312)
-E/AndroidRuntime(20042):                ... 19 more
-E/AndroidRuntime(20042):        Caused by: java.lang.NoClassDefFoundError: Failed resolution of: Landroidx/core/app/PictureInPictureProvider;
-E/AndroidRuntime(20042):                ... 19 more
-E/AndroidRuntime(20042):        Caused by: java.lang.ClassNotFoundException: Didn't find class "androidx.core.app.PictureInPictureProvider" on path: DexPathList[[zip file "/data/app/com.example.budget_buddy-fakkysD5mkFVqbpygTMKJA==/base.apk"],nativeLibraryDirectories=[/data/app/com.example.budget_buddy-fakkysD5mkFVqbpygTMKJA==/lib/arm64, /data/app/com.example.budget_buddy-fakkysD5mkFVqbpygTMKJA==/base.apk!/lib/arm64-v8a, /system/lib64]]
-E/AndroidRuntime(20042):                at dalvik.system.BaseDexClassLoader.findClass(BaseDexClassLoader.java:196)
-E/AndroidRuntime(20042):                at java.lang.ClassLoader.loadClass(ClassLoader.java:379)
-E/AndroidRuntime(20042):                at java.lang.ClassLoader.loadClass(ClassLoader.java:312)
-E/AndroidRuntime(20042):                ... 19 more
+Installing build\app\outputs\flutter-apk\app-debug.apk...          61.1s
+I/FlutterActivityAndFragmentDelegate( 5467): If you are attempting to set --enable-dart-profiling via Intent extras to launch a Flutter component outside of using the Flutter CLI, note that support for setting engine flags on Android via Intent will soon be dropped; see https://github.com/flutter/flutter/issues/180686 for more information on this breaking change. To migrate, set --enable-dart-profiling or any other flags specified via Intent extras on the command line instead or see https://github.com/flutter/flutter/blob/main/docs/engine/Flutter-Android-Engine-Flags.md for alternative methods.
+D/FlutterJNI( 5467): Beginning load of flutter...
+D/FlutterJNI( 5467): flutter (null) was loaded normally!
+I/flutter ( 5467): [IMPORTANT:flutter/shell/platform/android/android_context_gl_impeller.cc(104)] Using the Impeller rendering backend (OpenGLES).
+D/FlutterRenderer( 5467): Width is zero. 0,0
+Syncing files to device SM G965F...                                213ms
+
+Flutter run key commands.
+r Hot reload.
+R Hot restart.
+h List all available interactive commands.
+d Detach (terminate "flutter run" but leave application running).
+c Clear the screen
+q Quit (terminate the application on the device).
+
+A Dart VM Service on SM G965F is available at: http://127.0.0.1:56060/NKhSROY4R1k=/
+The Flutter DevTools debugger and profiler on SM G965F is available at:
+http://127.0.0.1:56060/NKhSROY4R1k=/devtools/?uri=ws://127.0.0.1:56060/NKhSROY4R1k=/ws
+I/flutter ( 5467): ╔══════════════════════════════════════════════════════╗
+I/flutter ( 5467): ║                 ISAR CONNECT STARTED                 ║
+I/flutter ( 5467): ╟──────────────────────────────────────────────────────╢
+I/flutter ( 5467): ║         Open the link to connect to the Isar         ║
+I/flutter ( 5467): ║        Inspector while this build is running.        ║
+I/flutter ( 5467): ╟──────────────────────────────────────────────────────╢
+I/flutter ( 5467): ║ https://inspect.isar.dev/3.1.0+1/#/56060/NKhSROY4R1k ║
+I/flutter ( 5467): ╚══════════════════════════════════════════════════════╝
+I/Choreographer( 5467): Skipped 74 frames!  The application may be doing too much work on its main thread.
+I/SurfaceView( 5467): onWindowVisibilityChanged(0) true io.flutter.embedding.android.FlutterSurfaceView{9c88959 V.E...... ......I. 0,0-0,0} of ViewRootImpl@e9d1746[MainActivity]
+D/FlutterRenderer( 5467): Width is zero. 0,0
+D/FlutterRenderer( 5467): Width is zero. 0,0
+I/ViewRootImpl@e9d1746[MainActivity]( 5467): Relayout returned: old=(0,0,1440,2960) new=(0,0,1440,2960) req=(1440,2960)0 dur=8 res=0x7 s={true 506906042368} ch=true
+D/FlutterJNI( 5467): Sending viewport metrics to the engine.
+I/mali_winsys( 5467): new_window_surface() [1440x2960] return: 0x3000
+I/SurfaceView( 5467): surfaceCreated 1 #8 io.flutter.embedding.android.FlutterSurfaceView{9c88959 V.E...... ......ID 0,0-1440,2792}
+I/mali_winsys( 5467): new_window_surface() [1440x2792] return: 0x3000
+I/SurfaceView( 5467): surfaceChanged (1440,2792) 1 #8 io.flutter.embedding.android.FlutterSurfaceView{9c88959 V.E...... ......ID 0,0-1440,2792}
+I/mali_egl( 5467): eglDestroySurface() in
+I/mali_winsys( 5467): delete_surface() [1440x2792] return
+I/mali_egl( 5467): eglDestroySurface() out
+W/libEGL  ( 5467): EGLNativeWindowType 0x760e289010 disconnect failed
+I/mali_winsys( 5467): new_window_surface() [1440x2792] return: 0x3000
+I/Choreographer( 5467): Skipped 84 frames!  The application may be doing too much work on its main thread.
+I/ViewRootImpl@e9d1746[MainActivity]( 5467): Relayout returned: old=(0,0,1440,2960) new=(0,0,1440,2960) req=(1440,2960)0 dur=5 res=0x3 s={true 506906042368} ch=false
+I/SurfaceView( 5467): surfaceDestroyed callback.size 1 #3 io.flutter.embedding.android.FlutterSurfaceView{9c88959 G.E...... ......ID 0,0-1440,2792}
+I/mali_egl( 5467): eglDestroySurface() in
+I/mali_winsys( 5467): delete_surface() [1440x2792] return
+I/mali_egl( 5467): eglDestroySurface() out
+W/libEGL  ( 5467): EGLNativeWindowType 0x760e289010 disconnect failed
+I/SurfaceView( 5467): remove() io.flutter.embedding.android.FlutterSurfaceView{9c88959 G.E...... ......ID 0,0-1440,2792} Surface(name=SurfaceView - com.example.budget_buddy/com.example.budget_buddy.MainActivity@9c88959@0)/@0xa117ac9
+I/SurfaceView( 5467): onWindowVisibilityChanged(8) false io.flutter.embedding.android.FlutterSurfaceView{9c88959 G.E...... ......ID 0,0-1440,2792} of ViewRootImpl@e9d1746[MainActivity]
+I/mali_egl( 5467): eglDestroySurface() in
+I/mali_egl( 5467): eglDestroySurface() out
+I/FlutterActivityAndFragmentDelegate( 5467): If you are attempting to set --enable-dart-profiling via Intent extras to launch a Flutter component outside of using the Flutter CLI, note that support for setting engine flags on Android via Intent will soon be dropped; see https://github.com/flutter/flutter/issues/180686 for more information on this breaking change. To migrate, set --enable-dart-profiling or any other flags specified via Intent extras on the command line instead or see https://github.com/flutter/flutter/blob/main/docs/engine/Flutter-Android-Engine-Flags.md for alternative methods.
+I/flutter ( 5467): [IMPORTANT:flutter/shell/platform/android/android_context_gl_impeller.cc(104)] Using the Impeller rendering backend (OpenGLES).
+I/mali_egl( 5467): eglDestroySurface() in
+I/mali_egl( 5467): eglDestroySurface() out
+D/PhoneWindow( 5467): forceLight changed to true [] from com.android.internal.policy.PhoneWindow.updateForceLightNavigationBar:4274 com.android.internal.policy.DecorView.updateColorViews:1547 com.android.internal.policy.PhoneWindow.dispatchWindowAttributesChanged:3252 android.view.Window.setFlags:1153 com.android.internal.policy.PhoneWindow.generateLayout:2474
+I/MultiWindowDecorSupport( 5467): [INFO] isPopOver = false
+I/MultiWindowDecorSupport( 5467): updateCaptionType >> DecorView@850c705[], isFloating: false, isApplication: true, hasWindowDecorCaption: false, hasWindowControllerCallback: true
+D/MultiWindowDecorSupport( 5467): setCaptionType = 0, DecorView = DecorView@850c705[]
+D/AccessibilityBridge( 5467): Setting not found: accessibility_display_inversion_enabled, using default: 0
+D/FlutterRenderer( 5467): Width is zero. 0,0
+I/SurfaceView( 5467): onWindowVisibilityChanged(0) true io.flutter.embedding.android.FlutterSurfaceView{517e08e V.E...... ......I. 0,0-0,0} of ViewRootImpl@e9d1746[MainActivity]
+I/ViewRootImpl@e9d1746[MainActivity]( 5467): stopped(false) old=false
+I/flutter ( 5467): ╔══════════════════════════════════════════════════════╗
+I/flutter ( 5467): ║                 ISAR CONNECT STARTED                 ║
+I/flutter ( 5467): ╟──────────────────────────────────────────────────────╢
+I/flutter ( 5467): ║         Open the link to connect to the Isar         ║
+I/flutter ( 5467): ║        Inspector while this build is running.        ║
+I/flutter ( 5467): ╟──────────────────────────────────────────────────────╢
+I/flutter ( 5467): ║ https://inspect.isar.dev/3.1.0+1/#/56060/NKhSROY4R1k ║
+I/flutter ( 5467): ╚══════════════════════════════════════════════════════╝
+I/ViewRootImpl@e9d1746[MainActivity]( 5467): MSG_WINDOW_FOCUS_CHANGED 1 1
+D/InputMethodManager( 5467): prepareNavigationBarInfo() DecorView@850c705[]
+D/InputMethodManager( 5467): getNavigationBarColor() -855310
+W/FlutterFragment( 5467): FlutterFragment 13809347 onWindowFocusChanged called after release.
+D/InputMethodManager( 5467): prepareNavigationBarInfo() DecorView@850c705[]
+D/InputMethodManager( 5467): getNavigationBarColor() -855310
+V/InputMethodManager( 5467): Starting input: tba=com.example.budget_buddy ic=null mNaviBarColor -855310 mIsGetNaviBarColorSuccess true , NavVisible : true , NavTrans : false
+D/InputMethodManager( 5467): startInputInner - Id : 0
+I/InputMethodManager( 5467): startInputInner - mService.startInputOrWindowGainedFocus
+I/Choreographer( 5467): Skipped 124 frames!  The application may be doing too much work on its main thread.
+D/FlutterRenderer( 5467): Width is zero. 0,0
+I/ViewRootImpl@e9d1746[MainActivity]( 5467): Relayout returned: old=(0,0,1440,2960) new=(0,0,1440,2960) req=(1440,2960)0 dur=6 res=0x3 s={true 506906042368} ch=false
+D/FlutterJNI( 5467): Sending viewport metrics to the engine.
+I/SurfaceView( 5467): surfaceCreated 1 #8 io.flutter.embedding.android.FlutterSurfaceView{517e08e V.E...... ......ID 0,0-1440,2792}
+I/mali_winsys( 5467): new_window_surface() [1440x2792] return: 0x3000
+I/SurfaceView( 5467): surfaceChanged (1440,2792) 1 #8 io.flutter.embedding.android.FlutterSurfaceView{517e08e V.E...... ......ID 0,0-1440,2792}
+I/mali_egl( 5467): eglDestroySurface() in
+I/mali_winsys( 5467): delete_surface() [1440x2792] return
+I/mali_egl( 5467): eglDestroySurface() out
+W/libEGL  ( 5467): EGLNativeWindowType 0x7612226010 disconnect failed
+I/mali_winsys( 5467): new_window_surface() [1440x2792] return: 0x3000
+I/ViewRootImpl@e9d1746[MainActivity]( 5467): MSG_RESIZED_REPORT: frame=(0,0,1440,2960) ci=(0,84,0,168) vi=(0,84,0,168) or=1
+I/Choreographer( 5467): Skipped 128 frames!  The application may be doing too much work on its main thread.
+E/MethodChannel#dexterous.com/flutter/local_notifications( 5467): Failed to handle method call
+E/MethodChannel#dexterous.com/flutter/local_notifications( 5467): java.lang.NullPointerException: Attempt to invoke virtual method 'android.content.res.Resources android.content.Context.getResources()' on a null object reference
+E/MethodChannel#dexterous.com/flutter/local_notifications( 5467):       at com.dexterous.flutterlocalnotifications.FlutterLocalNotificationsPlugin.isValidDrawableResource(FlutterLocalNotificationsPlugin.java:1459)
+E/MethodChannel#dexterous.com/flutter/local_notifications( 5467):       at com.dexterous.flutterlocalnotifications.FlutterLocalNotificationsPlugin.initialize(FlutterLocalNotificationsPlugin.java:1886)
+E/MethodChannel#dexterous.com/flutter/local_notifications( 5467):       at com.dexterous.flutterlocalnotifications.FlutterLocalNotificationsPlugin.onMethodCall(FlutterLocalNotificationsPlugin.java:1628)
+E/MethodChannel#dexterous.com/flutter/local_notifications( 5467):       at io.flutter.plugin.common.MethodChannel$IncomingMethodCallHandler.onMessage(MethodChannel.java:267)
+E/MethodChannel#dexterous.com/flutter/local_notifications( 5467):       at io.flutter.embedding.engine.dart.DartMessenger.invokeHandler(DartMessenger.java:286)
+E/MethodChannel#dexterous.com/flutter/local_notifications( 5467):       at io.flutter.embedding.engine.dart.DartMessenger.lambda$dispatchMessageToQueue$0$io-flutter-embedding-engine-dart-DartMessenger(DartMessenger.java:313)
+E/MethodChannel#dexterous.com/flutter/local_notifications( 5467):       at io.flutter.embedding.engine.dart.DartMessenger$$ExternalSyntheticLambda0.run(D8$$SyntheticClass:0)
+E/MethodChannel#dexterous.com/flutter/local_notifications( 5467):       at android.os.Handler.handleCallback(Handler.java:883)
+E/MethodChannel#dexterous.com/flutter/local_notifications( 5467):       at android.os.Handler.dispatchMessage(Handler.java:100)
+E/MethodChannel#dexterous.com/flutter/local_notifications( 5467):       at android.os.Looper.loop(Looper.java:237)
+E/MethodChannel#dexterous.com/flutter/local_notifications( 5467):       at android.app.ActivityThread.main(ActivityThread.java:8167)
+E/MethodChannel#dexterous.com/flutter/local_notifications( 5467):       at java.lang.reflect.Method.invoke(Native Method)
+E/MethodChannel#dexterous.com/flutter/local_notifications( 5467):       at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:496)
+E/MethodChannel#dexterous.com/flutter/local_notifications( 5467):       at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:1100)
+W/FlutterJNI( 5467): Tried to send a platform message response, but FlutterJNI was detached from native C++. Could not send. Response ID: 5
+D/InputMethodManager( 5467): prepareNavigationBarInfo() DecorView@850c705[]
+D/InputMethodManager( 5467): getNavigationBarColor() -855310
+V/InputMethodManager( 5467): Starting input: tba=com.example.budget_buddy ic=null mNaviBarColor -855310 mIsGetNaviBarColorSuccess true , NavVisible : true , NavTrans : false
+D/InputMethodManager( 5467): startInputInner - Id : 0
+D/FlutterJNI( 5467): Sending viewport metrics to the engine.
+W/Gralloc3( 5467): mapper 3.x is not supported
+I/gralloc ( 5467): Arm Module v1.0
+I/Choreographer( 5467): Skipped 97 frames!  The application may be doing too much work on its main thread.
+D/PhoneWindow( 5467): forceLight changed to false [] from com.android.internal.policy.PhoneWindow.updateForceLightNavigationBar:4280 com.android.internal.policy.PhoneWindow.setNavigationBarColor:4102 io.flutter.plugin.platform.PlatformPlugin.setSystemChromeSystemUIOverlayStyle:578 io.flutter.plugin.platform.PlatformPlugin.access$700:37 io.flutter.plugin.platform.PlatformPlugin$1.setSystemUiOverlayStyle:125
+D/ProfileInstaller( 5467): Installing profile for com.example.budget_buddy
+I/Choreographer( 5467): Skipped 144 frames!  The application may be doing too much work on its main thread.
+I/ViewRootImpl@e9d1746[MainActivity]( 5467): Relayout returned: old=(0,0,1440,2960) new=(0,0,1440,2960) req=(1440,2960)0 dur=9 res=0x3 s={true 506906042368} ch=false
+D/FlutterJNI( 5467): Sending viewport metrics to the engine.
+I/Choreographer( 5467): Skipped 31 frames!  The application may be doing too much work on its main thread.
+I/ViewRootImpl@e9d1746[MainActivity]( 5467): Relayout returned: old=(0,0,1440,2960) new=(0,0,1440,2960) req=(1440,2960)0 dur=4 res=0x3 s={true 506906042368} ch=false
+D/FlutterJNI( 5467): Sending viewport metrics to the engine.
+I/ViewRootImpl@e9d1746[MainActivity]( 5467): MSG_WINDOW_FOCUS_CHANGED 0 1
+D/InputMethodManager( 5467): prepareNavigationBarInfo() DecorView@850c705[]
+D/InputMethodManager( 5467): getNavigationBarColor() -16777216
+W/FlutterFragment( 5467): FlutterFragment 13809347 onWindowFocusChanged called after release.
+D/InputTransport( 5467): Input channel destroyed: 'ClientS', fd=98
+I/AssistStructure( 5467): Flattened final assist data: 840 bytes, containing 1 windows, 9 views
+I/SurfaceView( 5467): onWindowVisibilityChanged(8) false io.flutter.embedding.android.FlutterSurfaceView{517e08e V.E...... ......ID 0,0-1440,2792} of ViewRootImpl@e9d1746[MainActivity]
+I/SurfaceView( 5467): surfaceDestroyed callback.size 1 #2 io.flutter.embedding.android.FlutterSurfaceView{517e08e V.E...... ......ID 0,0-1440,2792}
+I/mali_egl( 5467): eglDestroySurface() in
+I/mali_winsys( 5467): delete_surface() [1440x2792] return
+I/mali_egl( 5467): eglDestroySurface() out
+W/libEGL  ( 5467): EGLNativeWindowType 0x7612226010 disconnect failed
+I/SurfaceView( 5467): remove() io.flutter.embedding.android.FlutterSurfaceView{517e08e V.E...... ......ID 0,0-1440,2792} Surface(name=SurfaceView - com.example.budget_buddy/com.example.budget_buddy.MainActivity@517e08e@0)/@0x6cf496d
+I/mali_egl( 5467): eglDestroySurface() in
+I/mali_winsys( 5467): delete_surface() [1440x2960] return
+I/mali_egl( 5467): eglDestroySurface() out
+W/libEGL  ( 5467): EGLNativeWindowType 0x76121e2690 disconnect failed
+I/ViewRootImpl@e9d1746[MainActivity]( 5467): Relayout returned: old=(0,0,1440,2960) new=(0,0,1440,2960) req=(1440,2960)8 dur=47 res=0x5 s={false 0} ch=true
+I/ViewRootImpl@e9d1746[MainActivity]( 5467): stopped(true) old=false
+I/SurfaceView( 5467): windowStopped(true) false io.flutter.embedding.android.FlutterSurfaceView{517e08e V.E...... ......ID 0,0-1440,2792} of ViewRootImpl@e9d1746[MainActivity]
+I/SurfaceView( 5467): onWindowVisibilityChanged(4) false io.flutter.embedding.android.FlutterSurfaceView{517e08e G.E...... ......ID 0,0-1440,2792} of ViewRootImpl@e9d1746[MainActivity]
+I/ViewRootImpl@e9d1746[MainActivity]( 5467): Relayout returned: old=(0,0,1440,2960) new=(0,0,1440,2960) req=(1440,2960)4 dur=17 res=0x1 s={false 0} ch=false
+I/ViewRootImpl@e9d1746[MainActivity]( 5467): stopped(false) old=true
+I/SurfaceView( 5467): windowStopped(false) false io.flutter.embedding.android.FlutterSurfaceView{517e08e G.E...... ......ID 0,0-1440,2792} of ViewRootImpl@e9d1746[MainActivity]
+I/ViewRootImpl@e9d1746[MainActivity]( 5467): stopped(false) old=false
+I/SurfaceView( 5467): onWindowVisibilityChanged(0) true io.flutter.embedding.android.FlutterSurfaceView{517e08e V.E...... ......ID 0,0-1440,2792} of ViewRootImpl@e9d1746[MainActivity]
+I/ViewRootImpl@e9d1746[MainActivity]( 5467): Relayout returned: old=(0,0,1440,2960) new=(0,0,1440,2960) req=(1440,2960)0 dur=8 res=0x7 s={true 507112431616} ch=true
+I/SurfaceView( 5467): surfaceCreated 1 #5 io.flutter.embedding.android.FlutterSurfaceView{517e08e V.E...... ......ID 0,0-1440,2792}
+I/mali_winsys( 5467): new_window_surface() [1440x2960] return: 0x3000
+I/mali_winsys( 5467): new_window_surface() [1440x2792] return: 0x3000
+I/SurfaceView( 5467): surfaceChanged (1440,2792) 1 #5 io.flutter.embedding.android.FlutterSurfaceView{517e08e V.E...... ......ID 0,0-1440,2792}
+I/mali_egl( 5467): eglDestroySurface() in
+I/mali_winsys( 5467): delete_surface() [1440x2792] return
+I/mali_egl( 5467): eglDestroySurface() out
+W/libEGL  ( 5467): EGLNativeWindowType 0x7605f72010 disconnect failed
+I/mali_winsys( 5467): new_window_surface() [1440x2792] return: 0x3000
+I/ViewRootImpl@e9d1746[MainActivity]( 5467): MSG_WINDOW_FOCUS_CHANGED 1 1
+D/InputMethodManager( 5467): prepareNavigationBarInfo() DecorView@850c705[]
+D/InputMethodManager( 5467): getNavigationBarColor() -16777216
+W/FlutterFragment( 5467): FlutterFragment 13809347 onWindowFocusChanged called after release.
+D/InputMethodManager( 5467): prepareNavigationBarInfo() DecorView@850c705[]
+D/InputMethodManager( 5467): getNavigationBarColor() -16777216
+V/InputMethodManager( 5467): Starting input: tba=com.example.budget_buddy ic=null mNaviBarColor -16777216 mIsGetNaviBarColorSuccess true , NavVisible : true , NavTrans : false
+D/InputMethodManager( 5467): startInputInner - Id : 0
+I/InputMethodManager( 5467): startInputInner - mService.startInputOrWindowGainedFocus
 
 }}
 [CONTEXT & CODE ERRORS END]

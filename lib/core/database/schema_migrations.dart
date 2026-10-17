@@ -14,7 +14,7 @@ part 'schema_migrations.g.dart';
 
 /// Schema version this build expects. Bump whenever a numbered step is added to
 /// [_applySteps]; databases stamped at or above it are left untouched.
-const int schemaVersion = 15;
+const int schemaVersion = 16;
 
 const String schemaVersionKey = 'schema_version';
 
@@ -107,6 +107,19 @@ Future<void> _applySteps(Isar isar) async {
   await _step13BackfillContextOwnership(isar);
   await _step14AddSyncCollections(isar);
   await _step15BackfillMembershipSyncColumns(isar);
+  await _step16AddConfirmSharedSavePreference(isar);
+}
+
+/// Step 16 (014-charts-and-analytics, US6) — additive only: `UserProfile` gains
+/// its `confirmSharedSave` column.
+///
+/// Isar reconciles the stored schema on open, so the new column materialises
+/// with its declared default (`true` — confirm a shared save unless the user
+/// opts out) before this runs; there is no data to rewrite. The step exists so
+/// the version stamp records the upgrade and so the specification's numbering
+/// stays visible. No monetary amount, seal or month total is touched.
+Future<void> _step16AddConfirmSharedSavePreference(Isar isar) async {
+  // Intentionally empty: additive schema only — see doc comment.
 }
 
 /// Step 14 (012-cross-device-shared-spaces, data-model §7, research R9) —

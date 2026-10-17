@@ -7,6 +7,10 @@ import 'package:budget_buddy/features/dashboard/presentation/dashboard_screen.da
 import 'package:budget_buddy/features/engine/month_summary.dart';
 import 'package:budget_buddy/features/engine/providers/month_summary_provider.dart';
 import 'package:budget_buddy/features/engine/providers/rate_registry_provider.dart';
+import 'package:budget_buddy/features/finance/providers/finance_providers.dart';
+import 'package:budget_buddy/features/spaces/providers/spaces_providers.dart';
+import 'package:budget_buddy/features/expenses/providers/category_provider.dart';
+
 import 'package:budget_buddy/features/engine/providers/true_available_provider.dart';
 import 'package:budget_buddy/features/medical/providers/medical_providers.dart';
 import 'package:budget_buddy/features/settings/providers/settings_provider.dart';
@@ -59,6 +63,11 @@ void main() {
             ),
           ),
           monthlyExpensesProvider.overrideWith((ref) => Stream.value([])),
+          monthlyOriginReimbursementsProvider
+              .overrideWith((ref) => Stream.value([])),
+          monthFinanceProvider.overrideWith((ref) => Stream.value(null)),
+          activeSpaceMembersProvider.overrideWith((ref) => Stream.value([])),
+          categoriesProvider.overrideWith((ref) async => []),
           monthlyReimbursementsProvider.overrideWith((ref) => Stream.value([])),
           insuranceProfileProvider.overrideWith((ref) => Stream.value(null)),
           medicalBillsProvider

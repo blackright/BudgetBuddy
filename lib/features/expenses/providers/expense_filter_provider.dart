@@ -4,6 +4,7 @@ import '../../../core/models/category.dart';
 import '../../engine/providers/true_available_provider.dart';
 
 final searchQueryProvider = StateProvider<String>((ref) => '');
+final activeCategoryIdFilterProvider = StateProvider<String?>((ref) => null);
 final activeCategoryFilterProvider = StateProvider<Category?>((ref) => null);
 final activeStatusFilterProvider = StateProvider<ExpenseStatus?>((ref) => null);
 final activeGuiltLevelFilterProvider =
@@ -12,6 +13,7 @@ final activeGuiltLevelFilterProvider =
 final filteredExpensesProvider = Provider<AsyncValue<List<Expense>>>((ref) {
   final expenses = ref.watch(monthlyExpensesProvider);
   final searchQuery = ref.watch(searchQueryProvider).toLowerCase();
+  final activeCategoryId = ref.watch(activeCategoryIdFilterProvider);
   final activeCategory = ref.watch(activeCategoryFilterProvider);
   final activeStatus = ref.watch(activeStatusFilterProvider);
   final activeGuilt = ref.watch(activeGuiltLevelFilterProvider);
@@ -22,7 +24,8 @@ final filteredExpensesProvider = Provider<AsyncValue<List<Expense>>>((ref) {
           !e.title.toLowerCase().contains(searchQuery)) {
         return false;
       }
-      if (activeCategory != null && e.categoryId != activeCategory.categoryId) {
+      final categoryId = activeCategory?.categoryId ?? activeCategoryId;
+      if (categoryId != null && e.categoryId != categoryId) {
         return false;
       }
       if (activeStatus != null && e.status != activeStatus) {

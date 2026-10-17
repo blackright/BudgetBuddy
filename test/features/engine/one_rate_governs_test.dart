@@ -130,6 +130,10 @@ void main() {
             .overrideWith((ref) => Stream.value([reimbursement()])),
         monthlyOriginReimbursementsProvider
             .overrideWith((ref) => Stream.value([reimbursement()])),
+        // US8: the split classifier resolves the payout's target through the
+        // repository. Supply the target directly so no Isar instance is needed.
+        reimbursementTargetExpensesProvider
+            .overrideWith((ref) => Stream.value([expense()])),
         medicalBillsProvider.overrideWith((ref) => Stream.value([bill()])),
         medicalExpenseStatusesProvider.overrideWith(
           (ref) => Stream.value({1: ExpenseStatus.paid}),

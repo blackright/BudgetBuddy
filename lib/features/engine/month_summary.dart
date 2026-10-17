@@ -28,6 +28,8 @@ class MonthSummary {
     required this.cancelled,
     required this.medicalPaid,
     required this.excessReturned,
+    this.insuranceReturned = 0.0,
+    this.expenseReturned = 0.0,
     this.openingBalance,
   });
 
@@ -41,6 +43,11 @@ class MonthSummary {
   /// paid amount in primary currency, for reimbursements that belong to this
   /// month but whose target expense lives in another one. It is only used to
   /// compute [excessReturned]; a missing entry contributes zero excess.
+  ///
+  /// [medicalTargetIds] holds the `expenseId`s of reimbursements whose target is
+  /// a **medical** bill. A payout against one of those is an insurance return;
+  /// every other payout — an ordinary reimbursable expense, or a return whose
+  /// target was deleted (`expenseId == null`) — is an expense return (US8).
   factory MonthSummary.from({
     required String yearMonth,
     required double income,
@@ -51,6 +58,7 @@ class MonthSummary {
     required Money Function(Reimbursement reimbursement) convertReimbursement,
     double? openingBalance,
     Map<int, double> targetPaidAmounts = const {},
+    Set<int> medicalTargetIds = const {},
   }) {
     var paymentsMade = 0.0;
     var planned = 0.0;
@@ -74,12 +82,28 @@ class MonthSummary {
 
     var moneyReturned = 0.0;
     var excessReturned = 0.0;
+    var insuranceReturned = 0.0;
+    var expenseReturned = 0.0;
     for (final reimbursement in reimbursements) {
       final converted = convertReimbursement(reimbursement).majorValue;
       moneyReturned += converted;
       final target = reimbursement.expenseId;
+      // Split every return by its target's kind (US8). A payout against a
+      // medical bill is an insurance return; a payout against an ordinary
+      // expense — or one whose target was deleted — is an expense return. The
+      // two always sum back to [moneyReturned].
+      if (target != null && medicalTargetIds.contains(target)) {
+        insuranceReturned += converted;
+      } else {
+        expenseReturned += converted;
+      }
       if (target == null) continue;
-      final targetPaid = targetPaidAmounts[target] ?? 0.0;
+      // A target the caller does not know about lives in another month (a
+      // payout credited to the month after its bill). Its paid amount cannot be
+      // judged here, so it contributes no excess rather than being counted as
+      // one in full.
+      final targetPaid = targetPaidAmounts[target];
+      if (targetPaid == null) continue;
       final excess = converted - targetPaid;
       if (excess > 0) excessReturned += excess;
     }
@@ -94,6 +118,8 @@ class MonthSummary {
       cancelled: cancelled,
       medicalPaid: medicalPaid,
       excessReturned: excessReturned,
+      insuranceReturned: insuranceReturned,
+      expenseReturned: expenseReturned,
       openingBalance: openingBalance,
     );
   }
@@ -129,6 +155,16 @@ class MonthSummary {
   /// its own figure rather than netted away (R14).
   final double excessReturned;
 
+  /// The part of [moneyReturned] paid back on a **medical** bill — an insurance
+  /// return (US8). Always non-negative.
+  final double insuranceReturned;
+
+  /// The part of [moneyReturned] paid back on an ordinary expense (or a return
+  /// whose target was deleted) — an expense return (US8). Always non-negative.
+  ///
+  /// [insuranceReturned] + [expenseReturned] always equals [moneyReturned].
+  final double expenseReturned;
+
   /// Money in the bank at the start of the month, or `null` when the user has
   /// never confirmed one (FR-006, FR-010).
   final double? openingBalance;
@@ -153,6 +189,16 @@ class MonthSummary {
   static bool _isMedical(Expense expense) =>
       expense.type == ExpenseType.medical ||
       expense.categoryId == _medicalCategoryId;
+
+  /// The `id`s of the **medical** targets among [targets] (US8).
+  ///
+  /// Classification is strictly by [ExpenseType] (the user's choice for US8): an
+  /// expense filed under the health category but stored as a standard expense is
+  /// an expense return, not an insurance one.
+  static Set<int> medicalTargetIdsOf(Iterable<Expense> targets) => {
+        for (final expense in targets)
+          if (expense.type == ExpenseType.medical) expense.id,
+      };
 
   /// Mirrors `MedicalRepository.medicalCategoryId`. Duplicated as a literal so
   /// this file stays free of feature imports.

@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/models/expense.dart';
 import '../../../core/providers/active_budget_provider.dart';
 import '../../../core/providers/active_profile_provider.dart';
 import '../../../core/providers/selected_month_provider.dart';
-import '../../../shared/presentation/widgets/analytics_placeholder_card.dart';
+import '../../../shared/presentation/widgets/context_banner.dart';
 import '../../../shared/presentation/widgets/month_incomplete_banner.dart';
+import '../../analytics/presentation/widgets/analytics_mini_charts.dart';
 import '../../engine/currency_resolution.dart';
 import '../../spaces/presentation/move_month_sheet.dart';
 import '../../spaces/providers/spaces_providers.dart';
@@ -47,64 +49,86 @@ class DashboardScreen extends ConsumerWidget {
             ),
         ],
       ),
-      body: GestureDetector(
-        onHorizontalDragEnd: (details) {
-          if (details.primaryVelocity != null) {
-            if (details.primaryVelocity! < -300) {
-              ref
-                  .read(selectedYearMonthProvider.notifier)
-                  .update((state) => nextMonth(state));
-            } else if (details.primaryVelocity! > 300) {
-              ref
-                  .read(selectedYearMonthProvider.notifier)
-                  .update((state) => previousMonth(state));
-            }
-          }
-        },
-        child: RefreshIndicator(
-          onRefresh: () async {
-            await Future.delayed(const Duration(milliseconds: 500));
-          },
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              MonthIncompleteBanner(currencySymbol: symbol),
-              MonthSummaryCard(currency: display),
-              const SizedBox(height: 12),
-              MonthSummaryDetails(
-                currency: display,
-                // The selected month lives in a provider, so the Medical tab opens
-                // on the same month with no route parameter to carry (FR-022,
-                // FR-027).
-                onMedicalTap: () => context.go('/medical'),
-              ),
-              const SizedBox(height: 12),
-              const AnalyticsPlaceholderCard(),
-              const SizedBox(height: 24),
-              const Text(
-                'Quick Actions',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  if (canEdit)
-                    InkWell(
-                      onTap: () => context.push('/add_expense'),
-                      child: _buildActionButton(Icons.add, 'Add Expense'),
+      body: Column(
+        children: [
+          const ContextBanner(),
+          Expanded(
+            child: GestureDetector(
+              onHorizontalDragEnd: (details) {
+                if (details.primaryVelocity != null) {
+                  if (details.primaryVelocity! < -300) {
+                    ref
+                        .read(selectedYearMonthProvider.notifier)
+                        .update((state) => nextMonth(state));
+                  } else if (details.primaryVelocity! > 300) {
+                    ref
+                        .read(selectedYearMonthProvider.notifier)
+                        .update((state) => previousMonth(state));
+                  }
+                }
+              },
+              child: RefreshIndicator(
+                onRefresh: () async {
+                  await Future.delayed(const Duration(milliseconds: 500));
+                },
+                child: ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    MonthIncompleteBanner(currencySymbol: symbol),
+                    MonthSummaryCard(
+                      currency: display,
+                      // US8: insurance returns came from medical bills; expense
+                      // returns came from ordinary expenses.
+                      onInsuranceReturnTap: () => context.go('/medical'),
+                      onExpenseReturnTap: () => context.push(
+                        '/expenses',
+                        extra: {'status': ExpenseStatus.reimbursed.name},
+                      ),
                     ),
-                  InkWell(
-                    onTap: () => context.go('/medical'),
-                    child:
-                        _buildActionButton(Icons.medical_services, 'Medical'),
-                  ),
-                  _buildActionButton(Icons.history, 'History'),
-                ],
+                    const SizedBox(height: 12),
+                    MonthSummaryDetails(
+                      currency: display,
+                      // The selected month lives in a provider, so the Medical tab opens
+                      // on the same month with no route parameter to carry (FR-022,
+                      // FR-027).
+                      onMedicalTap: () => context.go('/medical'),
+                      onInsuranceReturnTap: () => context.go('/medical'),
+                      onExpenseReturnTap: () => context.push(
+                        '/expenses',
+                        extra: {'status': ExpenseStatus.reimbursed.name},
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    const AnalyticsMiniCharts(),
+                    const SizedBox(height: 24),
+                    const Text(
+                      'Quick Actions',
+                      style:
+                          TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        if (canEdit)
+                          InkWell(
+                            onTap: () => context.push('/add_expense'),
+                            child: _buildActionButton(Icons.add, 'Add Expense'),
+                          ),
+                        InkWell(
+                          onTap: () => context.go('/medical'),
+                          child: _buildActionButton(
+                              Icons.medical_services, 'Medical'),
+                        ),
+                        _buildActionButton(Icons.history, 'History'),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

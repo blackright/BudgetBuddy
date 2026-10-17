@@ -100,6 +100,7 @@ void main() {
     required MonthlyBudget? month,
     List<Expense> expenses = const [],
     List<Reimbursement> reimbursements = const [],
+    List<Expense> targetExpenses = const [],
     ResolvedIncome resolvedIncome =
         const ResolvedIncome(amount: 690000, usesOverride: false),
   }) {
@@ -117,6 +118,10 @@ void main() {
             .overrideWith((ref) => Stream.value(reimbursements)),
         monthlyReimbursementsProvider
             .overrideWith((ref) => Stream.value(reimbursements)),
+        // US8: the split classifier resolves targets through the repository
+        // (Isar). Tests supply the resolved targets directly.
+        reimbursementTargetExpensesProvider
+            .overrideWith((ref) => Stream.value(targetExpenses)),
         resolvedIncomeProvider.overrideWithValue(resolvedIncome),
       ],
     );
@@ -131,6 +136,7 @@ void main() {
     required MonthlyBudget? month,
     List<Expense> expenses = const [],
     List<Reimbursement> reimbursements = const [],
+    List<Expense> targetExpenses = const [],
     ResolvedIncome resolvedIncome =
         const ResolvedIncome(amount: 690000, usesOverride: false),
   }) async {
@@ -139,6 +145,7 @@ void main() {
       month: month,
       expenses: expenses,
       reimbursements: reimbursements,
+      targetExpenses: targetExpenses,
       resolvedIncome: resolvedIncome,
     );
     await container.read(activeProfileProvider.future);
@@ -146,6 +153,7 @@ void main() {
     await container.read(monthFinanceProvider.future);
     await container.read(monthlyExpensesProvider.future);
     await container.read(monthlyOriginReimbursementsProvider.future);
+    await container.read(reimbursementTargetExpensesProvider.future);
     return container;
   }
 
@@ -239,6 +247,64 @@ void main() {
       );
 
       expect(container.read(monthSummaryProvider).openingBalance, isNull);
+    });
+  });
+
+  /// US8: the summary classifies each return by its *target's* kind, resolved
+  /// across months — the target of a next-month medical payout lives in the
+  /// previous one.
+  group('US8: the return split classifies targets across months', () {
+    Expense target({
+      required int id,
+      required String targetMonth,
+      ExpenseType type = ExpenseType.standard,
+    }) =>
+        Expense(
+          id: id,
+          profileId: 1,
+          yearMonth: targetMonth,
+          type: type,
+          title: 'Target',
+          amount: Money.fromMajor(100, CurrencyCode.huf).minorUnits,
+          currency: 'huf',
+          categoryId: 'health',
+          status: ExpenseStatus.paid,
+          date: DateTime(2026, 1, 5),
+          budgetId: 1,
+        );
+
+    test(
+        'a reimbursement whose medical target lives in the previous month is '
+        'an insurance return', () async {
+      final container = await prepared(
+        user: user(),
+        month: month(currency: null),
+        reimbursements: [hufReimbursement(huf: 34500, expenseId: 42)],
+        targetExpenses: [
+          target(id: 42, targetMonth: '2026-01', type: ExpenseType.medical),
+        ],
+      );
+
+      final summary = container.read(monthSummaryProvider);
+
+      expect(summary.insuranceReturned, 34500);
+      expect(summary.expenseReturned, 0);
+      expect(summary.moneyReturned, 34500);
+    });
+
+    test('a same-month standard target is an expense return', () async {
+      final container = await prepared(
+        user: user(),
+        month: month(currency: null),
+        expenses: [hufExpense(huf: 34500, id: 7)],
+        reimbursements: [hufReimbursement(huf: 10000, expenseId: 7)],
+        targetExpenses: [target(id: 7, targetMonth: yearMonth)],
+      );
+
+      final summary = container.read(monthSummaryProvider);
+
+      expect(summary.insuranceReturned, 0);
+      expect(summary.expenseReturned, 10000);
     });
   });
 }

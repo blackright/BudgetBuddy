@@ -11,6 +11,7 @@ import '../../sync/repositories/change_signer.dart';
 import '../domain/pairing_protocol.dart';
 import '../providers/pairing_providers.dart';
 import '../repositories/pairing_service.dart';
+import 'widgets/scan_error_panel.dart';
 
 String roleLabel(SharedMemberRole role) => switch (role) {
       SharedMemberRole.owner => 'Owner',
@@ -45,6 +46,7 @@ class _PairDeviceScreenState extends ConsumerState<PairDeviceScreen> {
   PairingInvite? _invite;
   bool _busy = false;
   String? _status;
+  String? _scanError;
 
   Future<PairingService?> _signingService() async {
     final identity = ref.read(identityProvider).valueOrNull;
@@ -106,16 +108,34 @@ class _PairDeviceScreenState extends ConsumerState<PairDeviceScreen> {
     });
   }
 
+  /// Stops the camera and shows [message] exactly once. `MobileScanner` fires
+  /// once per frame while a code is in view, so a refusal must latch instead of
+  /// repeating as a toast.
+  void _fail(String message) {
+    if (!mounted) return;
+    setState(() {
+      _scanError = message;
+      _busy = false;
+    });
+  }
+
+  /// Clears a latched refusal and resumes the camera.
+  void _retryScan() {
+    setState(() => _scanError = null);
+  }
+
   Future<void> _onDetect(BarcodeCapture capture) async {
     if (_busy) return;
     final raw =
         capture.barcodes.isEmpty ? null : capture.barcodes.first.rawValue;
     if (raw == null) return;
+    // Claim the busy flag before the first `await`, so frames arriving while
+    // the confirmation dialog is open cannot open a second dialog.
     setState(() => _busy = true);
     try {
       final service = ref.read(pairingServiceProvider);
       if (service == null) {
-        _warn('Create your identity first.');
+        _fail('Create your identity first.');
         return;
       }
       final payload = await service.parsePayload(raw);
@@ -125,11 +145,13 @@ class _PairDeviceScreenState extends ConsumerState<PairDeviceScreen> {
       // The claim travels to the presenter over the LAN transport; until the
       // exchange loop is wired this stops at a clear success message.
       service.claimFrom(payload);
-      setState(() =>
-          _status = 'Confirmed ${payload.username} (${payload.fingerprint}). '
-              'Keep both devices close to finish.');
+      setState(() {
+        _scanError = null;
+        _status = 'Confirmed ${payload.username} (${payload.fingerprint}). '
+            'Keep both devices close to finish.';
+      });
     } on PairingException catch (error) {
-      _warn(error.message);
+      _fail(error.message);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -197,7 +219,9 @@ class _PairDeviceScreenState extends ConsumerState<PairDeviceScreen> {
             _ScannerPane(
               busy: _busy,
               status: _status,
+              scanError: _scanError,
               onDetect: _onDetect,
+              onRetry: _retryScan,
             ),
           ],
         ),
@@ -288,12 +312,16 @@ class _ScannerPane extends StatelessWidget {
   const _ScannerPane({
     required this.busy,
     required this.status,
+    required this.scanError,
     required this.onDetect,
+    required this.onRetry,
   });
 
   final bool busy;
   final String? status;
+  final String? scanError;
   final ValueChanged<BarcodeCapture> onDetect;
+  final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -313,6 +341,10 @@ class _ScannerPane extends StatelessWidget {
           ),
         ),
       );
+    }
+    final error = scanError;
+    if (error != null) {
+      return Center(child: ScanErrorPanel(message: error, onRetry: onRetry));
     }
     return MobileScanner(
       key: const Key('pairingScanner'),

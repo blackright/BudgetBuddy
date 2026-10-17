@@ -24,10 +24,25 @@ import '../providers/category_provider.dart';
 import '../repositories/expense_repository.dart';
 
 class ExpensesScreen extends ConsumerWidget {
-  const ExpensesScreen({super.key});
+  const ExpensesScreen({super.key, this.filterCategoryId, this.filterStatus});
+
+  final String? filterCategoryId;
+  final ExpenseStatus? filterStatus;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (filterCategoryId != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.read(activeCategoryIdFilterProvider.notifier).state =
+            filterCategoryId;
+        ref.read(activeCategoryFilterProvider.notifier).state = null;
+      });
+    }
+    if (filterStatus != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.read(activeStatusFilterProvider.notifier).state = filterStatus;
+      });
+    }
     final expensesAsync = ref.watch(filteredExpensesProvider);
     final categoriesAsync = ref.watch(categoriesProvider);
     final canEdit = ref.watch(activeContextCanEditProvider);
@@ -85,8 +100,10 @@ class ExpensesScreen extends ConsumerWidget {
                     // Category Filter
                     categoriesAsync.when(
                       data: (cats) => DropdownButton<String?>(
-                        value:
-                            ref.watch(activeCategoryFilterProvider)?.categoryId,
+                        value: ref
+                                .watch(activeCategoryFilterProvider)
+                                ?.categoryId ??
+                            ref.watch(activeCategoryIdFilterProvider),
                         hint: const Text('Category'),
                         items: [
                           const DropdownMenuItem(
@@ -100,11 +117,17 @@ class ExpensesScreen extends ConsumerWidget {
                             ref
                                 .read(activeCategoryFilterProvider.notifier)
                                 .state = null;
+                            ref
+                                .read(activeCategoryIdFilterProvider.notifier)
+                                .state = null;
                           } else {
                             ref
                                     .read(activeCategoryFilterProvider.notifier)
                                     .state =
                                 cats.firstWhere((c) => c.categoryId == val);
+                            ref
+                                .read(activeCategoryIdFilterProvider.notifier)
+                                .state = val;
                           }
                         },
                       ),

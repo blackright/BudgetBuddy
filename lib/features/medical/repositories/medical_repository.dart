@@ -8,6 +8,7 @@ import '../../../core/models/medical_service_type.dart';
 import '../../../core/models/money.dart';
 import '../../../core/network/rate_types.dart';
 import '../../../core/providers/budget_context_provider.dart';
+import '../../../core/providers/selected_month_provider.dart';
 import '../../../core/services/reminder_notification_service.dart';
 import '../../engine/currency_resolution.dart';
 import '../../engine/expense_delta.dart';
@@ -340,6 +341,15 @@ class MedicalRepository {
   /// `finished` means "fully resolved, money accounted for". An insurer-paid
   /// bill has no reimbursement to account for, so the state cannot be reached.
   static void _validateTransition(MedicalBill bill, MedicalBillState next) {
+    // `finished` is terminal: once the payout is recorded the bill is settled,
+    // so it can never slip back to waiting, be rejected, or be un-finished.
+    if (bill.state == MedicalBillState.finished &&
+        next != MedicalBillState.finished) {
+      throw const InvalidBillTransitionException(
+        'This bill is finished — the insurer payout has been recorded, so its '
+        'status is locked.',
+      );
+    }
     if (next == MedicalBillState.finished &&
         bill.paymentMethod == MedicalPaymentMethod.insurerPaid) {
       throw const InvalidBillTransitionException(
@@ -414,6 +424,13 @@ class MedicalRepository {
   }) async {
     if (bill.paymentMethod == method) return;
 
+    // `finished` is terminal, so the method that produced the payout is frozen.
+    if (bill.state == MedicalBillState.finished) {
+      throw const InvalidBillTransitionException(
+        'This bill is finished, so its payment method is locked.',
+      );
+    }
+
     await _guardWrite(
         bill.sharedSpaceId ?? context?.sharedSpaceId, bill.yearMonth);
 
@@ -445,12 +462,15 @@ class MedicalRepository {
       MedicalBill bill, int totalReimbursed) async {
     await _guardWrite(bill.sharedSpaceId, bill.yearMonth);
     await _isar.writeTxn(() async {
-      bill
-        ..reimbursedAmount = totalReimbursed
-        ..state = (totalReimbursed >= bill.insurerPaidAmount)
+      bill.reimbursedAmount = totalReimbursed;
+      // A finished bill stays finished: correcting the payout amount must not
+      // silently reopen a settled bill.
+      if (bill.state != MedicalBillState.finished) {
+        bill.state = (totalReimbursed >= bill.insurerPaidAmount)
             ? MedicalBillState.finished
             : MedicalBillState
                 .waiting; // or however we want to represent partial
+      }
       await _isar.medicalBills.put(bill);
     });
   }
@@ -459,8 +479,9 @@ class MedicalRepository {
   ///
   /// All-or-nothing and idempotent: re-logging replaces the previous amount
   /// instead of stacking a second reimbursement against the same expense (R-2,
-  /// R-3, R-4). The money is attributed to the bill's owning month, not the date
-  /// it was recorded (R-5).
+  /// R-3, R-4). The money is attributed to the month *after* the bill's owning
+  /// month — the payout lands with next month's income — not to the date it was
+  /// recorded (R-5 revision).
   Future<void> logReimbursement(
     MedicalBill bill, {
     required int amount,
@@ -511,8 +532,8 @@ class MedicalRepository {
             expenseId: expenseId,
             amount: amount,
             currency: expense.currency,
-            originYearMonth:
-                bill.yearMonth.isNotEmpty ? bill.yearMonth : expense.yearMonth,
+            originYearMonth: nextMonth(
+                bill.yearMonth.isNotEmpty ? bill.yearMonth : expense.yearMonth),
             date: date ?? DateTime.now(),
           ),
         );
@@ -521,8 +542,8 @@ class MedicalRepository {
         existing.sort((a, b) => a.id.compareTo(b.id));
         existing.first
           ..amount = amount
-          ..originYearMonth =
-              bill.yearMonth.isNotEmpty ? bill.yearMonth : expense.yearMonth
+          ..originYearMonth = nextMonth(
+              bill.yearMonth.isNotEmpty ? bill.yearMonth : expense.yearMonth)
           ..date = date ?? existing.first.date;
         await _isar.reimbursements.put(existing.first);
         final extras = existing.skip(1).map((r) => r.id).toList();

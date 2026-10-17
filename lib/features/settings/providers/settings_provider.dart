@@ -94,3 +94,38 @@ class AppThemeController {
     });
   }
 }
+
+/// Whether saving into a **shared** space asks for confirmation first (US6,
+/// T056). Defaults to `true` until the user opts out in Settings, so a shared
+/// save is confirmed by design; personal saves never prompt regardless.
+final confirmSharedSaveOnProvider = Provider<bool>((ref) {
+  final profile = ref.watch(activeProfileProvider).valueOrNull;
+  return profile?.confirmSharedSave ?? true;
+});
+
+/// The single write path for the shared-save confirmation preference (US6).
+final confirmSharedSaveControllerProvider =
+    Provider<ConfirmSharedSaveController>((ref) {
+  return ConfirmSharedSaveController(IsarHelper.instance);
+});
+
+class ConfirmSharedSaveController {
+  ConfirmSharedSaveController(this._isar);
+
+  final Isar _isar;
+
+  /// Persists [enabled] as [profileId]'s shared-save confirmation preference
+  /// (the active profile — US1 — falling back to the lowest-id one when none is
+  /// named).
+  Future<void> setConfirmSharedSave(bool enabled, {int? profileId}) {
+    return _isar.writeTxn(() async {
+      final profile = profileId != null
+          ? await _isar.userProfiles.get(profileId)
+          : await _isar.userProfiles.where().findFirst();
+      if (profile == null) return;
+      profile.confirmSharedSave = enabled;
+      profile.updatedAt = DateTime.now();
+      await _isar.userProfiles.put(profile);
+    });
+  }
+}

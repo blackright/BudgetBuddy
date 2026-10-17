@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest_all.dart' as tz;
@@ -16,7 +17,42 @@ class ReminderNotificationService {
   final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
 
-  Future<void> init() async {
+  bool _initialized = false;
+  Future<void>? _initFuture;
+
+  /// Wakes the plugin up the first time it is actually needed (lazy) and only
+  /// once (idempotent), never blocking app startup.
+  ///
+  /// Android attaches the plugin's `context` only after the engine is running,
+  /// so initializing eagerly in `main()` can hit a null context and throw a
+  /// `NullPointerException`. Running here—when a reminder is first scheduled or
+  /// queried—guarantees the context exists. Any failure is logged and swallowed
+  /// so notifications can never stop the app from opening.
+  Future<void> ensureInitialized() async {
+    if (_initialized) return;
+    if (_isTest) {
+      _initialized = true;
+      return;
+    }
+    final inFlight = _initFuture;
+    if (inFlight != null) {
+      await inFlight;
+      return;
+    }
+    final future = _init();
+    _initFuture = future;
+    try {
+      await future;
+      _initialized = true;
+    } catch (error, stackTrace) {
+      debugPrint(
+          'ReminderNotificationService init failed: $error\n$stackTrace');
+    } finally {
+      _initFuture = null;
+    }
+  }
+
+  Future<void> _init() async {
     tz.initializeTimeZones();
     final timezoneInfo = await FlutterTimezone.getLocalTimezone();
     final String timeZoneName = timezoneInfo.identifier;
@@ -43,6 +79,8 @@ class ReminderNotificationService {
   }
 
   Future<bool> requestPermissions() async {
+    if (_isTest) return false;
+    await ensureInitialized();
     final AndroidFlutterLocalNotificationsPlugin? androidImplementation =
         _plugin.resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>();
@@ -60,6 +98,7 @@ class ReminderNotificationService {
     required DateTime scheduledDate,
   }) async {
     if (_isTest) return;
+    await ensureInitialized();
     if (scheduledDate.isBefore(DateTime.now())) return;
 
     await _plugin.zonedSchedule(
@@ -87,6 +126,7 @@ class ReminderNotificationService {
 
   Future<void> cancelReminder(int id) async {
     if (_isTest) return;
+    await ensureInitialized();
     await _plugin.cancel(id: id);
   }
 }

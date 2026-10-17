@@ -12,8 +12,11 @@ import '../../../core/models/medical_bill.dart';
 import '../../../core/models/medical_service_type.dart';
 import '../../../core/models/money.dart';
 import '../../../core/providers/active_profile_provider.dart';
+import '../../../core/providers/active_space_provider.dart';
+import '../../../shared/presentation/confirm_space_on_save.dart';
 import '../../../shared/presentation/money_format.dart';
 import '../../../shared/presentation/widgets/money_field.dart';
+import '../../settings/providers/settings_provider.dart';
 import '../providers/medical_providers.dart';
 import 'medical_theme.dart';
 
@@ -146,6 +149,10 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
   bool _saving = false;
 
   bool get _isEditing => widget.existingBill != null;
+
+  /// A finished bill is terminal: its state and payment method are frozen, so
+  /// the form mirrors the detail screen's lock when opened on such a bill.
+  bool get _isLocked => widget.existingBill?.state == MedicalBillState.finished;
 
   /// Only a self-paid bill can be reimbursed (R-1).
   bool get _showReimbursementField =>
@@ -293,6 +300,27 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
     if (profileId == null) {
       _toast('No active profile. Create one to save medical bills.');
       return;
+    }
+
+    // US6 (T055): a save into a shared space is confirmed first, naming the
+    // space, unless the user turned the guard off in Settings.
+    if (billContext.sharedSpaceId != null &&
+        ref.read(confirmSharedSaveOnProvider)) {
+      final spaceName =
+          ref.read(activeSpaceProvider).value?.name ?? 'this space';
+      final decision = await confirmSpaceOnSave(
+        context,
+        title: 'Medical bill',
+        amountText: formatMoney(Money(_amountMinor, _currencyCode)),
+        spaceName: spaceName,
+      );
+      if (!mounted) return;
+      if (decision != SpaceSaveDecision.confirm) {
+        // "Change context" (or a dismissal) abandons this save and returns to
+        // the shell, where the top switcher is visible.
+        if (decision == SpaceSaveDecision.changeContext) context.pop();
+        return;
+      }
     }
 
     setState(() => _saving = true);
@@ -560,17 +588,20 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
                     ),
                   ),
               ],
-              onChanged: (value) {
-                if (value == null) return;
-                setState(() {
-                  _paymentMethod = value;
-                  // D2: an insurer reply cannot survive the switch to
-                  // insurer-paid, so drop it rather than save an invalid pair.
-                  if (value == MedicalPaymentMethod.insurerPaid) {
-                    _insurerReplyPath = null;
-                  }
-                });
-              },
+              onChanged: _isLocked
+                  ? null
+                  : (value) {
+                      if (value == null) return;
+                      setState(() {
+                        _paymentMethod = value;
+                        // D2: an insurer reply cannot survive the switch to
+                        // insurer-paid, so drop it rather than save an invalid
+                        // pair.
+                        if (value == MedicalPaymentMethod.insurerPaid) {
+                          _insurerReplyPath = null;
+                        }
+                      });
+                    },
             ),
             const SizedBox(height: 16),
             TextFormField(
@@ -646,23 +677,33 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
             // FR-052: the state drives both the insurance meaning and the cost.
             SegmentedButton<MedicalBillState>(
               key: const Key('billStateField'),
-              segments: const [
-                ButtonSegment(
+              segments: [
+                const ButtonSegment(
                   value: MedicalBillState.planned,
                   label: Text('Planned'),
                 ),
-                ButtonSegment(
+                const ButtonSegment(
                   value: MedicalBillState.waiting,
                   label: Text('Waiting'),
                 ),
-                ButtonSegment(
+                const ButtonSegment(
                   value: MedicalBillState.paid,
                   label: Text('Paid'),
                 ),
+                // A finished bill is terminal, so its chip is shown but cannot
+                // be selected. Without this the seeded value would have no
+                // matching segment and the form would assert.
+                if (_state == MedicalBillState.finished)
+                  const ButtonSegment(
+                    value: MedicalBillState.finished,
+                    label: Text('Finished'),
+                    enabled: false,
+                  ),
               ],
               selected: {_state},
-              onSelectionChanged: (selection) =>
-                  setState(() => _state = selection.first),
+              onSelectionChanged: _isLocked
+                  ? null
+                  : (selection) => setState(() => _state = selection.first),
             ),
             const SizedBox(height: 8),
             _EstimateCard(

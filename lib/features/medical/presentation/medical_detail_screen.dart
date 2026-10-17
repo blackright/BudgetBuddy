@@ -77,7 +77,7 @@ class _DetailScaffold extends ConsumerWidget {
         backgroundColor: background,
         elevation: 0,
         actions: [
-          if (canEdit)
+          if (canEdit && bill.state != MedicalBillState.finished)
             IconButton(
               tooltip: 'Edit',
               icon: const Icon(Icons.edit),
@@ -380,6 +380,7 @@ class _PaymentMethodSection extends ConsumerWidget {
     final yearMonth = ref.watch(selectedYearMonthProvider);
     final canEdit = ref.watch(activeContextCanEditProvider);
     final insurerPaid = bill.paymentMethod == MedicalPaymentMethod.insurerPaid;
+    final isFinished = bill.state == MedicalBillState.finished;
 
     // The money-impact figure is quoted in the bill's own currency; when the
     // bill is foreign, show the converted budget figure with the original
@@ -451,8 +452,9 @@ class _PaymentMethodSection extends ConsumerWidget {
                 ),
               ],
               selected: {bill.paymentMethod},
-              onSelectionChanged: (selection) =>
-                  _setMethod(context, ref, selection.first),
+              onSelectionChanged: isFinished
+                  ? null
+                  : (selection) => _setMethod(context, ref, selection.first),
             ),
         ],
       ),
@@ -498,6 +500,7 @@ class _BillStateSection extends ConsumerWidget {
     // finished and can never be reimbursed.
     final selfPaid = bill.paymentMethod == MedicalPaymentMethod.selfPaid;
     final canEdit = ref.watch(activeContextCanEditProvider);
+    final isFinished = bill.state == MedicalBillState.finished;
     final canFinish = selfPaid && bill.reimbursedAmount > 0;
 
     return _SectionCard(
@@ -514,7 +517,9 @@ class _BillStateSection extends ConsumerWidget {
                   if (state != MedicalBillState.finished || canFinish)
                     OutlinedButton.icon(
                       key: Key('state-${state.name}'),
-                      onPressed: () => _setState(context, ref, state),
+                      onPressed: isFinished
+                          ? null
+                          : () => _setState(context, ref, state),
                       icon: Icon(MedicalTheme.billStateIcon(state), size: 18),
                       label: Text(state.label),
                       style: bill.state == state
@@ -527,6 +532,28 @@ class _BillStateSection extends ConsumerWidget {
                     ),
               ],
             ),
+          if (isFinished) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(
+                  Icons.lock_outline,
+                  size: 14,
+                  color: MedicalTheme.subtleText(context),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'This bill is finished and locked — the payout is recorded.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: MedicalTheme.subtleText(context),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: 8),
           Text(
             _stateHint(bill.state, selfPaid: selfPaid),
@@ -535,8 +562,20 @@ class _BillStateSection extends ConsumerWidget {
               color: MedicalTheme.subtleText(context),
             ),
           ),
-          if (canEdit && selfPaid && bill.linkedExpenseId != null) ...[
+          if (canEdit &&
+              selfPaid &&
+              !isFinished &&
+              bill.linkedExpenseId != null) ...[
             const SizedBox(height: 12),
+            Text(
+              'Returned money will be credited to '
+              '${_creditMonthLabel(bill)}.',
+              style: TextStyle(
+                fontSize: 12,
+                color: MedicalTheme.subtleText(context),
+              ),
+            ),
+            const SizedBox(height: 8),
             FilledButton.icon(
               key: const Key('logReimbursementButton'),
               onPressed: () => _logReimbursement(context, ref),
@@ -553,6 +592,14 @@ class _BillStateSection extends ConsumerWidget {
       ),
     );
   }
+
+  /// The month a payout for [bill] will land in: the month after the bill's
+  /// own month (it arrives with next month's income).
+  static String _creditMonthLabel(MedicalBill bill) => monthLabel(
+        nextMonth(
+          bill.yearMonth.isNotEmpty ? bill.yearMonth : currentYearMonth(),
+        ),
+      );
 
   static String _stateHint(MedicalBillState state, {required bool selfPaid}) =>
       switch (state) {

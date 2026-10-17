@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'core/models/user_profile.dart';
 import 'core/presentation/app_themes.dart';
 import 'core/providers/active_profile_provider.dart';
+import 'core/providers/selected_month_provider.dart';
 
 import 'core/database/isar_helper.dart';
 import 'core/presentation/database_corruption_screen.dart';
@@ -23,8 +24,6 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await IsarHelper.init();
 
-  await ReminderNotificationService().init();
-
   final container = ProviderContainer();
   // Execute end of month sweep check on startup
   await container.read(sweepServiceProvider).executeSweepCheck();
@@ -40,7 +39,12 @@ void main() async {
   // (invariant I3), and again whenever the app resumes (FR-004).
   final sealObserver = _SealLifecycleObserver(container);
   WidgetsBinding.instance.addObserver(sealObserver);
-  WidgetsBinding.instance.addPostFrameCallback((_) => sealObserver.run());
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    sealObserver.run();
+    // Warm up notifications only once the first frame is up, so the Android
+    // plugin's context is guaranteed to exist (never block startup on it).
+    unawaited(ReminderNotificationService().ensureInitialized());
+  });
 }
 
 /// Drives the device-global month-seal coordinator on cold start and resume.
@@ -54,6 +58,18 @@ class _SealLifecycleObserver extends WidgetsBindingObserver {
     unawaited(
       _container.read(sealCoordinatorProvider).runSealPass(DateTime.now()),
     );
+    _snapToCurrentMonth();
+  }
+
+  /// US8: if the app comes back after the month rolled over, show the current
+  /// month rather than the one it was left on. A current or deliberately chosen
+  /// future month is left alone.
+  void _snapToCurrentMonth() {
+    final selected = _container.read(selectedYearMonthProvider);
+    final snapped = snapToCurrentMonthIfBehind(selected);
+    if (snapped != selected) {
+      _container.read(selectedYearMonthProvider.notifier).state = snapped;
+    }
   }
 
   @override

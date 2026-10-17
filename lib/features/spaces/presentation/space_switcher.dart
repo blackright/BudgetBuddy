@@ -47,17 +47,19 @@ Future<SharedSpace?> showCreateSpaceFlow(
   return space;
 }
 
-/// US2: the top-of-app context switcher — "which room am I in".
+/// US2/US6: the single, reusable context-switch control.
 ///
-/// Shows the active context (a shared space, or the personal profile) and opens
-/// a dropdown of every space the profile belongs to, plus "My profile" and
-/// "New space". Selecting a space writes `activeSpaceIdProvider` (the router
-/// marker, T037) and touches `lastActiveAt`; selecting "My profile" clears it.
-///
-/// Mounted once in the [AppShell], so every tab sees the same single
-/// switch point (context-router §3).
-class SpaceSwitcher extends ConsumerWidget {
-  const SpaceSwitcher({super.key});
+/// Wraps [child] in a popup that lists the active context (a shared space, or
+/// the personal profile) and every space the profile belongs to, plus "My
+/// profile" and "New space". Selecting a space writes `activeSpaceIdProvider`
+/// (the router marker, T037) and touches `lastActiveAt`; selecting "My profile"
+/// clears it. Shared by the AppShell [SpaceSwitcher] and the dashboard
+/// [ContextBanner] so both switch through one code path (US6).
+class ContextSwitcherMenu extends ConsumerWidget {
+  const ContextSwitcherMenu({super.key, required this.child});
+
+  /// The tappable affordance that opens the menu.
+  final Widget child;
 
   Future<void> _createSpace(BuildContext context, WidgetRef ref) =>
       showCreateSpaceFlow(context, ref);
@@ -72,10 +74,101 @@ class SpaceSwitcher extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final spaceAsync = ref.watch(activeSpaceProvider);
-    final activeSpace = spaceAsync.value;
+    final activeSpace = ref.watch(activeSpaceProvider).value;
     final profile = ref.watch(activeProfileProvider).valueOrNull;
     final mySpaces = ref.watch(mySpacesProvider).value ?? const <SharedSpace>[];
+
+    return PopupMenuButton<int>(
+      tooltip: 'Switch context',
+      onSelected: (value) {
+        if (value == _kNewSpace) {
+          _createSpace(context, ref);
+        } else if (value == _kBackToProfile) {
+          ref.read(activeSpaceIdProvider.notifier).state = null;
+          if (profile != null) {
+            ref
+                .read(profileSwitcherControllerProvider)
+                .touchLastActiveAt(profile.id)
+                .ignore();
+          }
+        } else if (profile != null) {
+          _switchSpace(ref, value, profile.id);
+        }
+      },
+      itemBuilder: (context) => [
+        PopupMenuItem<int>(
+          key: const Key('personalOption'),
+          value: _kBackToProfile,
+          child: Row(
+            children: [
+              const Icon(Icons.person_outline),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  profile != null
+                      ? 'My profile\n${profile.name}'
+                      : 'My profile',
+                  maxLines: 2,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (mySpaces.isNotEmpty) const PopupMenuDivider(),
+        for (final space in mySpaces)
+          PopupMenuItem<int>(
+            key: Key('spaceOption_${space.id}'),
+            value: space.id,
+            child: Row(
+              children: [
+                Text(space.avatar, style: const TextStyle(fontSize: 20)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    space.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (space.id == activeSpace?.id)
+                  Icon(
+                    Icons.check,
+                    size: 18,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+              ],
+            ),
+          ),
+        const PopupMenuDivider(),
+        const PopupMenuItem<int>(
+          key: Key('newSpaceOption'),
+          value: _kNewSpace,
+          child: Row(
+            children: [
+              Icon(Icons.add_circle_outline),
+              SizedBox(width: 12),
+              Text('New space'),
+            ],
+          ),
+        ),
+      ],
+      child: child,
+    );
+  }
+}
+
+/// US2: the top-of-app context switcher — "which room am I in".
+///
+/// Shows the active context (a shared space, or the personal profile) and opens
+/// [ContextSwitcherMenu]'s dropdown. Mounted once in the [AppShell], so every
+/// tab sees the same single switch point (context-router §3).
+class SpaceSwitcher extends ConsumerWidget {
+  const SpaceSwitcher({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final activeSpace = ref.watch(activeSpaceProvider).value;
+    final profile = ref.watch(activeProfileProvider).valueOrNull;
 
     final label = activeSpace != null
         ? '${activeSpace.avatar} ${activeSpace.name}'
@@ -90,82 +183,8 @@ class SpaceSwitcher extends ConsumerWidget {
         child: Row(
           children: [
             Expanded(
-              child: PopupMenuButton<int>(
+              child: ContextSwitcherMenu(
                 key: const Key('spaceSwitcher'),
-                tooltip: 'Switch context',
-                onSelected: (value) {
-                  if (value == _kNewSpace) {
-                    _createSpace(context, ref);
-                  } else if (value == _kBackToProfile) {
-                    ref.read(activeSpaceIdProvider.notifier).state = null;
-                    if (profile != null) {
-                      ref
-                          .read(profileSwitcherControllerProvider)
-                          .touchLastActiveAt(profile.id)
-                          .ignore();
-                    }
-                  } else if (profile != null) {
-                    _switchSpace(ref, value, profile.id);
-                  }
-                },
-                itemBuilder: (context) => [
-                  PopupMenuItem<int>(
-                    key: const Key('personalOption'),
-                    value: _kBackToProfile,
-                    child: Row(
-                      children: [
-                        const Icon(Icons.person_outline),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            profile != null
-                                ? 'My profile\n${profile.name}'
-                                : 'My profile',
-                            maxLines: 2,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (mySpaces.isNotEmpty) const PopupMenuDivider(),
-                  for (final space in mySpaces)
-                    PopupMenuItem<int>(
-                      key: Key('spaceOption_${space.id}'),
-                      value: space.id,
-                      child: Row(
-                        children: [
-                          Text(space.avatar,
-                              style: const TextStyle(fontSize: 20)),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              space.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          if (space.id == activeSpace?.id)
-                            Icon(
-                              Icons.check,
-                              size: 18,
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
-                        ],
-                      ),
-                    ),
-                  const PopupMenuDivider(),
-                  const PopupMenuItem<int>(
-                    key: Key('newSpaceOption'),
-                    value: _kNewSpace,
-                    child: Row(
-                      children: [
-                        Icon(Icons.add_circle_outline),
-                        SizedBox(width: 12),
-                        Text('New space'),
-                      ],
-                    ),
-                  ),
-                ],
                 child: Row(
                   children: [
                     Expanded(

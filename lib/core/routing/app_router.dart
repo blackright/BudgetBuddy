@@ -109,7 +109,28 @@ GoRouter createAppRouter({String? initialLocation}) => GoRouter(
               routes: [
                 GoRoute(
                   path: '/expenses',
-                  builder: (context, state) => const ExpensesScreen(),
+                  builder: (context, state) {
+                    final extra = state.extra;
+                    String? categoryId;
+                    String? statusName;
+                    if (extra is Map) {
+                      final c = extra['categoryId'];
+                      if (c is String) categoryId = c;
+                      final s = extra['status'];
+                      if (s is String) statusName = s;
+                    }
+                    ExpenseStatus? status;
+                    if (statusName != null) {
+                      status = ExpenseStatus.values.firstWhere(
+                        (e) => e.name == statusName,
+                        orElse: () => ExpenseStatus.paid,
+                      );
+                    }
+                    return ExpensesScreen(
+                      filterCategoryId: categoryId,
+                      filterStatus: status,
+                    );
+                  },
                 ),
               ],
             ),
