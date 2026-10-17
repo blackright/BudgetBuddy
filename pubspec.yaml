@@ -14,6 +14,7 @@ dependencies:
   device_calendar: ^4.3.3
   dio: ^5.11.1
   file_picker: ^13.1.0
+  fl_chart: ^1.2.0
   flutter:
     sdk: flutter
   flutter_local_notifications: ^23.0.0-dev.3

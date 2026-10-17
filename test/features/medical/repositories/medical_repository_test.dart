@@ -3,6 +3,7 @@ import 'package:budget_buddy/core/models/expense.dart';
 import 'package:budget_buddy/core/models/medical_bill.dart';
 import 'package:budget_buddy/core/models/medical_service_type.dart';
 import 'package:budget_buddy/core/models/money.dart';
+import 'package:budget_buddy/features/expenses/models/reimbursement.dart';
 import 'package:budget_buddy/features/medical/providers/medical_providers.dart';
 import 'package:budget_buddy/features/medical/repositories/medical_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -481,8 +482,7 @@ void main() {
       expect(saved.insurerReplyPath, isNull);
     });
 
-    test('switching to insurer-paid clears a payout that can no longer apply',
-        () async {
+    test('switching to insurer-paid clears a partial payout', () async {
       final saved = await harness.repository.saveBill(
         bill(
           method: MedicalPaymentMethod.selfPaid,
@@ -490,8 +490,23 @@ void main() {
         ),
         context,
       );
-      await harness.repository.logReimbursement(saved, amount: usd(800));
-      expect(await available(), 4800);
+      // A partial payout leaves the bill open, which is the only way a payout
+      // can now coexist with a non-finished bill, since `finished` is terminal.
+      await harness.repository.updateMedicalBillReimbursement(saved, usd(150));
+      expect(saved.state, MedicalBillState.waiting);
+      await harness.isar.writeTxn(() async {
+        await harness.isar.reimbursements.put(
+          Reimbursement(
+            profileId: context.profileId,
+            expenseId: saved.linkedExpenseId,
+            amount: usd(150),
+            currency: 'usd',
+            originYearMonth: '2026-01',
+            date: DateTime(2026, 1, 10),
+          ),
+        );
+      });
+      expect(await harness.allReimbursements(), hasLength(1));
 
       await harness.repository.setPaymentMethod(
         saved,
@@ -503,7 +518,7 @@ void main() {
       expect(await harness.allReimbursements(), isEmpty);
     });
 
-    test('R-1: switching to insurer-paid un-finishes the bill', () async {
+    test('R-1: a finished bill refuses a payment-method switch', () async {
       final saved = await harness.repository.saveBill(
         bill(
           method: MedicalPaymentMethod.selfPaid,
@@ -514,13 +529,18 @@ void main() {
       await harness.repository.logReimbursement(saved, amount: usd(800));
       expect(saved.state, MedicalBillState.finished);
 
-      await harness.repository.setPaymentMethod(
-        saved,
-        MedicalPaymentMethod.insurerPaid,
-        context: context,
+      expect(
+        () => harness.repository.setPaymentMethod(
+          saved,
+          MedicalPaymentMethod.insurerPaid,
+          context: context,
+        ),
+        throwsA(isA<InvalidBillTransitionException>()),
       );
 
-      expect(saved.state, MedicalBillState.paid);
+      expect(saved.state, MedicalBillState.finished);
+      expect(saved.paymentMethod, MedicalPaymentMethod.selfPaid);
+      expect(saved.reimbursedAmount, usd(800));
     });
 
     test('setting the same method again is a no-op', () async {
@@ -593,7 +613,8 @@ void main() {
       expect(await available(), 4150);
     });
 
-    test('R-5: the payout is attributed to the bill month', () async {
+    test('R-5: the payout is credited to the month after the bill month',
+        () async {
       final paid = await selfPaidBill();
       await harness.repository.logReimbursement(
         paid,
@@ -602,7 +623,7 @@ void main() {
       );
 
       final row = (await harness.allReimbursements()).single;
-      expect(row.originYearMonth, context.yearMonth);
+      expect(row.originYearMonth, '2026-02');
     });
 
     test('the payout hangs off the bill expense', () async {
@@ -667,32 +688,47 @@ void main() {
       );
     });
 
-    test('T4: rejecting a reimbursed bill removes the injected payout',
-        () async {
+    test('T4: a finished bill cannot be rejected', () async {
       final paid = await selfPaidBill();
       await harness.repository.logReimbursement(paid, amount: usd(800));
       expect(await available(), 4800);
 
-      await harness.repository
-          .setBillState(paid, MedicalBillState.rejected, context: context);
+      expect(
+        () => harness.repository
+            .setBillState(paid, MedicalBillState.rejected, context: context),
+        throwsA(isA<InvalidBillTransitionException>()),
+      );
 
-      expect(paid.state, MedicalBillState.rejected);
-      expect(paid.reimbursedAmount, 0);
-      expect(await harness.allReimbursements(), isEmpty);
-      expect(await available(), 4000);
+      expect(paid.state, MedicalBillState.finished);
+      expect(paid.reimbursedAmount, usd(800));
+      expect(await harness.allReimbursements(), hasLength(1));
     });
 
-    test('moving away from finished also drops the payout', () async {
+    test('a finished bill cannot move back to waiting', () async {
       final paid = await selfPaidBill();
       await harness.repository.logReimbursement(paid, amount: usd(800));
+
+      expect(
+        () => harness.repository
+            .setBillState(paid, MedicalBillState.waiting, context: context),
+        throwsA(isA<InvalidBillTransitionException>()),
+      );
+
+      expect(paid.state, MedicalBillState.finished);
+      expect(paid.reimbursedAmount, usd(800));
       expect(await harness.allReimbursements(), hasLength(1));
+      expect(await available(), 4800);
+    });
 
-      await harness.repository
-          .setBillState(paid, MedicalBillState.waiting, context: context);
+    test('updateMedicalBillReimbursement keeps a finished bill finished',
+        () async {
+      final paid = await selfPaidBill();
+      await harness.repository.logReimbursement(paid, amount: usd(800));
 
-      expect(paid.reimbursedAmount, 0);
-      expect(await harness.allReimbursements(), isEmpty);
-      expect(await available(), 4000);
+      await harness.repository.updateMedicalBillReimbursement(paid, usd(750));
+
+      expect(paid.state, MedicalBillState.finished);
+      expect(paid.reimbursedAmount, usd(750));
     });
 
     test('a non-positive payout is rejected', () async {

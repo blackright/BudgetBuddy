@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/models/currency_code.dart';
 import '../../../../core/models/expense.dart';
 import '../../../../core/models/money.dart';
+import '../../../../core/providers/selected_month_provider.dart';
 import '../../../../shared/presentation/money_format.dart';
 import '../../../../shared/presentation/widgets/money_field.dart';
 import '../../providers/reimbursement_provider.dart';
@@ -77,7 +78,12 @@ class _ReimbursementEntrySheetState
       final reimbursement = Reimbursement(
         profileId: widget.expense.profileId,
         expenseId: widget.expense.id,
-        originYearMonth: widget.expense.yearMonth,
+        // A medical payout lands with next month's income, so it is credited to
+        // the month after the bill's own month. Generic expense reimbursements
+        // stay in the expense's month.
+        originYearMonth: widget.medicalBill != null
+            ? nextMonth(widget.expense.yearMonth)
+            : widget.expense.yearMonth,
         amount: amountMinor,
         currency: _currency,
         date: DateTime.now(),

@@ -111,4 +111,26 @@ void main() {
       );
     });
   });
+
+  group('formatMinorUnitsCompact abbreviates chart-axis labels', () {
+    test('leaves small values uncompacted, no symbol', () {
+      expect(formatMinorUnitsCompact(850, CurrencyCode.huf), '850');
+      expect(formatMinorUnitsCompact(1000, CurrencyCode.usd), '10');
+      expect(formatMinorUnitsCompact(1, CurrencyCode.usd), '0.01');
+    });
+
+    test('abbreviates thousands and millions', () {
+      expect(formatMinorUnitsCompact(10000, CurrencyCode.huf), '10k');
+      expect(formatMinorUnitsCompact(12500, CurrencyCode.huf), '12.5k');
+      expect(formatMinorUnitsCompact(3820000, CurrencyCode.huf), '3.8M');
+      expect(formatMinorUnitsCompact(1000000000, CurrencyCode.huf), '1B');
+    });
+
+    test('keeps a leading sign and never repeats the currency symbol', () {
+      expect(formatMinorUnitsCompact(-1000, CurrencyCode.usd), '-10');
+      expect(formatMinorUnitsCompact(100000, CurrencyCode.usd), '1k');
+      expect(formatMinorUnitsCompact(1000, CurrencyCode.huf),
+          isNot(contains('Ft')));
+    });
+  });
 }

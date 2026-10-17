@@ -322,6 +322,205 @@ class PairingService {
   }
 
   // ---------------------------------------------------------------------------
+  // Identity pairing (US7): a space-independent contact exchange
+  // ---------------------------------------------------------------------------
+
+  /// Mints a space-independent identity invite (US7, T060).
+  ///
+  /// Nothing is persisted: the token lives only in the returned invite and is
+  /// validated when the scanner's reply comes back via [handleIdentityClaim].
+  /// No signer is needed because no membership is granted.
+  PairingIdentityInvite createIdentityInvite({
+    Duration ttl = defaultTtl,
+    DateTime? now,
+  }) {
+    final clock = now ?? _wallClock();
+    final token = _newToken();
+    final payload = PairingIdentityPayload(
+      identityId: _identity.fingerprint,
+      username: _identity.username,
+      publicKey: _identity.publicKey,
+      fingerprint: _identity.fingerprint,
+      token: token,
+      expiresAt: clock.add(ttl),
+    );
+    return PairingIdentityInvite(token: token, payload: payload);
+  }
+
+  /// Parses and validates a scanned identity code (US7, T060): version, type,
+  /// expiry, and that the public key matches the fingerprint it claims. A
+  /// tampered or foreign code is refused before any state changes.
+  Future<PairingIdentityPayload> parseIdentityPayload(
+    String raw, {
+    DateTime? now,
+  }) async {
+    final clock = now ?? _wallClock();
+    final PairingIdentityPayload payload;
+    try {
+      payload = PairingIdentityPayload.parse(raw);
+    } catch (_) {
+      throw const PairingException('this is not a BudgetBuddy pairing code');
+    }
+    if (payload.v != kPairingPayloadVersion ||
+        payload.type != kIdentityPayloadType) {
+      throw const PairingException(
+          'this pairing code is an unsupported version');
+    }
+    if (!clock.isBefore(payload.expiresAt)) {
+      throw const PairingException('this pairing code has expired');
+    }
+    final expected = await _fingerprint(payload.publicKey);
+    if (expected != payload.fingerprint || expected != payload.identityId) {
+      throw const PairingException(
+        'the pairing code is tampered: key and fingerprint disagree',
+      );
+    }
+    return payload;
+  }
+
+  /// Parses a scanned reply code from the presenter's device (US7, T060). A
+  /// string that is not a well-formed claim is refused with a friendly message.
+  PairingClaim parseIdentityClaim(String raw) {
+    try {
+      final claim = PairingClaim.parse(raw);
+      if (claim.token.isEmpty ||
+          claim.scannerIdentityId.isEmpty ||
+          claim.scannerPublicKey.isEmpty) {
+        throw const PairingException('this is not a BudgetBuddy reply code');
+      }
+      return claim;
+    } catch (_) {
+      throw const PairingException('this is not a BudgetBuddy reply code');
+    }
+  }
+
+  /// Scanner side (US7, T060): after the person confirms the presenter, persist
+  /// them as a contact. No membership or cursor is created — an identity pairing
+  /// shares no data.
+  Future<PairedPeer> acceptIdentityPayload(
+    PairingIdentityPayload payload, {
+    DateTime? now,
+  }) async {
+    final clock = now ?? _wallClock();
+    final presenterFingerprint = await _fingerprint(payload.publicKey);
+    if (presenterFingerprint != payload.identityId) {
+      throw const PairingException(
+        'the presenter key does not match its fingerprint',
+      );
+    }
+    return _isar.writeTxn(() async {
+      final existing = await _isar.pairedPeers
+          .filter()
+          .peerIdentityIdEqualTo(payload.identityId)
+          .findFirst();
+      return _persistPeer(
+        identityId: payload.identityId,
+        username: payload.username,
+        publicKey: payload.publicKey,
+        existing: existing,
+        clock: clock,
+      );
+    });
+  }
+
+  /// Scanner side (US7, T060): build this device's reply for an identity code.
+  PairingClaim identityClaimFrom(PairingIdentityPayload payload) =>
+      PairingClaim(
+        token: payload.token,
+        scannerIdentityId: _identity.fingerprint,
+        scannerPublicKey: _identity.publicKey,
+        scannerUsername: _identity.username,
+      );
+
+  /// Presenter side (US7, T060): validate the scanner's reply and persist them
+  /// as a contact. The reply must echo this invite's token and not be expired,
+  /// and the scanner's key must match the fingerprint it claims.
+  Future<PairedPeer> handleIdentityClaim(
+    PairingIdentityPayload payload,
+    PairingClaim claim, {
+    DateTime? now,
+  }) async {
+    final clock = now ?? _wallClock();
+    if (claim.token != payload.token) {
+      throw const PairingException('this reply is for a different code');
+    }
+    if (!clock.isBefore(payload.expiresAt)) {
+      throw const PairingException('this pairing code has expired');
+    }
+    final scannerFingerprint = await _fingerprint(claim.scannerPublicKey);
+    if (scannerFingerprint != claim.scannerIdentityId) {
+      throw const PairingException(
+        'the scanner key does not match the fingerprint it claims',
+      );
+    }
+    return _isar.writeTxn(() async {
+      final existing = await _isar.pairedPeers
+          .filter()
+          .peerIdentityIdEqualTo(scannerFingerprint)
+          .findFirst();
+      return _persistPeer(
+        identityId: scannerFingerprint,
+        username: claim.scannerUsername,
+        publicKey: claim.scannerPublicKey,
+        existing: existing,
+        clock: clock,
+      );
+    });
+  }
+
+  /// Grants an **existing paired contact** a role in a shared space (US7, T064).
+  ///
+  /// The People-list counterpart to [handleClaim]: no QR is involved because the
+  /// contact is already paired. The membership is still signed by this device's
+  /// identity and keyed by the peer's remote profile id, so apply-time
+  /// authorization verifies it exactly like a QR-granted membership.
+  ///
+  /// Refuses (with [PairingException] and nothing persisted) a peer that is not
+  /// a contact, a space that no longer exists, a peer already in that space
+  /// (I2), and a space with no Owner.
+  Future<SharedMember> addContactToSpace({
+    required int spaceId,
+    required String peerIdentityId,
+    required SharedMemberRole role,
+    DateTime? now,
+  }) async {
+    final clock = now ?? _wallClock();
+    // Fail before opening the write transaction when the identity is locked, so
+    // a locked phone can never leave a half-written membership behind.
+    _requireSigner;
+    return _isar.writeTxn(() async {
+      final peer = await _isar.pairedPeers
+          .filter()
+          .peerIdentityIdEqualTo(peerIdentityId)
+          .findFirst();
+      if (peer == null) {
+        throw const PairingException(
+            'that person is not one of your contacts yet');
+      }
+      if (await _isar.sharedSpaces.get(spaceId) == null) {
+        throw const PairingException('the space no longer exists');
+      }
+      if (await _hasActiveContext(peer.id, spaceId)) {
+        throw const PairingException('that person is already in this space');
+      }
+      if (await _activeOwnerCount(spaceId) < 1) {
+        throw const PairingException('the space has no Owner');
+      }
+
+      final member = await _grantMembership(
+        spaceId: spaceId,
+        scannerFingerprint: peer.peerIdentityId,
+        role: role,
+        clock: clock,
+      );
+      await _persistContext(peer.id, spaceId, role, clock);
+      await _ensureCursor(peer.id, spaceId, clock);
+      await _recorder?.recordMember(member, now: clock);
+      return member;
+    });
+  }
+
+  // ---------------------------------------------------------------------------
   // Internals
   // ---------------------------------------------------------------------------
 

@@ -10,7 +10,32 @@ export '../../identity/domain/identity_profile_key.dart'
 
 /// The QR payload format version and discriminator (`contracts/pairing.md` §2).
 const int kPairingPayloadVersion = 1;
+
+/// A space **invite** code: the presenter offers a role in one shared space.
 const String kPairingPayloadType = 'buddy.pairing';
+
+/// A space-independent **identity** code (US7): the presenter only trades
+/// contact details — no space and no role — so two people can become contacts
+/// before (or instead of) sharing a space.
+const String kIdentityPayloadType = 'buddy.identity';
+
+/// Which kind of BudgetBuddy code a scanned string is, so the UI can route it
+/// to the right flow (`pairing.md` §2). Unknown/foreign strings return `null`.
+enum PairingCodeKind { spaceInvite, identity }
+
+/// Reads only the `type` discriminator of [raw]; never throws.
+PairingCodeKind? pairingCodeKindOf(String raw) {
+  try {
+    final json = (jsonDecode(raw) as Map).cast<String, Object?>();
+    return switch (json['type']) {
+      kPairingPayloadType => PairingCodeKind.spaceInvite,
+      kIdentityPayloadType => PairingCodeKind.identity,
+      _ => null,
+    };
+  } catch (_) {
+    return null;
+  }
+}
 
 /// Thrown for any refused pairing step — expired, already-used, cancelled,
 /// duplicated, tampered, or missing a space/Owner (FR-005, `pairing.md` §4).
@@ -211,4 +236,91 @@ class PairingInvite {
 
   /// The QR content to display.
   final PairingPayload payload;
+}
+
+/// The QR payload for a **space-independent identity** code (US7, T059).
+///
+/// It is the [PairingPayload] minus `spaceId`/`offeredRole`: the same public
+/// identity material and single-use token, but it grants no membership — the
+/// two devices simply become each other's contacts. A distinct [type] keeps the
+/// two code kinds apart, so a space invite is never mistaken for a contact
+/// exchange.
+class PairingIdentityPayload {
+  const PairingIdentityPayload({
+    required this.identityId,
+    required this.username,
+    required this.publicKey,
+    required this.fingerprint,
+    required this.token,
+    required this.expiresAt,
+    this.v = kPairingPayloadVersion,
+    this.type = kIdentityPayloadType,
+  });
+
+  /// Format version, so a future change can be refused cleanly.
+  final int v;
+
+  /// Always [kIdentityPayloadType]; a foreign QR is refused.
+  final String type;
+
+  /// The presenter's identity fingerprint (equals [fingerprint]).
+  final String identityId;
+
+  /// The presenter's display label (never a lookup key).
+  final String username;
+
+  /// Base64 ed25519 public key of the presenter.
+  final String publicKey;
+
+  /// Short human-comparable hash shown for confirmation.
+  final String fingerprint;
+
+  /// The single-use token, echoed back in the reply so the two QRs must match.
+  final String token;
+
+  /// After this instant the code is refused (`pairing.md` §4).
+  final DateTime expiresAt;
+
+  /// Decodes a scanned string, throwing [FormatException] when it is not a
+  /// well-formed payload object at all.
+  static PairingIdentityPayload parse(String raw) =>
+      PairingIdentityPayload.fromJson(
+          (jsonDecode(raw) as Map).cast<String, Object?>());
+
+  factory PairingIdentityPayload.fromJson(Map<String, Object?> json) =>
+      PairingIdentityPayload(
+        v: (json['v'] as num?)?.toInt() ?? 0,
+        type: json['type'] as String? ?? '',
+        identityId: json['identityId'] as String? ?? '',
+        username: json['username'] as String? ?? '',
+        publicKey: json['publicKey'] as String? ?? '',
+        fingerprint: json['fingerprint'] as String? ?? '',
+        token: json['token'] as String? ?? '',
+        expiresAt: DateTime.parse(json['expiresAt'] as String).toUtc(),
+      );
+
+  Map<String, Object?> toJson() => {
+        'v': v,
+        'type': type,
+        'identityId': identityId,
+        'username': username,
+        'publicKey': publicKey,
+        'fingerprint': fingerprint,
+        'token': token,
+        'expiresAt': expiresAt.toUtc().toIso8601String(),
+      };
+
+  /// The exact string encoded into the QR.
+  String encode() => jsonEncode(toJson());
+}
+
+/// The presenter's identity invite plus its scannable [payload] (US7, T059).
+class PairingIdentityInvite {
+  const PairingIdentityInvite({required this.token, required this.payload});
+
+  /// The token to match against the scanned reply.
+  final String token;
+
+  /// The QR content to display.
+  final PairingIdentityPayload payload;
 }

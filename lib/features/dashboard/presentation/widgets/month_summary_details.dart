@@ -21,11 +21,19 @@ class MonthSummaryDetails extends ConsumerWidget {
     super.key,
     required this.currency,
     this.onMedicalTap,
+    this.onInsuranceReturnTap,
+    this.onExpenseReturnTap,
   });
 
   final CurrencyCode currency;
 
   final VoidCallback? onMedicalTap;
+
+  /// US8: opens the medical screen for insurance returns.
+  final VoidCallback? onInsuranceReturnTap;
+
+  /// US8: opens the expense list for expense returns.
+  final VoidCallback? onExpenseReturnTap;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -57,6 +65,23 @@ class MonthSummaryDetails extends ConsumerWidget {
               value: _money(summary.excessReturned),
               valueKey: const Key('excessLine'),
               color: MedicalTheme.semantic(context, MedicalTheme.moneyIn),
+            ),
+          // US8: the returned total split into insurance vs expense returns.
+          if (summary.insuranceReturned > 0)
+            _DetailLine(
+              label: 'Insurance return',
+              value: _money(summary.insuranceReturned),
+              valueKey: const Key('insuranceReturnedLine'),
+              color: MedicalTheme.semantic(context, MedicalTheme.moneyIn),
+              onTap: onInsuranceReturnTap,
+            ),
+          if (summary.expenseReturned > 0)
+            _DetailLine(
+              label: 'Expense returns',
+              value: _money(summary.expenseReturned),
+              valueKey: const Key('expenseReturnsLine'),
+              color: MedicalTheme.semantic(context, MedicalTheme.moneyIn),
+              onTap: onExpenseReturnTap,
             ),
           if (summary.usesOverriddenIncome)
             Padding(

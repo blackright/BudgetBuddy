@@ -57,6 +57,7 @@ void main() {
     List<Expense> expenses = const [],
     List<Reimbursement> reimbursements = const [],
     Map<int, double> targetPaidAmounts = const {},
+    Set<int> medicalTargetIds = const {},
     Money Function(Expense)? convertExpense,
     Money Function(Reimbursement)? convertReimbursement,
   }) {
@@ -68,6 +69,7 @@ void main() {
       reimbursements: reimbursements,
       openingBalance: openingBalance,
       targetPaidAmounts: targetPaidAmounts,
+      medicalTargetIds: medicalTargetIds,
       convertExpense: convertExpense ??
           (e) => Money(e.amount, e.currencyCode ?? CurrencyCode.usd),
       convertReimbursement: convertReimbursement ??
@@ -191,6 +193,40 @@ void main() {
 
       expect(summary.kept, -700);
       expect(summary.moneyInBank, isNull);
+    });
+
+    test(
+        'a payout credited next month is not counted as excess when its target '
+        'lives in another month', () {
+      // The bill was paid in 2026-01; the payout is credited to 2026-02, so the
+      // target is absent from this month's targetPaidAmounts. It must not be
+      // mistaken for a 100% over-reimbursement.
+      final summary = build(
+        yearMonth: '2026-02',
+        income: 4000,
+        openingBalance: 500,
+        expenses: const [],
+        reimbursements: [
+          reimbursement(amount: 800, expenseId: 42, originYearMonth: '2026-02'),
+        ],
+        targetPaidAmounts: const {},
+      );
+
+      expect(summary.moneyReturned, 800);
+      expect(summary.excessReturned, 0);
+      expect(summary.kept, 4000 + 800);
+    });
+
+    test('a payout with its target in the same month still reports excess', () {
+      final summary = build(
+        income: 500,
+        openingBalance: 100,
+        expenses: [expense(amount: 800, id: 42)],
+        reimbursements: [reimbursement(amount: 900, expenseId: 42)],
+        targetPaidAmounts: const {42: 800},
+      );
+
+      expect(summary.excessReturned, 100);
     });
 
     test('I8: cancelled expenses contribute to nothing but cancelled', () {
@@ -391,6 +427,70 @@ void main() {
       );
 
       expect(summary.usesOverriddenIncome, isTrue);
+    });
+  });
+
+  group('US8: insurance vs expense returns', () {
+    test('the two halves always sum back to moneyReturned', () {
+      final summary = build(
+        income: 4000,
+        reimbursements: [
+          reimbursement(amount: 300, id: 1, expenseId: 10),
+          reimbursement(amount: 200, id: 2, expenseId: 20),
+          reimbursement(amount: 50, id: 3, expenseId: null),
+        ],
+        medicalTargetIds: const {10},
+      );
+
+      expect(summary.moneyReturned, 550);
+      expect(
+        summary.insuranceReturned + summary.expenseReturned,
+        summary.moneyReturned,
+      );
+    });
+
+    test('a payout against a medical target is an insurance return', () {
+      final summary = build(
+        income: 4000,
+        reimbursements: [reimbursement(amount: 800, expenseId: 42)],
+        medicalTargetIds: const {42},
+      );
+
+      expect(summary.insuranceReturned, 800);
+      expect(summary.expenseReturned, 0);
+    });
+
+    test('a payout against an ordinary target is an expense return', () {
+      final summary = build(
+        income: 4000,
+        reimbursements: [reimbursement(amount: 300, expenseId: 7)],
+        medicalTargetIds: const {},
+      );
+
+      expect(summary.insuranceReturned, 0);
+      expect(summary.expenseReturned, 300);
+    });
+
+    test('an orphaned return counts as an expense return', () {
+      final summary = build(
+        income: 4000,
+        reimbursements: [reimbursement(amount: 500, expenseId: null)],
+      );
+
+      expect(summary.insuranceReturned, 0);
+      expect(summary.expenseReturned, 500);
+    });
+
+    test('medicalTargetIdsOf keys strictly on the medical expense type', () {
+      final targets = [
+        expense(amount: 100, id: 1, type: ExpenseType.medical),
+        // A standard expense filed under the health category is NOT insurance:
+        // classification is by type only (the user's US8 choice).
+        expense(amount: 100, id: 2, categoryId: 'health'),
+        expense(amount: 100, id: 3),
+      ];
+
+      expect(MonthSummary.medicalTargetIdsOf(targets), {1});
     });
   });
 }

@@ -22,51 +22,56 @@ const UserProfileSchema = CollectionSchema(
       name: r'avatar',
       type: IsarType.string,
     ),
-    r'createdAt': PropertySchema(
+    r'confirmSharedSave': PropertySchema(
       id: 1,
+      name: r'confirmSharedSave',
+      type: IsarType.bool,
+    ),
+    r'createdAt': PropertySchema(
+      id: 2,
       name: r'createdAt',
       type: IsarType.dateTime,
     ),
     r'defaultNetSalary': PropertySchema(
-      id: 2,
+      id: 3,
       name: r'defaultNetSalary',
       type: IsarType.double,
     ),
     r'fontFamily': PropertySchema(
-      id: 3,
+      id: 4,
       name: r'fontFamily',
       type: IsarType.byte,
       enumMap: _UserProfilefontFamilyEnumValueMap,
     ),
     r'lastActiveAt': PropertySchema(
-      id: 4,
+      id: 5,
       name: r'lastActiveAt',
       type: IsarType.dateTime,
     ),
     r'monthlyAvailableAmount': PropertySchema(
-      id: 5,
+      id: 6,
       name: r'monthlyAvailableAmount',
       type: IsarType.double,
     ),
     r'name': PropertySchema(
-      id: 6,
+      id: 7,
       name: r'name',
       type: IsarType.string,
     ),
     r'primaryCurrency': PropertySchema(
-      id: 7,
+      id: 8,
       name: r'primaryCurrency',
       type: IsarType.byte,
       enumMap: _UserProfileprimaryCurrencyEnumValueMap,
     ),
     r'themeMode': PropertySchema(
-      id: 8,
+      id: 9,
       name: r'themeMode',
       type: IsarType.byte,
       enumMap: _UserProfilethemeModeEnumValueMap,
     ),
     r'updatedAt': PropertySchema(
-      id: 9,
+      id: 10,
       name: r'updatedAt',
       type: IsarType.dateTime,
     )
@@ -103,15 +108,16 @@ void _userProfileSerialize(
   Map<Type, List<int>> allOffsets,
 ) {
   writer.writeString(offsets[0], object.avatar);
-  writer.writeDateTime(offsets[1], object.createdAt);
-  writer.writeDouble(offsets[2], object.defaultNetSalary);
-  writer.writeByte(offsets[3], object.fontFamily.index);
-  writer.writeDateTime(offsets[4], object.lastActiveAt);
-  writer.writeDouble(offsets[5], object.monthlyAvailableAmount);
-  writer.writeString(offsets[6], object.name);
-  writer.writeByte(offsets[7], object.primaryCurrency.index);
-  writer.writeByte(offsets[8], object.themeMode.index);
-  writer.writeDateTime(offsets[9], object.updatedAt);
+  writer.writeBool(offsets[1], object.confirmSharedSave);
+  writer.writeDateTime(offsets[2], object.createdAt);
+  writer.writeDouble(offsets[3], object.defaultNetSalary);
+  writer.writeByte(offsets[4], object.fontFamily.index);
+  writer.writeDateTime(offsets[5], object.lastActiveAt);
+  writer.writeDouble(offsets[6], object.monthlyAvailableAmount);
+  writer.writeString(offsets[7], object.name);
+  writer.writeByte(offsets[8], object.primaryCurrency.index);
+  writer.writeByte(offsets[9], object.themeMode.index);
+  writer.writeDateTime(offsets[10], object.updatedAt);
 }
 
 UserProfile _userProfileDeserialize(
@@ -122,22 +128,23 @@ UserProfile _userProfileDeserialize(
 ) {
   final object = UserProfile();
   object.avatar = reader.readString(offsets[0]);
-  object.createdAt = reader.readDateTime(offsets[1]);
-  object.defaultNetSalary = reader.readDouble(offsets[2]);
+  object.confirmSharedSave = reader.readBool(offsets[1]);
+  object.createdAt = reader.readDateTime(offsets[2]);
+  object.defaultNetSalary = reader.readDouble(offsets[3]);
   object.fontFamily =
-      _UserProfilefontFamilyValueEnumMap[reader.readByteOrNull(offsets[3])] ??
+      _UserProfilefontFamilyValueEnumMap[reader.readByteOrNull(offsets[4])] ??
           AppFontFamily.system;
   object.id = id;
-  object.lastActiveAt = reader.readDateTimeOrNull(offsets[4]);
-  object.monthlyAvailableAmount = reader.readDouble(offsets[5]);
-  object.name = reader.readString(offsets[6]);
+  object.lastActiveAt = reader.readDateTimeOrNull(offsets[5]);
+  object.monthlyAvailableAmount = reader.readDouble(offsets[6]);
+  object.name = reader.readString(offsets[7]);
   object.primaryCurrency = _UserProfileprimaryCurrencyValueEnumMap[
-          reader.readByteOrNull(offsets[7])] ??
+          reader.readByteOrNull(offsets[8])] ??
       PrimaryCurrency.huf;
   object.themeMode =
-      _UserProfilethemeModeValueEnumMap[reader.readByteOrNull(offsets[8])] ??
+      _UserProfilethemeModeValueEnumMap[reader.readByteOrNull(offsets[9])] ??
           AppThemeMode.system;
-  object.updatedAt = reader.readDateTime(offsets[9]);
+  object.updatedAt = reader.readDateTime(offsets[10]);
   return object;
 }
 
@@ -151,28 +158,30 @@ P _userProfileDeserializeProp<P>(
     case 0:
       return (reader.readString(offset)) as P;
     case 1:
-      return (reader.readDateTime(offset)) as P;
+      return (reader.readBool(offset)) as P;
     case 2:
-      return (reader.readDouble(offset)) as P;
+      return (reader.readDateTime(offset)) as P;
     case 3:
+      return (reader.readDouble(offset)) as P;
+    case 4:
       return (_UserProfilefontFamilyValueEnumMap[
               reader.readByteOrNull(offset)] ??
           AppFontFamily.system) as P;
-    case 4:
-      return (reader.readDateTimeOrNull(offset)) as P;
     case 5:
-      return (reader.readDouble(offset)) as P;
+      return (reader.readDateTimeOrNull(offset)) as P;
     case 6:
-      return (reader.readString(offset)) as P;
+      return (reader.readDouble(offset)) as P;
     case 7:
+      return (reader.readString(offset)) as P;
+    case 8:
       return (_UserProfileprimaryCurrencyValueEnumMap[
               reader.readByteOrNull(offset)] ??
           PrimaryCurrency.huf) as P;
-    case 8:
+    case 9:
       return (_UserProfilethemeModeValueEnumMap[
               reader.readByteOrNull(offset)] ??
           AppThemeMode.system) as P;
-    case 9:
+    case 10:
       return (reader.readDateTime(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -437,6 +446,16 @@ extension UserProfileQueryFilter
       return query.addFilterCondition(FilterCondition.greaterThan(
         property: r'avatar',
         value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterFilterCondition>
+      confirmSharedSaveEqualTo(bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'confirmSharedSave',
+        value: value,
       ));
     });
   }
@@ -1132,6 +1151,20 @@ extension UserProfileQuerySortBy
     });
   }
 
+  QueryBuilder<UserProfile, UserProfile, QAfterSortBy>
+      sortByConfirmSharedSave() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'confirmSharedSave', Sort.asc);
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterSortBy>
+      sortByConfirmSharedSaveDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'confirmSharedSave', Sort.desc);
+    });
+  }
+
   QueryBuilder<UserProfile, UserProfile, QAfterSortBy> sortByCreatedAt() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'createdAt', Sort.asc);
@@ -1258,6 +1291,20 @@ extension UserProfileQuerySortThenBy
   QueryBuilder<UserProfile, UserProfile, QAfterSortBy> thenByAvatarDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'avatar', Sort.desc);
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterSortBy>
+      thenByConfirmSharedSave() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'confirmSharedSave', Sort.asc);
+    });
+  }
+
+  QueryBuilder<UserProfile, UserProfile, QAfterSortBy>
+      thenByConfirmSharedSaveDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'confirmSharedSave', Sort.desc);
     });
   }
 
@@ -1397,6 +1444,13 @@ extension UserProfileQueryWhereDistinct
     });
   }
 
+  QueryBuilder<UserProfile, UserProfile, QDistinct>
+      distinctByConfirmSharedSave() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'confirmSharedSave');
+    });
+  }
+
   QueryBuilder<UserProfile, UserProfile, QDistinct> distinctByCreatedAt() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'createdAt');
@@ -1467,6 +1521,13 @@ extension UserProfileQueryProperty
   QueryBuilder<UserProfile, String, QQueryOperations> avatarProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'avatar');
+    });
+  }
+
+  QueryBuilder<UserProfile, bool, QQueryOperations>
+      confirmSharedSaveProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'confirmSharedSave');
     });
   }
 

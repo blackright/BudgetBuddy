@@ -43,6 +43,19 @@ String nextMonth([String? yearMonth]) =>
 /// The current wall-clock month, for the "Today" control (FR-026).
 String goToToday() => currentYearMonth();
 
+/// The month to show when the app opens or resumes (US8).
+///
+/// Snaps [selected] forward to [now]'s month **only when it lags behind** — the
+/// "left the app on October and woke up in November" case. A current or future
+/// selection the user made on purpose is returned untouched, so the app never
+/// yanks them backwards or overrides a month they chose themselves.
+String snapToCurrentMonthIfBehind(String selected, [DateTime? now]) {
+  final today = currentYearMonth(now);
+  // `YYYY-MM` compares correctly as plain text: a smaller string is an earlier
+  // month.
+  return selected.compareTo(today) < 0 ? today : selected;
+}
+
 (int, int) _parseYearMonth(String yearMonth) {
   final match = RegExp(r'^(\d{4})-(\d{2})$').firstMatch(yearMonth);
   if (match == null) {

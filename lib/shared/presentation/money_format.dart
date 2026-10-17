@@ -44,6 +44,34 @@ String formatMajorUnits(num amount, CurrencyCode currency) => formatMinorUnits(
       currency,
     );
 
+/// Renders whole minor units of [currency] compactly for chart axes.
+///
+/// Unlike [formatMinorUnits] this omits the currency symbol and abbreviates
+/// thousands/millions (`850`, `12k`, `3.8M`), so an axis shows a handful of
+/// short labels instead of repeating `Ft 10,000` on every tick. The exact
+/// figure stays visible in the card header, which still uses [formatMinorUnits].
+String formatMinorUnitsCompact(int minorUnits, CurrencyCode currency) {
+  final major = minorUnits / currency.minorUnitsPerMajor;
+  final sign = major < 0 ? '-' : '';
+  final abs = major.abs();
+
+  if (abs < 1000) return '$sign${_trimZeros(abs, 2)}';
+  if (abs < 1000000) return '$sign${_trimZeros(abs / 1000, 1)}k';
+  if (abs < 1000000000) return '$sign${_trimZeros(abs / 1000000, 1)}M';
+  return '$sign${_trimZeros(abs / 1000000000, 1)}B';
+}
+
+/// Formats [value] with up to [decimals] places, dropping trailing zeros so
+/// `10.0` reads as `10` and `12.50` as `12.5`.
+String _trimZeros(double value, int decimals) {
+  var text = value.toStringAsFixed(decimals);
+  if (text.contains('.')) {
+    text = text.replaceFirst(RegExp(r'0+$'), '');
+    text = text.replaceFirst(RegExp(r'\.$'), '');
+  }
+  return text;
+}
+
 /// Renders the converted amount with the original beside it, e.g.
 /// `Ft 3,850 · $10.00` (FR-002: the original amount is always visible).
 ///

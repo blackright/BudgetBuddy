@@ -6,8 +6,10 @@ import '../../../../core/models/expense.dart';
 import '../../../../core/models/money.dart';
 import '../../../../core/providers/active_budget_provider.dart';
 import '../../../../core/providers/active_profile_provider.dart';
+import '../../../../core/providers/active_space_provider.dart';
 import '../../../../core/providers/budget_context_provider.dart';
 import '../../../../core/providers/selected_month_provider.dart';
+import '../../../../shared/presentation/confirm_space_on_save.dart';
 import '../../../../shared/presentation/money_format.dart';
 import '../../../../shared/presentation/widgets/money_field.dart';
 import '../../engine/currency_resolution.dart';
@@ -63,34 +65,55 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   String get _effectiveCurrency =>
       _currency ?? ref.read(mainCurrencyProvider).code.toUpperCase();
 
-  void _saveExpense() {
-    if (_formKey.currentState!.validate()) {
-      final amount = _parseAmount(_amountController.text) ?? 0.0;
-      final budgetContext = ref.read(budgetContextProvider);
-      final budget = ref.read(activeBudgetProvider).value;
+  Future<void> _saveExpense() async {
+    if (!_formKey.currentState!.validate()) return;
 
-      if (budget == null) return;
+    final amount = _parseAmount(_amountController.text) ?? 0.0;
+    final budgetContext = ref.read(budgetContextProvider);
+    final budget = ref.read(activeBudgetProvider).value;
 
-      final code =
-          CurrencyCode.tryParse(_effectiveCurrency) ?? CurrencyCode.huf;
-      final expense = Expense(
-        profileId: budgetContext.isShared ? 0 : budgetContext.profileKey,
-        sharedSpaceId: budgetContext.spaceId,
-        yearMonth: budget.yearMonth,
-        title: _titleController.text,
-        amount: Money.fromMajor(amount, code).minorUnits,
-        currency: code.code.toUpperCase(),
-        categoryId: _categoryId,
-        status: _status,
-        isReimbursable: _isReimbursable,
-        guiltLevel: _guiltLevel,
-        date: DateTime.now(),
-        budgetId: budget.id,
+    if (budget == null) return;
+
+    final code = CurrencyCode.tryParse(_effectiveCurrency) ?? CurrencyCode.huf;
+
+    // US6 (T055): a save into a shared space is confirmed first, naming the
+    // space, unless the user turned the guard off in Settings.
+    if (budgetContext.isShared && ref.read(confirmSharedSaveOnProvider)) {
+      final spaceName =
+          ref.read(activeSpaceProvider).value?.name ?? 'this space';
+      final title = _titleController.text.trim();
+      final decision = await confirmSpaceOnSave(
+        context,
+        title: title.isEmpty ? 'Expense' : title,
+        amountText: formatMoney(Money.fromMajor(amount, code)),
+        spaceName: spaceName,
       );
-
-      ref.read(expensesProvider.notifier).addExpense(expense);
-      context.pop();
+      if (!mounted) return;
+      if (decision != SpaceSaveDecision.confirm) {
+        // "Change context" (or a dismissal) abandons this save and returns to
+        // the shell, where the top switcher is visible.
+        if (decision == SpaceSaveDecision.changeContext) context.pop();
+        return;
+      }
     }
+
+    final expense = Expense(
+      profileId: budgetContext.isShared ? 0 : budgetContext.profileKey,
+      sharedSpaceId: budgetContext.spaceId,
+      yearMonth: budget.yearMonth,
+      title: _titleController.text,
+      amount: Money.fromMajor(amount, code).minorUnits,
+      currency: code.code.toUpperCase(),
+      categoryId: _categoryId,
+      status: _status,
+      isReimbursable: _isReimbursable,
+      guiltLevel: _guiltLevel,
+      date: DateTime.now(),
+      budgetId: budget.id,
+    );
+
+    ref.read(expensesProvider.notifier).addExpense(expense);
+    context.pop();
   }
 
   @override

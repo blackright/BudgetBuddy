@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import '../../finance/presentation/net_salary_section.dart';
 import '../../identity/presentation/identity_section.dart';
 import '../../pairing/presentation/paired_devices_section.dart';
+import '../../pairing/presentation/people_section.dart';
 import '../../spaces/presentation/space_settings_section.dart';
 import 'font_setting_section.dart';
 import 'profile_switcher_section.dart';
+import 'shared_save_setting_section.dart';
 import 'theme_setting_section.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -24,6 +26,9 @@ class SettingsScreen extends StatelessWidget {
           SizedBox(height: 16),
           IdentitySection(),
           SizedBox(height: 16),
+          // US7: the global People list — no active space required.
+          PeopleSection(),
+          SizedBox(height: 16),
           // US3: shows only once an identity exists.
           PairedDevicesSection(),
           SizedBox(height: 16),
@@ -34,6 +39,9 @@ class SettingsScreen extends StatelessWidget {
           FontSettingSection(),
           SizedBox(height: 16),
           ThemeSettingSection(),
+          SizedBox(height: 16),
+          // US6: confirm saves into a shared space.
+          SharedSaveSettingSection(),
         ],
       ),
     );

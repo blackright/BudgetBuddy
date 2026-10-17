@@ -12,6 +12,12 @@ import 'package:budget_buddy/features/engine/providers/rate_registry_provider.da
 import 'package:budget_buddy/features/medical/presentation/medical_theme.dart';
 import 'package:budget_buddy/features/settings/providers/settings_provider.dart';
 import 'package:budget_buddy/shared/presentation/widgets/month_incomplete_banner.dart';
+import 'package:budget_buddy/features/engine/providers/true_available_provider.dart';
+import 'package:budget_buddy/features/medical/providers/medical_providers.dart';
+import 'package:budget_buddy/features/spaces/providers/spaces_providers.dart';
+import 'package:budget_buddy/features/expenses/providers/category_provider.dart';
+import 'package:budget_buddy/features/finance/providers/finance_providers.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -34,6 +40,8 @@ void main() {
     double cancelled = 150,
     double medicalPaid = 200,
     double excessReturned = 0,
+    double insuranceReturned = 0,
+    double expenseReturned = 0,
     double? openingBalance = 1000,
     bool usesOverriddenIncome = false,
   }) {
@@ -47,6 +55,8 @@ void main() {
       cancelled: cancelled,
       medicalPaid: medicalPaid,
       excessReturned: excessReturned,
+      insuranceReturned: insuranceReturned,
+      expenseReturned: expenseReturned,
       openingBalance: openingBalance,
     );
   }
@@ -66,17 +76,21 @@ void main() {
     return ProviderScope(
       overrides: [
         activeProfileProvider.overrideWith((ref) => Stream.value(null)),
-        // The analytics placeholder reads the active context directly; resolve
-        // it to a personal context without needing an Isar-backed profile.
         budgetContextProvider.overrideWithValue(
           ContextRef.personal(profileId: 1, yearMonth: '2026-01'),
         ),
         activeBudgetProvider.overrideWith((ref) => Stream.value(budget())),
         monthSummaryProvider.overrideWithValue(value ?? makeSummary()),
-        // The hero card now carries the conversion caption (T054), which reads
-        // the rate registry and the profile main currency.
         rateRegistryProvider.overrideWithValue(RateTableRegistry()),
         mainCurrencyProvider.overrideWithValue(CurrencyCode.huf),
+        monthlyExpensesProvider.overrideWith((ref) => Stream.value([])),
+        monthlyReimbursementsProvider.overrideWith((ref) => Stream.value([])),
+        monthlyOriginReimbursementsProvider
+            .overrideWith((ref) => Stream.value([])),
+        medicalBillsProvider.overrideWith((ref) => Stream.value([])),
+        monthFinanceProvider.overrideWith((ref) => Stream.value(budget())),
+        activeSpaceMembersProvider.overrideWith((ref) => Stream.value([])),
+        categoriesProvider.overrideWith((ref) async => []),
       ],
       child: MaterialApp(home: Scaffold(body: child)),
     );
@@ -370,6 +384,120 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('monthIncompleteBanner')), findsNothing);
+    });
+  });
+
+  group('US8: returned money split into insurance vs expense', () {
+    const split = 300.0 + 200.0;
+
+    testWidgets('the card shows both sub-lines under Returned', (tester) async {
+      await tester.pumpWidget(
+        wrap(
+          const MonthSummaryCard(currency: CurrencyCode.usd),
+          value: makeSummary(
+            moneyReturned: split,
+            insuranceReturned: 300,
+            expenseReturned: 200,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('returnedLine')), findsOneWidget);
+      expect(find.byKey(const Key('insuranceReturnedLine')), findsOneWidget);
+      expect(find.byKey(const Key('expenseReturnsLine')), findsOneWidget);
+      expect(find.text('Insurance return'), findsOneWidget);
+      expect(find.text('Expense returns'), findsOneWidget);
+    });
+
+    testWidgets('a zero half is not rendered', (tester) async {
+      await tester.pumpWidget(
+        wrap(
+          const MonthSummaryCard(currency: CurrencyCode.usd),
+          value: makeSummary(moneyReturned: 300, insuranceReturned: 300),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('insuranceReturnedLine')), findsOneWidget);
+      expect(find.byKey(const Key('expenseReturnsLine')), findsNothing);
+    });
+
+    testWidgets('both lines are hidden when nothing was returned',
+        (tester) async {
+      await tester.pumpWidget(
+        wrap(
+          const MonthSummaryCard(currency: CurrencyCode.usd),
+          value: makeSummary(moneyReturned: 0),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('insuranceReturnedLine')), findsNothing);
+      expect(find.byKey(const Key('expenseReturnsLine')), findsNothing);
+    });
+
+    testWidgets('tapping the card sub-lines fires their callbacks',
+        (tester) async {
+      var insuranceTaps = 0;
+      var expenseTaps = 0;
+      await tester.pumpWidget(
+        wrap(
+          MonthSummaryCard(
+            currency: CurrencyCode.usd,
+            onInsuranceReturnTap: () => insuranceTaps++,
+            onExpenseReturnTap: () => expenseTaps++,
+          ),
+          value: makeSummary(
+            moneyReturned: split,
+            insuranceReturned: 300,
+            expenseReturned: 200,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('insuranceReturnedLine')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('expenseReturnsLine')));
+      await tester.pumpAndSettle();
+
+      expect(insuranceTaps, 1);
+      expect(expenseTaps, 1);
+    });
+
+    testWidgets('the details group mirrors both figures and is tappable',
+        (tester) async {
+      var insuranceTaps = 0;
+      var expenseTaps = 0;
+      await tester.pumpWidget(
+        wrap(
+          MonthSummaryDetails(
+            currency: CurrencyCode.usd,
+            onInsuranceReturnTap: () => insuranceTaps++,
+            onExpenseReturnTap: () => expenseTaps++,
+          ),
+          value: makeSummary(
+            moneyReturned: split,
+            insuranceReturned: 300,
+            expenseReturned: 200,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('summaryDetails')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('insuranceReturnedLine')), findsOneWidget);
+      expect(find.byKey(const Key('expenseReturnsLine')), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('insuranceReturnedLine')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('expenseReturnsLine')));
+      await tester.pumpAndSettle();
+
+      expect(insuranceTaps, 1);
+      expect(expenseTaps, 1);
     });
   });
 }

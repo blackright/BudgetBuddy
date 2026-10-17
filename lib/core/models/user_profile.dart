@@ -44,4 +44,9 @@ class UserProfile {
   /// operating-system preference until they opt into one mode (T059/T061).
   @enumerated
   AppThemeMode themeMode = AppThemeMode.system;
+
+  /// Whether saving into a **shared** space asks for confirmation first (US6,
+  /// FR context). Defaults to `true` so a shared save is confirmed unless the
+  /// user opts out; personal saves never prompt.
+  bool confirmSharedSave = true;
 }

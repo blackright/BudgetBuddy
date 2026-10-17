@@ -126,6 +126,20 @@ class ExpenseRepository {
     return _isar.expenses.get(id);
   }
 
+  /// Reactive [Expense]s for the given [ids], keyed on the id alone.
+  ///
+  /// Used to classify this month's reimbursements by their *target's* kind
+  /// (US8): a payout credited next month keeps its bill in the previous month,
+  /// so the target is not in the month's own expense list. An empty list
+  /// resolves to an empty stream rather than a query that matches everything.
+  Stream<List<Expense>> watchExpensesByIds(List<int> ids) {
+    if (ids.isEmpty) return Stream.value(const []);
+    return _isar.expenses
+        .filter()
+        .anyOf(ids, (q, int id) => q.idEqualTo(id))
+        .watch(fireImmediately: true);
+  }
+
   /// Records a reimbursement for a non-medical expense.
   ///
   /// Two guarantees beyond a plain insert (FR-034):

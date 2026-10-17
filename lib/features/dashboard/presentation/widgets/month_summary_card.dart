@@ -20,9 +20,20 @@ import '../../../../shared/presentation/widgets/conversion_footnote.dart';
 /// alive for the expense screens, but the dashboard default view does not show
 /// them (FR-023).
 class MonthSummaryCard extends ConsumerWidget {
-  const MonthSummaryCard({super.key, required this.currency});
+  const MonthSummaryCard({
+    super.key,
+    required this.currency,
+    this.onInsuranceReturnTap,
+    this.onExpenseReturnTap,
+  });
 
   final CurrencyCode currency;
+
+  /// Opens the medical screen (an insurance return came from a medical bill).
+  final VoidCallback? onInsuranceReturnTap;
+
+  /// Opens the expense list (an expense return came from an ordinary expense).
+  final VoidCallback? onExpenseReturnTap;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -93,6 +104,26 @@ class MonthSummaryCard extends ConsumerWidget {
               valueKey: const Key('returnedLine'),
               color: MedicalTheme.semantic(context, MedicalTheme.moneyIn),
             ),
+            // US8: break the returned total into insurance vs expense returns,
+            // shown only when there is something to show.
+            if (summary.insuranceReturned > 0)
+              _SummaryLine(
+                label: 'Insurance return',
+                value: _money(summary.insuranceReturned),
+                valueKey: const Key('insuranceReturnedLine'),
+                color: MedicalTheme.semantic(context, MedicalTheme.moneyIn),
+                indent: 12,
+                onTap: onInsuranceReturnTap,
+              ),
+            if (summary.expenseReturned > 0)
+              _SummaryLine(
+                label: 'Expense returns',
+                value: _money(summary.expenseReturned),
+                valueKey: const Key('expenseReturnsLine'),
+                color: MedicalTheme.semantic(context, MedicalTheme.moneyIn),
+                indent: 12,
+                onTap: onExpenseReturnTap,
+              ),
             ConversionFootnote(
               main: ref.watch(mainCurrencyProvider),
               display: currency,
@@ -117,6 +148,8 @@ class _SummaryLine extends StatelessWidget {
     required this.value,
     required this.valueKey,
     required this.color,
+    this.indent = 0,
+    this.onTap,
   });
 
   final String label;
@@ -124,10 +157,16 @@ class _SummaryLine extends StatelessWidget {
   final Key valueKey;
   final Color color;
 
+  /// Extra left padding, so a sub-line reads as subordinate to its parent.
+  final double indent;
+
+  /// When set, the line becomes tappable and shows a chevron.
+  final VoidCallback? onTap;
+
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
+    final content = Padding(
+      padding: EdgeInsets.fromLTRB(indent, 3, 0, 3),
       child: Row(
         children: [
           Text(label, style: Theme.of(context).textTheme.bodyMedium),
@@ -139,8 +178,15 @@ class _SummaryLine extends StatelessWidget {
               style: TextStyle(fontWeight: FontWeight.w600, color: color),
             ),
           ),
+          if (onTap != null) ...[
+            const SizedBox(width: 4),
+            const Icon(Icons.chevron_right, size: 16),
+          ],
         ],
       ),
     );
+
+    if (onTap == null) return content;
+    return InkWell(onTap: onTap, child: content);
   }
 }
