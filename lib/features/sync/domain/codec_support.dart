@@ -1,9 +1,16 @@
 /// Shared helpers for the per-entity [SyncCodec]s (data-model §2.6).
 ///
 /// Payloads are canonical JSON built from `int` / `double` / `String` / `bool` /
-/// `null` / `List` / `Map` only, so a `toPayload`→`fromPayload` round-trip is
-/// lossless and money fields stay byte-identical (FR-010). Dates travel as UTC
-/// milliseconds and enums as their [Enum.name], both stable across devices.
+/// `null` / `List` / `Map` only. Money fields stay byte-identical (FR-010), and
+/// dates travel as UTC milliseconds and enums as their [Enum.name], both stable
+/// across devices.
+///
+/// **Identity (015)**: a payload carries the row's own `syncGuid` and refers to
+/// other rows by GUID, never by a local integer `Id` (`entity-identity.md` §2).
+/// A codec is pure, so it cannot look a reference up — it leaves the numeric
+/// foreign keys out entirely, the `SyncRecorder` injects the GUID references
+/// when it has a database, and the applier resolves them back to local ids at
+/// apply time. Every scalar (money, dates, enums) still round-trips losslessly.
 library;
 
 /// A `DateTime` encoded as UTC milliseconds, or `null`.
@@ -30,6 +37,22 @@ int? decodeIntOrNull(Object? value) => value == null ? null : _asInt(value);
 /// Reads an optional double value.
 double? decodeDoubleOrNull(Object? value) =>
     value == null ? null : (value as num).toDouble();
+
+/// Reads the device-independent identity (`syncGuid`).
+///
+/// A missing value yields the empty string, which never matches a real GUID, so
+/// the engine can treat the record as malformed (`entity-identity.md` §8).
+String decodeGuid(Object? value) => value as String? ?? '';
+
+/// Reads a GUID **reference**, or `null` when absent/empty.
+///
+/// An absent reference is legal on the wire: the target may not exist on this
+/// device yet (it may arrive later), and the applier leaves the local field
+/// unset rather than inventing a value (`entity-identity.md` §4 R2).
+String? decodeGuidOrNull(Object? value) {
+  final guid = value as String?;
+  return guid == null || guid.isEmpty ? null : guid;
+}
 
 /// Resolves an enum member by its [Enum.name], falling back to the first member
 /// for an unknown value so a payload from a newer peer never crashes a reader.

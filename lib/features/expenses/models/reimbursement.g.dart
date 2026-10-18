@@ -61,6 +61,11 @@ const ReimbursementSchema = CollectionSchema(
       id: 8,
       name: r'sharedSpaceId',
       type: IsarType.long,
+    ),
+    r'syncGuid': PropertySchema(
+      id: 9,
+      name: r'syncGuid',
+      type: IsarType.string,
     )
   },
   estimateSize: _reimbursementEstimateSize,
@@ -69,6 +74,19 @@ const ReimbursementSchema = CollectionSchema(
   deserializeProp: _reimbursementDeserializeProp,
   idName: r'id',
   indexes: {
+    r'syncGuid': IndexSchema(
+      id: 6159741003405035971,
+      name: r'syncGuid',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'syncGuid',
+          type: IndexType.hash,
+          caseSensitive: true,
+        )
+      ],
+    ),
     r'profileId': IndexSchema(
       id: 6052971939042612300,
       name: r'profileId',
@@ -157,6 +175,7 @@ int _reimbursementEstimateSize(
     }
   }
   bytesCount += 3 + object.originYearMonth.length * 3;
+  bytesCount += 3 + object.syncGuid.length * 3;
   return bytesCount;
 }
 
@@ -175,6 +194,7 @@ void _reimbursementSerialize(
   writer.writeBool(offsets[6], object.orphaned);
   writer.writeLong(offsets[7], object.profileId);
   writer.writeLong(offsets[8], object.sharedSpaceId);
+  writer.writeString(offsets[9], object.syncGuid);
 }
 
 Reimbursement _reimbursementDeserialize(
@@ -195,6 +215,7 @@ Reimbursement _reimbursementDeserialize(
     profileId: reader.readLong(offsets[7]),
     sharedSpaceId: reader.readLongOrNull(offsets[8]),
   );
+  object.syncGuid = reader.readString(offsets[9]);
   return object;
 }
 
@@ -223,6 +244,8 @@ P _reimbursementDeserializeProp<P>(
       return (reader.readLong(offset)) as P;
     case 8:
       return (reader.readLongOrNull(offset)) as P;
+    case 9:
+      return (reader.readString(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
   }
@@ -350,6 +373,51 @@ extension ReimbursementQueryWhere
         upper: upperId,
         includeUpper: includeUpper,
       ));
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterWhereClause> syncGuidEqualTo(
+      String syncGuid) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'syncGuid',
+        value: [syncGuid],
+      ));
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterWhereClause>
+      syncGuidNotEqualTo(String syncGuid) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncGuid',
+              lower: [],
+              upper: [syncGuid],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncGuid',
+              lower: [syncGuid],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncGuid',
+              lower: [syncGuid],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncGuid',
+              lower: [],
+              upper: [syncGuid],
+              includeUpper: false,
+            ));
+      }
     });
   }
 
@@ -1572,6 +1640,142 @@ extension ReimbursementQueryFilter
       ));
     });
   }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterFilterCondition>
+      syncGuidEqualTo(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterFilterCondition>
+      syncGuidGreaterThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterFilterCondition>
+      syncGuidLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterFilterCondition>
+      syncGuidBetween(
+    String lower,
+    String upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'syncGuid',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterFilterCondition>
+      syncGuidStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterFilterCondition>
+      syncGuidEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterFilterCondition>
+      syncGuidContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterFilterCondition>
+      syncGuidMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'syncGuid',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterFilterCondition>
+      syncGuidIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'syncGuid',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterFilterCondition>
+      syncGuidIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'syncGuid',
+        value: '',
+      ));
+    });
+  }
 }
 
 extension ReimbursementQueryObject
@@ -1695,6 +1899,19 @@ extension ReimbursementQuerySortBy
       sortBySharedSpaceIdDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'sharedSpaceId', Sort.desc);
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterSortBy> sortBySyncGuid() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncGuid', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterSortBy>
+      sortBySyncGuidDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncGuid', Sort.desc);
     });
   }
 }
@@ -1828,6 +2045,19 @@ extension ReimbursementQuerySortThenBy
       return query.addSortBy(r'sharedSpaceId', Sort.desc);
     });
   }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterSortBy> thenBySyncGuid() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncGuid', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterSortBy>
+      thenBySyncGuidDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncGuid', Sort.desc);
+    });
+  }
 }
 
 extension ReimbursementQueryWhereDistinct
@@ -1888,6 +2118,13 @@ extension ReimbursementQueryWhereDistinct
       distinctBySharedSpaceId() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'sharedSpaceId');
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QDistinct> distinctBySyncGuid(
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'syncGuid', caseSensitive: caseSensitive);
     });
   }
 }
@@ -1952,6 +2189,12 @@ extension ReimbursementQueryProperty
   QueryBuilder<Reimbursement, int?, QQueryOperations> sharedSpaceIdProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'sharedSpaceId');
+    });
+  }
+
+  QueryBuilder<Reimbursement, String, QQueryOperations> syncGuidProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'syncGuid');
     });
   }
 }

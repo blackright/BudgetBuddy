@@ -15,6 +15,7 @@ import '../../../core/providers/budget_context_provider.dart';
 import '../../engine/providers/rate_registry_provider.dart';
 import '../../expenses/models/reimbursement.dart';
 import '../../finance/repositories/income_carry.dart';
+import '../domain/shared_member_key.dart';
 import 'space_role_guard.dart';
 
 /// The resolved income of the month being moved, in the pot that owns it.
@@ -513,12 +514,26 @@ class MonthMoveOperations {
         .findAll();
   }
 
-  Future<SharedMember?> _member(int spaceId, int profileId) =>
-      _isar.sharedMembers
-          .filter()
-          .sharedSpaceIdEqualTo(spaceId)
-          .profileIdEqualTo(profileId)
-          .findFirst();
+  /// The acting profile's membership row for [spaceId], or `null` (T060).
+  ///
+  /// The write paths key every membership row by the **uniform** identity key
+  /// ([sharedMemberKeyForLocalProfile]), so resolve it and match either that key
+  /// or the raw [profileId] — the pre-012 fallback — the same dual-key read the
+  /// spaces providers use. Matching only the raw id locked the Owner out of
+  /// their own brand-new space: no row was found, so the edit gate refused.
+  Future<SharedMember?> _member(int spaceId, int profileId) async {
+    final key = await sharedMemberKeyForLocalProfile(_isar, profileId);
+    final members = await _isar.sharedMembers
+        .filter()
+        .sharedSpaceIdEqualTo(spaceId)
+        .findAll();
+    for (final member in members) {
+      if (member.profileId == key || member.profileId == profileId) {
+        return member;
+      }
+    }
+    return null;
+  }
 }
 
 /// The app-wide month-move operations, with the live rate registry so a sealed

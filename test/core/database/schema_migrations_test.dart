@@ -1,8 +1,13 @@
 import 'package:budget_buddy/core/database/schema_migrations.dart';
+import 'package:budget_buddy/core/models/change_record.dart';
+import 'package:budget_buddy/core/models/context_kind.dart';
+import 'package:budget_buddy/core/models/expense.dart';
 import 'package:budget_buddy/core/models/live_rate_set.dart';
 import 'package:budget_buddy/core/models/medical_bill.dart';
 import 'package:budget_buddy/core/models/month_rate_seal.dart';
 import 'package:budget_buddy/core/models/monthly_budget.dart';
+import 'package:budget_buddy/core/models/shared_space.dart';
+import 'package:budget_buddy/core/models/user_profile.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../features/medical/repositories/medical_test_harness.dart';
@@ -236,6 +241,104 @@ void main() {
       expect(afterFirst!.currency, 'usd');
       expect(afterSecond!.currency, 'usd');
       expect(await harness.schemaStamps(), hasLength(1));
+    });
+
+    final guidV4 = RegExp(
+      r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-'
+      r'[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+    );
+
+    test('step 17 stamps a device-independent syncGuid on legacy rows',
+        () async {
+      // A row written before the column existed reads back with an empty GUID.
+      final budget = MonthlyBudget()
+        ..yearMonth = '2026-08'
+        ..baseAvailableAmount = 0
+        ..currency = 'usd'
+        ..createdAt = DateTime(2026)
+        ..updatedAt = DateTime(2026)
+        ..syncGuid = '';
+      final space = SharedSpace()
+        ..name = 'Legacy space'
+        ..currency = PrimaryCurrency.usd
+        ..defaultIncome = 0
+        ..createdByProfileId = 1
+        ..createdAt = DateTime(2026)
+        ..syncGuid = '';
+      final expense = Expense(
+        profileId: 1,
+        yearMonth: '2026-08',
+        title: 'Legacy',
+        amount: 100,
+        currency: 'usd',
+        categoryId: 'general',
+        date: DateTime(2026, 8, 1),
+        budgetId: 0,
+      )..syncGuid = '';
+      await harness.isar.writeTxn(() async {
+        await harness.isar.monthlyBudgets.put(budget);
+        await harness.isar.sharedSpaces.put(space);
+        await harness.isar.expenses.put(expense);
+      });
+
+      await harness.runMigrations();
+
+      final guids = [
+        (await harness.isar.monthlyBudgets.get(budget.id))!.syncGuid,
+        (await harness.isar.sharedSpaces.get(space.id))!.syncGuid,
+        (await harness.isar.expenses.get(expense.id))!.syncGuid,
+      ];
+      for (final guid in guids) {
+        expect(guid, isNotEmpty, reason: 'step 17 fills an empty GUID');
+        expect(guid, matches(guidV4), reason: 'a fresh RFC-4122 v4 GUID');
+      }
+      expect(guids.toSet(), hasLength(3),
+          reason: 'distinct rows never collapse onto one identity');
+    });
+
+    test('step 17 leaves an already-stamped GUID untouched (idempotent)',
+        () async {
+      final budget = MonthlyBudget()
+        ..yearMonth = '2026-09'
+        ..baseAvailableAmount = 0
+        ..currency = 'usd'
+        ..createdAt = DateTime(2026)
+        ..updatedAt = DateTime(2026)
+        ..syncGuid = 'fixed-guid';
+
+      await harness.isar.writeTxn(() async {
+        await harness.isar.monthlyBudgets.put(budget);
+      });
+
+      await harness.runMigrations();
+      await harness.runMigrations();
+
+      final after = (await harness.isar.monthlyBudgets.get(budget.id))!;
+      expect(after.syncGuid, 'fixed-guid');
+    });
+
+    test('step 17 clears the local change log (identity was reshaped)',
+        () async {
+      final record = ChangeRecord()
+        ..contextKind = ContextKind.shared
+        ..contextLocalId = 1
+        ..entityType = 'Expense'
+        ..entityLocalId = 1
+        ..op = 'upsert'
+        ..hlcMillis = 1
+        ..hlcCounter = 0
+        ..deviceId = 'dev'
+        ..authorIdentityId = 'fp'
+        ..signature = 'sig'
+        ..createdAt = DateTime(2026);
+      await harness.isar.writeTxn(() async {
+        await harness.isar.changeRecords.put(record);
+      });
+      expect(await harness.isar.changeRecords.count(), 1);
+
+      await harness.runMigrations();
+
+      expect(await harness.isar.changeRecords.count(), 0);
     });
   });
 }

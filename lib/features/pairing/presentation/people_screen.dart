@@ -2,16 +2,27 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/providers/active_profile_provider.dart';
 import '../../../core/providers/identity_provider.dart';
+import '../../spaces/repositories/space_role_guard.dart';
+import '../../spaces/repositories/spaces_repository.dart';
+import '../domain/pairing_protocol.dart';
 import '../providers/pairing_providers.dart';
 import 'scan_identity_code_screen.dart';
 import 'show_identity_code_screen.dart';
+
+/// The single action on a contact row.
+enum _ContactAction { remove }
 
 /// US7 (T062): the global **People** list.
 ///
 /// This is the single place to see everyone this device knows and to become
 /// contacts with someone new — reachable from Settings with **no active space**,
 /// so pairing is no longer trapped inside a space (T063).
+///
+/// It is also where a person is **removed** (T077). Removal is guarded by a
+/// confirmation dialog on purpose: forgetting someone stops sync with them, and
+/// a single careless tap should never do that.
 class PeopleScreen extends ConsumerWidget {
   const PeopleScreen({super.key});
 
@@ -24,6 +35,91 @@ class PeopleScreen extends ConsumerWidget {
       Navigator.of(context, rootNavigator: true).push(
         MaterialPageRoute<void>(builder: (_) => const ScanIdentityCodeScreen()),
       );
+
+  /// Removes [contact] from this phone, behind a confirmation dialog.
+  ///
+  /// Two things happen, in this order: their membership is revoked in every
+  /// shared space where the acting profile is the Owner (so the other phone
+  /// learns about it through the change log), then the peer row itself is
+  /// forgotten so the person leaves the list and stops syncing (T077). Spaces
+  /// the acting profile does not own are left alone and named in the SnackBar,
+  /// so the outcome is never silently over- or under-stated.
+  Future<void> _remove(
+    BuildContext context,
+    WidgetRef ref,
+    Contact contact,
+    int? actingProfileId,
+  ) async {
+    final peer = contact.peer;
+    final names = contact.sharedSpaceNames;
+    final name = peer.peerUsername.isEmpty ? 'this person' : peer.peerUsername;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Remove this person?'),
+        content: Text(
+          'You will stop exchanging changes with '
+          '${peer.peerUsername} (${peer.peerFingerprint}), and they leave your '
+          'People list. The data you already have stays on this phone.'
+          '${names.isEmpty ? '' : '\n\nWhere you are the Owner, they are also removed from: ${names.join(', ')}.'}',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const Key('confirmRemovePersonButton'),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    final refused = <String>[];
+    final repo = ref.read(spacesRepositoryProvider);
+    final memberKey = remoteProfileIdFor(peer.peerIdentityId);
+    for (var i = 0; i < contact.sharedSpaceIds.length; i++) {
+      final spaceName = i < names.length ? names[i] : 'a shared space';
+      if (actingProfileId == null) {
+        // No acting profile means no authority anywhere: forget them here, but
+        // never pretend the memberships were revoked.
+        refused.add(spaceName);
+        continue;
+      }
+      try {
+        await repo.removeMember(
+          actingProfileId: actingProfileId,
+          spaceId: contact.sharedSpaceIds[i],
+          profileId: memberKey,
+        );
+      } on UnauthorizedSpaceAction {
+        // Not the Owner (or the space's last Owner): forget them here, but
+        // leave the membership where we have no authority to change it.
+        refused.add(spaceName);
+      } on ArgumentError {
+        // Already not a member (e.g. removed from their own phone): done.
+      }
+    }
+
+    await ref
+        .read(pairingServiceProvider)
+        ?.forgetPeer(peerIdentityId: peer.peerIdentityId);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          refused.isEmpty
+              ? 'Removed $name.'
+              : 'Removed $name here. You are not the Owner of '
+                  '${refused.join(', ')}, so they are still a member there.',
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -45,6 +141,10 @@ class PeopleScreen extends ConsumerWidget {
 
     final format = DateFormat.yMMMd().add_jm();
     final contacts = ref.watch(contactsProvider).value ?? const <Contact>[];
+    // Watched (not read lazily) so the acting profile is already resolved by the
+    // time the menu opens: a lazily-read stream provider would still be loading
+    // and the revocations would silently be skipped as "not the Owner".
+    final actingProfileId = ref.watch(actingProfileIdProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('People')),
@@ -77,6 +177,22 @@ class PeopleScreen extends ConsumerWidget {
                             'Paired ${format.format(peer.pairedAt.toLocal())}'
                                 '${peer.lastSeenAt == null ? '' : ' · Last seen ${format.format(peer.lastSeenAt!.toLocal())}'}',
                           ].join('\n'),
+                        ),
+                        trailing: PopupMenuButton<_ContactAction>(
+                          key: Key('peopleContactMenu_${peer.peerIdentityId}'),
+                          tooltip: 'Manage person',
+                          onSelected: (action) {
+                            if (action == _ContactAction.remove) {
+                              _remove(context, ref, contact, actingProfileId);
+                            }
+                          },
+                          itemBuilder: (menuContext) => [
+                            PopupMenuItem<_ContactAction>(
+                              key: Key('removePerson_${peer.peerIdentityId}'),
+                              value: _ContactAction.remove,
+                              child: const Text('Remove person'),
+                            ),
+                          ],
                         ),
                       );
                     },

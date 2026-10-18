@@ -335,6 +335,7 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
       if (providerId == null && typedProvider.isNotEmpty) {
         final provider = await repo.findOrCreateProvider(
           profileId: profileId,
+          sharedSpaceId: billContext.sharedSpaceId,
           name: typedProvider,
         );
         providerId = provider.id;
@@ -345,6 +346,7 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
       if (memberId == null && typedMember.isNotEmpty) {
         final member = await repo.saveFamilyMember(
           profileId: profileId,
+          sharedSpaceId: billContext.sharedSpaceId,
           name: typedMember,
           relation: 'Family',
         );
@@ -362,7 +364,10 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
         ..billPhotoPath = _billPhotoPath
         ..insurerReplyPath = _insurerReplyPath
         ..serviceDate = _serviceDate
-        ..profileId = profileId
+        // FR-013: the context owns the row, so a shared bill is keyed on the
+        // space (`billContext.profileId` is 0 for a space) and can never be
+        // pinned to a personal profile.
+        ..profileId = billContext.profileId
         ..currency = _currencyCode.code
         ..state = _state;
 

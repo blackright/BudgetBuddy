@@ -60,6 +60,9 @@ class CategoryListScreen extends ConsumerWidget {
         error: (err, stack) => Center(child: Text('Error: $err')),
       ),
       floatingActionButton: FloatingActionButton(
+        // Distinct from the Expenses FAB: both routes can be on stage at once
+        // during a push, and sharing the default tag would throw (T081).
+        heroTag: 'categoriesAddFab',
         onPressed: () {
           context.push('/categories/edit');
         },

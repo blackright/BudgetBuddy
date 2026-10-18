@@ -6,6 +6,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../../../core/database/isar_helper.dart';
 import '../../../core/models/shared_member.dart';
 import '../../../core/providers/identity_provider.dart';
+import '../../identity/providers/device_key_session.dart';
 import '../../sync/domain/hlc.dart';
 import '../../sync/repositories/change_signer.dart';
 import '../domain/pairing_protocol.dart';
@@ -54,7 +55,11 @@ class _PairDeviceScreenState extends ConsumerState<PairDeviceScreen> {
       _warn('Create your identity first.');
       return null;
     }
-    final keyPair = await ref.read(unlockedKeyPairProvider.future);
+    // A prompt the user cancels leaves the session retryable, so pressing the
+    // button again asks once more instead of failing forever (T073).
+    final keyPair = await ref
+        .read(deviceKeySessionProvider.notifier)
+        .require(reason: 'Pair with a device');
     if (keyPair == null) {
       _warn('Your identity stayed locked, so nothing was shared.');
       return null;
@@ -142,13 +147,17 @@ class _PairDeviceScreenState extends ConsumerState<PairDeviceScreen> {
       if (!mounted) return;
       final confirmed = await _confirmScanned(payload);
       if (confirmed != true || !mounted) return;
-      // The claim travels to the presenter over the LAN transport; until the
-      // exchange loop is wired this stops at a clear success message.
-      service.claimFrom(payload);
+      // A space code only carries the *invite*: completing it needs the claim to
+      // reach the presenter's device, and that LAN meeting flow is not wired yet
+      // (the claim would be discarded here). Say so plainly instead of implying
+      // the two phones are paired — an implied-but-missing pairing is exactly
+      // the bug where a phone "paired" yet never received the space.
       setState(() {
         _scanError = null;
-        _status = 'Confirmed ${payload.username} (${payload.fingerprint}). '
-            'Keep both devices close to finish.';
+        _status = 'That is ${payload.username} (${payload.fingerprint}). '
+            'This code cannot finish here yet — open Settings → People and '
+            "scan each other's codes to become contacts, then add them from "
+            "the space's Invite button.";
       });
     } on PairingException catch (error) {
       _fail(error.message);

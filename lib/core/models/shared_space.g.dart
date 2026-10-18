@@ -47,6 +47,11 @@ const SharedSpaceSchema = CollectionSchema(
       id: 5,
       name: r'name',
       type: IsarType.string,
+    ),
+    r'syncGuid': PropertySchema(
+      id: 6,
+      name: r'syncGuid',
+      type: IsarType.string,
     )
   },
   estimateSize: _sharedSpaceEstimateSize,
@@ -54,7 +59,21 @@ const SharedSpaceSchema = CollectionSchema(
   deserialize: _sharedSpaceDeserialize,
   deserializeProp: _sharedSpaceDeserializeProp,
   idName: r'id',
-  indexes: {},
+  indexes: {
+    r'syncGuid': IndexSchema(
+      id: 6159741003405035971,
+      name: r'syncGuid',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'syncGuid',
+          type: IndexType.hash,
+          caseSensitive: true,
+        )
+      ],
+    )
+  },
   links: {},
   embeddedSchemas: {},
   getId: _sharedSpaceGetId,
@@ -71,6 +90,7 @@ int _sharedSpaceEstimateSize(
   var bytesCount = offsets.last;
   bytesCount += 3 + object.avatar.length * 3;
   bytesCount += 3 + object.name.length * 3;
+  bytesCount += 3 + object.syncGuid.length * 3;
   return bytesCount;
 }
 
@@ -86,6 +106,7 @@ void _sharedSpaceSerialize(
   writer.writeByte(offsets[3], object.currency.index);
   writer.writeLong(offsets[4], object.defaultIncome);
   writer.writeString(offsets[5], object.name);
+  writer.writeString(offsets[6], object.syncGuid);
 }
 
 SharedSpace _sharedSpaceDeserialize(
@@ -104,6 +125,7 @@ SharedSpace _sharedSpaceDeserialize(
   object.defaultIncome = reader.readLong(offsets[4]);
   object.id = id;
   object.name = reader.readString(offsets[5]);
+  object.syncGuid = reader.readString(offsets[6]);
   return object;
 }
 
@@ -126,6 +148,8 @@ P _sharedSpaceDeserializeProp<P>(
     case 4:
       return (reader.readLong(offset)) as P;
     case 5:
+      return (reader.readString(offset)) as P;
+    case 6:
       return (reader.readString(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -232,6 +256,51 @@ extension SharedSpaceQueryWhere
         upper: upperId,
         includeUpper: includeUpper,
       ));
+    });
+  }
+
+  QueryBuilder<SharedSpace, SharedSpace, QAfterWhereClause> syncGuidEqualTo(
+      String syncGuid) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'syncGuid',
+        value: [syncGuid],
+      ));
+    });
+  }
+
+  QueryBuilder<SharedSpace, SharedSpace, QAfterWhereClause> syncGuidNotEqualTo(
+      String syncGuid) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncGuid',
+              lower: [],
+              upper: [syncGuid],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncGuid',
+              lower: [syncGuid],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncGuid',
+              lower: [syncGuid],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncGuid',
+              lower: [],
+              upper: [syncGuid],
+              includeUpper: false,
+            ));
+      }
     });
   }
 }
@@ -778,6 +847,141 @@ extension SharedSpaceQueryFilter
       ));
     });
   }
+
+  QueryBuilder<SharedSpace, SharedSpace, QAfterFilterCondition> syncGuidEqualTo(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SharedSpace, SharedSpace, QAfterFilterCondition>
+      syncGuidGreaterThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SharedSpace, SharedSpace, QAfterFilterCondition>
+      syncGuidLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SharedSpace, SharedSpace, QAfterFilterCondition> syncGuidBetween(
+    String lower,
+    String upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'syncGuid',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SharedSpace, SharedSpace, QAfterFilterCondition>
+      syncGuidStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SharedSpace, SharedSpace, QAfterFilterCondition>
+      syncGuidEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SharedSpace, SharedSpace, QAfterFilterCondition>
+      syncGuidContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SharedSpace, SharedSpace, QAfterFilterCondition> syncGuidMatches(
+      String pattern,
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'syncGuid',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SharedSpace, SharedSpace, QAfterFilterCondition>
+      syncGuidIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'syncGuid',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<SharedSpace, SharedSpace, QAfterFilterCondition>
+      syncGuidIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'syncGuid',
+        value: '',
+      ));
+    });
+  }
 }
 
 extension SharedSpaceQueryObject
@@ -860,6 +1064,18 @@ extension SharedSpaceQuerySortBy
   QueryBuilder<SharedSpace, SharedSpace, QAfterSortBy> sortByNameDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'name', Sort.desc);
+    });
+  }
+
+  QueryBuilder<SharedSpace, SharedSpace, QAfterSortBy> sortBySyncGuid() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncGuid', Sort.asc);
+    });
+  }
+
+  QueryBuilder<SharedSpace, SharedSpace, QAfterSortBy> sortBySyncGuidDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncGuid', Sort.desc);
     });
   }
 }
@@ -952,6 +1168,18 @@ extension SharedSpaceQuerySortThenBy
       return query.addSortBy(r'name', Sort.desc);
     });
   }
+
+  QueryBuilder<SharedSpace, SharedSpace, QAfterSortBy> thenBySyncGuid() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncGuid', Sort.asc);
+    });
+  }
+
+  QueryBuilder<SharedSpace, SharedSpace, QAfterSortBy> thenBySyncGuidDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncGuid', Sort.desc);
+    });
+  }
 }
 
 extension SharedSpaceQueryWhereDistinct
@@ -992,6 +1220,13 @@ extension SharedSpaceQueryWhereDistinct
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'name', caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<SharedSpace, SharedSpace, QDistinct> distinctBySyncGuid(
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'syncGuid', caseSensitive: caseSensitive);
     });
   }
 }
@@ -1039,6 +1274,12 @@ extension SharedSpaceQueryProperty
   QueryBuilder<SharedSpace, String, QQueryOperations> nameProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'name');
+    });
+  }
+
+  QueryBuilder<SharedSpace, String, QQueryOperations> syncGuidProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'syncGuid');
     });
   }
 }

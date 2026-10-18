@@ -5,9 +5,11 @@ import 'package:go_router/go_router.dart';
 import '../../../core/models/expense.dart';
 import '../../../core/providers/active_budget_provider.dart';
 import '../../../core/providers/active_profile_provider.dart';
+import '../../../core/providers/active_space_provider.dart';
 import '../../../core/providers/selected_month_provider.dart';
 import '../../../shared/presentation/widgets/context_banner.dart';
 import '../../../shared/presentation/widgets/month_incomplete_banner.dart';
+import '../../../shared/presentation/widgets/sync_status_chip.dart';
 import '../../analytics/presentation/widgets/analytics_mini_charts.dart';
 import '../../engine/currency_resolution.dart';
 import '../../spaces/presentation/move_month_sheet.dart';
@@ -31,6 +33,7 @@ class DashboardScreen extends ConsumerWidget {
     final activeBudget = ref.watch(activeBudgetProvider).value;
     final profile = ref.watch(activeProfileProvider).valueOrNull;
     final canEdit = ref.watch(activeContextCanEditProvider);
+    final activeSpaceId = ref.watch(activeSpaceIdProvider);
     final display =
         resolveDisplayCurrency(month: activeBudget, profile: profile);
     final symbol = display.symbol;
@@ -38,6 +41,27 @@ class DashboardScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const MonthNavigator(),
+        // FR-008/US3 AC6: the space's sync state belongs on the month screen,
+        // visible without opening settings. It cannot share the title line — the
+        // month navigator already fills it (288 logical px of the ~232 a 360 px
+        // phone leaves), so the badge sits directly **under** the month, still
+        // inside the app bar, so it never scrolls away. Only a shared space has a
+        // peer, so a personal month keeps the shorter app bar.
+        bottom: activeSpaceId == null
+            ? null
+            : PreferredSize(
+                preferredSize: const Size.fromHeight(30),
+                child: SizedBox(
+                  height: 30,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 12),
+                      child: SyncStatusChip(spaceId: activeSpaceId),
+                    ),
+                  ),
+                ),
+              ),
         actions: [
           if (activeBudget != null && canEdit) const MonthConvertToMenu(),
           if (activeBudget != null && canEdit)

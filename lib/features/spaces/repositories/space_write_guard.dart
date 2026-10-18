@@ -4,6 +4,7 @@ import 'package:isar/isar.dart';
 import '../../../core/database/isar_helper.dart';
 import '../../../core/models/month_rate_seal.dart';
 import '../../../core/models/shared_member.dart';
+import '../domain/shared_member_key.dart';
 import 'space_role_guard.dart';
 
 /// Database-backed companion to [SpaceAccessGuard] (contracts/space-roles §2–3).
@@ -23,13 +24,25 @@ class SpaceWriteGuard {
 
   /// The acting profile's membership row in [spaceId], or `null` when the
   /// profile is not a member (which every gate treats as a refusal).
-  Future<SharedMember?> memberOf(int spaceId, int? profileId) {
-    if (profileId == null) return Future.value(null);
-    return _isar.sharedMembers
+  ///
+  /// The write paths key every membership row by the **uniform** identity key
+  /// ([sharedMemberKeyForLocalProfile]), so resolve it and match either that key
+  /// or the raw [profileId] — the pre-012 fallback — the same dual-key read the
+  /// spaces providers use (T060). Matching only the raw id found no row and
+  /// refused every shared write for an identity-keyed Owner.
+  Future<SharedMember?> memberOf(int spaceId, int? profileId) async {
+    if (profileId == null) return null;
+    final key = await sharedMemberKeyForLocalProfile(_isar, profileId);
+    final members = await _isar.sharedMembers
         .filter()
         .sharedSpaceIdEqualTo(spaceId)
-        .profileIdEqualTo(profileId)
-        .findFirst();
+        .findAll();
+    for (final member in members) {
+      if (member.profileId == key || member.profileId == profileId) {
+        return member;
+      }
+    }
+    return null;
   }
 
   /// True when a `MonthRateSeal` row exists for [yearMonth] — the app's single

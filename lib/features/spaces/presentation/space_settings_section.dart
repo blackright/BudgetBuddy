@@ -23,6 +23,14 @@ String _roleLabel(SharedMemberRole role) => switch (role) {
       SharedMemberRole.viewer => 'Viewer',
     };
 
+/// The Owner-only actions on a member row (T079).
+///
+/// Honoured in `onSelected` rather than `PopupMenuItem.onTap`: `onSelected`
+/// runs after the menu route has settled, so a dialog opened from it is not
+/// racing the popup's own dismissal, and it keeps every member action in one
+/// switch that a test can reason about.
+enum _MemberAction { remove, makeOwner }
+
 /// Owner-only rename dialog. Stateful: owns its controller (profile-dialog
 /// discipline, T026 regression).
 class _RenameSpaceDialog extends StatefulWidget {
@@ -245,15 +253,10 @@ class SpaceSettingsSection extends ConsumerWidget {
     final target = await showDialog<int>(
       context: context,
       builder: (_) {
-        final profiles =
-            ref.read(profilesProvider).value ?? const <UserProfile>[];
-        final names = {
-          for (final profile in profiles) profile.id: profile.name
-        };
         return _TransferDialog(
           members: members,
           currentOwnerId: profileId,
-          names: names,
+          names: ref.read(memberDisplayNamesProvider),
         );
       },
     );
@@ -263,6 +266,61 @@ class SpaceSettingsSection extends ConsumerWidget {
           spaceId: space.id,
           newOwnerProfileId: target,
         );
+  }
+
+  /// Owner-only member removal, behind a confirmation (T079).
+  ///
+  /// The dialog exists so a stray tap can never drop somebody from a shared
+  /// space: the money they put in stays in the space's months, and only their
+  /// access goes away.
+  Future<void> _removeMember(
+    BuildContext context,
+    WidgetRef ref,
+    SharedMember member,
+  ) async {
+    final space = ref.read(activeSpaceProvider).value;
+    final myRole = ref.read(activeSpaceMyRoleProvider);
+    if (space == null || myRole == null) return;
+
+    final names = ref.read(memberDisplayNamesProvider);
+    final name = names[member.profileId] ?? 'This member';
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Remove this member?'),
+        content: Text(
+          '$name loses access to ${space.name} on their phone. Money already '
+          'in the space stays there, and you can invite them again later.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const Key('confirmRemoveMemberButton'),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    try {
+      await ref.read(spacesRepositoryProvider).removeMember(
+            actingProfileId: myRole.profileId,
+            spaceId: space.id,
+            profileId: member.profileId,
+          );
+    } on UnauthorizedSpaceAction catch (error) {
+      // Show the rule that actually fired (e.g. the last-Owner guard) instead
+      // of guessing at one reason for every refusal (T062).
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(error.message)));
+    }
   }
 
   Future<void> _delete(BuildContext context, WidgetRef ref) async {
@@ -314,10 +372,7 @@ class SpaceSettingsSection extends ConsumerWidget {
     final isOwner = myRole?.role == SharedMemberRole.owner;
     final members =
         ref.watch(activeSpaceMembersProvider).value ?? const <SharedMember>[];
-    final profiles = ref.watch(profilesProvider).value ?? const <UserProfile>[];
-    final profileName = {
-      for (final profile in profiles) profile.id: profile.name,
-    };
+    final memberNames = ref.watch(memberDisplayNamesProvider);
 
     final membersCard = Card(
       child: Column(
@@ -333,39 +388,28 @@ class SpaceSettingsSection extends ConsumerWidget {
               key: Key('memberTile_${member.profileId}'),
               dense: true,
               leading: const CircleAvatar(child: Icon(Icons.person_outline)),
-              title: Text(profileName[member.profileId] ?? 'Profile'),
+              title: Text(memberNames[member.profileId] ?? 'Profile'),
               subtitle: Text(_roleLabel(member.role)),
               trailing: isOwner && member.profileId != myRole?.profileId
-                  ? PopupMenuButton<Object>(
+                  ? PopupMenuButton<_MemberAction>(
                       tooltip: 'Manage member',
-                      onSelected: (action) {},
+                      onSelected: (action) {
+                        switch (action) {
+                          case _MemberAction.remove:
+                            _removeMember(context, ref, member);
+                          case _MemberAction.makeOwner:
+                            _transfer(context, ref);
+                        }
+                      },
                       itemBuilder: (context) => [
-                        PopupMenuItem<Object>(
+                        PopupMenuItem<_MemberAction>(
                           key: Key('removeMember_${member.profileId}'),
-                          onTap: () async {
-                            final repo = ref.read(spacesRepositoryProvider);
-                            try {
-                              await repo.removeMember(
-                                actingProfileId: myRole!.profileId,
-                                spaceId: space.id,
-                                profileId: member.profileId,
-                              );
-                            } on UnauthorizedSpaceAction {
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content:
-                                        Text('Cannot remove the only Owner.'),
-                                  ),
-                                );
-                              }
-                            }
-                          },
+                          value: _MemberAction.remove,
                           child: const Text('Remove'),
                         ),
-                        PopupMenuItem<Object>(
+                        PopupMenuItem<_MemberAction>(
                           key: Key('makeOwner_${member.profileId}'),
-                          onTap: () => _transfer(context, ref),
+                          value: _MemberAction.makeOwner,
                           child: const Text('Make this member the Owner'),
                         ),
                       ],
@@ -464,13 +508,13 @@ class SpaceSettingsSection extends ConsumerWidget {
         Card(
           child: ListTile(
             leading: Text(space.avatar, style: const TextStyle(fontSize: 28)),
-            title: Text(space.name),
+            title: Text(space.displayName),
             subtitle: Text(
               '${space.currency.code.displayName} · Our income '
               '${space.currency.code.symbol}'
               '${NumberFormat('#,##0.00').format(space.defaultIncome / space.currency.code.minorUnitsPerMajor)}',
             ),
-            trailing: const SyncStatusChip(),
+            trailing: SyncStatusChip(spaceId: space.id),
           ),
         ),
         const SizedBox(height: 8),

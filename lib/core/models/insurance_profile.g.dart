@@ -46,6 +46,11 @@ const InsuranceProfileSchema = CollectionSchema(
       id: 5,
       name: r'sharedSpaceId',
       type: IsarType.long,
+    ),
+    r'syncGuid': PropertySchema(
+      id: 6,
+      name: r'syncGuid',
+      type: IsarType.string,
     )
   },
   estimateSize: _insuranceProfileEstimateSize,
@@ -54,6 +59,19 @@ const InsuranceProfileSchema = CollectionSchema(
   deserializeProp: _insuranceProfileDeserializeProp,
   idName: r'id',
   indexes: {
+    r'syncGuid': IndexSchema(
+      id: 6159741003405035971,
+      name: r'syncGuid',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'syncGuid',
+          type: IndexType.hash,
+          caseSensitive: true,
+        )
+      ],
+    ),
     r'profileId': IndexSchema(
       id: 6052971939042612300,
       name: r'profileId',
@@ -113,6 +131,7 @@ int _insuranceProfileEstimateSize(
       bytesCount += 3 + value.length * 3;
     }
   }
+  bytesCount += 3 + object.syncGuid.length * 3;
   return bytesCount;
 }
 
@@ -128,6 +147,7 @@ void _insuranceProfileSerialize(
   writer.writeString(offsets[3], object.planSummary);
   writer.writeLong(offsets[4], object.profileId);
   writer.writeLong(offsets[5], object.sharedSpaceId);
+  writer.writeString(offsets[6], object.syncGuid);
 }
 
 InsuranceProfile _insuranceProfileDeserialize(
@@ -143,6 +163,7 @@ InsuranceProfile _insuranceProfileDeserialize(
   object.planName = reader.readStringOrNull(offsets[2]);
   object.profileId = reader.readLongOrNull(offsets[4]);
   object.sharedSpaceId = reader.readLongOrNull(offsets[5]);
+  object.syncGuid = reader.readString(offsets[6]);
   return object;
 }
 
@@ -165,6 +186,8 @@ P _insuranceProfileDeserializeProp<P>(
       return (reader.readLongOrNull(offset)) as P;
     case 5:
       return (reader.readLongOrNull(offset)) as P;
+    case 6:
+      return (reader.readString(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
   }
@@ -275,6 +298,51 @@ extension InsuranceProfileQueryWhere
         upper: upperId,
         includeUpper: includeUpper,
       ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterWhereClause>
+      syncGuidEqualTo(String syncGuid) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'syncGuid',
+        value: [syncGuid],
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterWhereClause>
+      syncGuidNotEqualTo(String syncGuid) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncGuid',
+              lower: [],
+              upper: [syncGuid],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncGuid',
+              lower: [syncGuid],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncGuid',
+              lower: [syncGuid],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncGuid',
+              lower: [],
+              upper: [syncGuid],
+              includeUpper: false,
+            ));
+      }
     });
   }
 
@@ -1242,6 +1310,142 @@ extension InsuranceProfileQueryFilter
       ));
     });
   }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
+      syncGuidEqualTo(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
+      syncGuidGreaterThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
+      syncGuidLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
+      syncGuidBetween(
+    String lower,
+    String upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'syncGuid',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
+      syncGuidStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
+      syncGuidEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
+      syncGuidContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
+      syncGuidMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'syncGuid',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
+      syncGuidIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'syncGuid',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterFilterCondition>
+      syncGuidIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'syncGuid',
+        value: '',
+      ));
+    });
+  }
 }
 
 extension InsuranceProfileQueryObject
@@ -1333,6 +1537,20 @@ extension InsuranceProfileQuerySortBy
       sortBySharedSpaceIdDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'sharedSpaceId', Sort.desc);
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterSortBy>
+      sortBySyncGuid() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncGuid', Sort.asc);
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterSortBy>
+      sortBySyncGuidDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncGuid', Sort.desc);
     });
   }
 }
@@ -1435,6 +1653,20 @@ extension InsuranceProfileQuerySortThenBy
       return query.addSortBy(r'sharedSpaceId', Sort.desc);
     });
   }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterSortBy>
+      thenBySyncGuid() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncGuid', Sort.asc);
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QAfterSortBy>
+      thenBySyncGuidDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncGuid', Sort.desc);
+    });
+  }
 }
 
 extension InsuranceProfileQueryWhereDistinct
@@ -1478,6 +1710,13 @@ extension InsuranceProfileQueryWhereDistinct
       distinctBySharedSpaceId() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'sharedSpaceId');
+    });
+  }
+
+  QueryBuilder<InsuranceProfile, InsuranceProfile, QDistinct>
+      distinctBySyncGuid({bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'syncGuid', caseSensitive: caseSensitive);
     });
   }
 }
@@ -1529,6 +1768,12 @@ extension InsuranceProfileQueryProperty
       return query.addPropertyName(r'sharedSpaceId');
     });
   }
+
+  QueryBuilder<InsuranceProfile, String, QQueryOperations> syncGuidProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'syncGuid');
+    });
+  }
 }
 
 // coverage:ignore-file
@@ -1561,6 +1806,11 @@ const FamilyMemberSchema = CollectionSchema(
       id: 3,
       name: r'sharedSpaceId',
       type: IsarType.long,
+    ),
+    r'syncGuid': PropertySchema(
+      id: 4,
+      name: r'syncGuid',
+      type: IsarType.string,
     )
   },
   estimateSize: _familyMemberEstimateSize,
@@ -1569,6 +1819,19 @@ const FamilyMemberSchema = CollectionSchema(
   deserializeProp: _familyMemberDeserializeProp,
   idName: r'id',
   indexes: {
+    r'syncGuid': IndexSchema(
+      id: 6159741003405035971,
+      name: r'syncGuid',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'syncGuid',
+          type: IndexType.hash,
+          caseSensitive: true,
+        )
+      ],
+    ),
     r'profileId': IndexSchema(
       id: 6052971939042612300,
       name: r'profileId',
@@ -1612,6 +1875,7 @@ int _familyMemberEstimateSize(
   var bytesCount = offsets.last;
   bytesCount += 3 + object.name.length * 3;
   bytesCount += 3 + object.relation.length * 3;
+  bytesCount += 3 + object.syncGuid.length * 3;
   return bytesCount;
 }
 
@@ -1625,6 +1889,7 @@ void _familyMemberSerialize(
   writer.writeLong(offsets[1], object.profileId);
   writer.writeString(offsets[2], object.relation);
   writer.writeLong(offsets[3], object.sharedSpaceId);
+  writer.writeString(offsets[4], object.syncGuid);
 }
 
 FamilyMember _familyMemberDeserialize(
@@ -1639,6 +1904,7 @@ FamilyMember _familyMemberDeserialize(
   object.profileId = reader.readLongOrNull(offsets[1]);
   object.relation = reader.readString(offsets[2]);
   object.sharedSpaceId = reader.readLongOrNull(offsets[3]);
+  object.syncGuid = reader.readString(offsets[4]);
   return object;
 }
 
@@ -1657,6 +1923,8 @@ P _familyMemberDeserializeProp<P>(
       return (reader.readString(offset)) as P;
     case 3:
       return (reader.readLongOrNull(offset)) as P;
+    case 4:
+      return (reader.readString(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
   }
@@ -1766,6 +2034,51 @@ extension FamilyMemberQueryWhere
         upper: upperId,
         includeUpper: includeUpper,
       ));
+    });
+  }
+
+  QueryBuilder<FamilyMember, FamilyMember, QAfterWhereClause> syncGuidEqualTo(
+      String syncGuid) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'syncGuid',
+        value: [syncGuid],
+      ));
+    });
+  }
+
+  QueryBuilder<FamilyMember, FamilyMember, QAfterWhereClause>
+      syncGuidNotEqualTo(String syncGuid) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncGuid',
+              lower: [],
+              upper: [syncGuid],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncGuid',
+              lower: [syncGuid],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncGuid',
+              lower: [syncGuid],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncGuid',
+              lower: [],
+              upper: [syncGuid],
+              includeUpper: false,
+            ));
+      }
     });
   }
 
@@ -2470,6 +2783,142 @@ extension FamilyMemberQueryFilter
       ));
     });
   }
+
+  QueryBuilder<FamilyMember, FamilyMember, QAfterFilterCondition>
+      syncGuidEqualTo(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<FamilyMember, FamilyMember, QAfterFilterCondition>
+      syncGuidGreaterThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<FamilyMember, FamilyMember, QAfterFilterCondition>
+      syncGuidLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<FamilyMember, FamilyMember, QAfterFilterCondition>
+      syncGuidBetween(
+    String lower,
+    String upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'syncGuid',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<FamilyMember, FamilyMember, QAfterFilterCondition>
+      syncGuidStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<FamilyMember, FamilyMember, QAfterFilterCondition>
+      syncGuidEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<FamilyMember, FamilyMember, QAfterFilterCondition>
+      syncGuidContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<FamilyMember, FamilyMember, QAfterFilterCondition>
+      syncGuidMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'syncGuid',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<FamilyMember, FamilyMember, QAfterFilterCondition>
+      syncGuidIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'syncGuid',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<FamilyMember, FamilyMember, QAfterFilterCondition>
+      syncGuidIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'syncGuid',
+        value: '',
+      ));
+    });
+  }
 }
 
 extension FamilyMemberQueryObject
@@ -2526,6 +2975,18 @@ extension FamilyMemberQuerySortBy
       sortBySharedSpaceIdDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'sharedSpaceId', Sort.desc);
+    });
+  }
+
+  QueryBuilder<FamilyMember, FamilyMember, QAfterSortBy> sortBySyncGuid() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncGuid', Sort.asc);
+    });
+  }
+
+  QueryBuilder<FamilyMember, FamilyMember, QAfterSortBy> sortBySyncGuidDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncGuid', Sort.desc);
     });
   }
 }
@@ -2592,6 +3053,18 @@ extension FamilyMemberQuerySortThenBy
       return query.addSortBy(r'sharedSpaceId', Sort.desc);
     });
   }
+
+  QueryBuilder<FamilyMember, FamilyMember, QAfterSortBy> thenBySyncGuid() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncGuid', Sort.asc);
+    });
+  }
+
+  QueryBuilder<FamilyMember, FamilyMember, QAfterSortBy> thenBySyncGuidDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncGuid', Sort.desc);
+    });
+  }
 }
 
 extension FamilyMemberQueryWhereDistinct
@@ -2620,6 +3093,13 @@ extension FamilyMemberQueryWhereDistinct
       distinctBySharedSpaceId() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'sharedSpaceId');
+    });
+  }
+
+  QueryBuilder<FamilyMember, FamilyMember, QDistinct> distinctBySyncGuid(
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'syncGuid', caseSensitive: caseSensitive);
     });
   }
 }
@@ -2653,6 +3133,12 @@ extension FamilyMemberQueryProperty
   QueryBuilder<FamilyMember, int?, QQueryOperations> sharedSpaceIdProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'sharedSpaceId');
+    });
+  }
+
+  QueryBuilder<FamilyMember, String, QQueryOperations> syncGuidProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'syncGuid');
     });
   }
 }
@@ -2692,6 +3178,11 @@ const MedicalProviderSchema = CollectionSchema(
       id: 4,
       name: r'specialty',
       type: IsarType.string,
+    ),
+    r'syncGuid': PropertySchema(
+      id: 5,
+      name: r'syncGuid',
+      type: IsarType.string,
     )
   },
   estimateSize: _medicalProviderEstimateSize,
@@ -2700,6 +3191,19 @@ const MedicalProviderSchema = CollectionSchema(
   deserializeProp: _medicalProviderDeserializeProp,
   idName: r'id',
   indexes: {
+    r'syncGuid': IndexSchema(
+      id: 6159741003405035971,
+      name: r'syncGuid',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'syncGuid',
+          type: IndexType.hash,
+          caseSensitive: true,
+        )
+      ],
+    ),
     r'profileId': IndexSchema(
       id: 6052971939042612300,
       name: r'profileId',
@@ -2748,6 +3252,7 @@ int _medicalProviderEstimateSize(
       bytesCount += 3 + value.length * 3;
     }
   }
+  bytesCount += 3 + object.syncGuid.length * 3;
   return bytesCount;
 }
 
@@ -2762,6 +3267,7 @@ void _medicalProviderSerialize(
   writer.writeLong(offsets[2], object.profileId);
   writer.writeLong(offsets[3], object.sharedSpaceId);
   writer.writeString(offsets[4], object.specialty);
+  writer.writeString(offsets[5], object.syncGuid);
 }
 
 MedicalProvider _medicalProviderDeserialize(
@@ -2777,6 +3283,7 @@ MedicalProvider _medicalProviderDeserialize(
   object.profileId = reader.readLongOrNull(offsets[2]);
   object.sharedSpaceId = reader.readLongOrNull(offsets[3]);
   object.specialty = reader.readStringOrNull(offsets[4]);
+  object.syncGuid = reader.readString(offsets[5]);
   return object;
 }
 
@@ -2797,6 +3304,8 @@ P _medicalProviderDeserializeProp<P>(
       return (reader.readLongOrNull(offset)) as P;
     case 4:
       return (reader.readStringOrNull(offset)) as P;
+    case 5:
+      return (reader.readString(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
   }
@@ -2908,6 +3417,51 @@ extension MedicalProviderQueryWhere
         upper: upperId,
         includeUpper: includeUpper,
       ));
+    });
+  }
+
+  QueryBuilder<MedicalProvider, MedicalProvider, QAfterWhereClause>
+      syncGuidEqualTo(String syncGuid) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'syncGuid',
+        value: [syncGuid],
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalProvider, MedicalProvider, QAfterWhereClause>
+      syncGuidNotEqualTo(String syncGuid) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncGuid',
+              lower: [],
+              upper: [syncGuid],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncGuid',
+              lower: [syncGuid],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncGuid',
+              lower: [syncGuid],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncGuid',
+              lower: [],
+              upper: [syncGuid],
+              includeUpper: false,
+            ));
+      }
     });
   }
 
@@ -3647,6 +4201,142 @@ extension MedicalProviderQueryFilter
       ));
     });
   }
+
+  QueryBuilder<MedicalProvider, MedicalProvider, QAfterFilterCondition>
+      syncGuidEqualTo(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalProvider, MedicalProvider, QAfterFilterCondition>
+      syncGuidGreaterThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalProvider, MedicalProvider, QAfterFilterCondition>
+      syncGuidLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalProvider, MedicalProvider, QAfterFilterCondition>
+      syncGuidBetween(
+    String lower,
+    String upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'syncGuid',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalProvider, MedicalProvider, QAfterFilterCondition>
+      syncGuidStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalProvider, MedicalProvider, QAfterFilterCondition>
+      syncGuidEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalProvider, MedicalProvider, QAfterFilterCondition>
+      syncGuidContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalProvider, MedicalProvider, QAfterFilterCondition>
+      syncGuidMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'syncGuid',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalProvider, MedicalProvider, QAfterFilterCondition>
+      syncGuidIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'syncGuid',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalProvider, MedicalProvider, QAfterFilterCondition>
+      syncGuidIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'syncGuid',
+        value: '',
+      ));
+    });
+  }
 }
 
 extension MedicalProviderQueryObject
@@ -3723,6 +4413,20 @@ extension MedicalProviderQuerySortBy
       sortBySpecialtyDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'specialty', Sort.desc);
+    });
+  }
+
+  QueryBuilder<MedicalProvider, MedicalProvider, QAfterSortBy>
+      sortBySyncGuid() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncGuid', Sort.asc);
+    });
+  }
+
+  QueryBuilder<MedicalProvider, MedicalProvider, QAfterSortBy>
+      sortBySyncGuidDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncGuid', Sort.desc);
     });
   }
 }
@@ -3809,6 +4513,20 @@ extension MedicalProviderQuerySortThenBy
       return query.addSortBy(r'specialty', Sort.desc);
     });
   }
+
+  QueryBuilder<MedicalProvider, MedicalProvider, QAfterSortBy>
+      thenBySyncGuid() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncGuid', Sort.asc);
+    });
+  }
+
+  QueryBuilder<MedicalProvider, MedicalProvider, QAfterSortBy>
+      thenBySyncGuidDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncGuid', Sort.desc);
+    });
+  }
 }
 
 extension MedicalProviderQueryWhereDistinct
@@ -3845,6 +4563,13 @@ extension MedicalProviderQueryWhereDistinct
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'specialty', caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<MedicalProvider, MedicalProvider, QDistinct> distinctBySyncGuid(
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'syncGuid', caseSensitive: caseSensitive);
     });
   }
 }
@@ -3885,6 +4610,12 @@ extension MedicalProviderQueryProperty
   QueryBuilder<MedicalProvider, String?, QQueryOperations> specialtyProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'specialty');
+    });
+  }
+
+  QueryBuilder<MedicalProvider, String, QQueryOperations> syncGuidProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'syncGuid');
     });
   }
 }

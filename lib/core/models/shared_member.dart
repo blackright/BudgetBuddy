@@ -1,5 +1,7 @@
 import 'package:isar/isar.dart';
 
+import '../../features/sync/domain/sync_guid.dart';
+
 part 'shared_member.g.dart';
 
 /// A profile's membership in a shared space, with its role (FR-002, FR-005).
@@ -16,6 +18,11 @@ enum SharedMemberRole {
 @collection
 class SharedMember {
   Id id = Isar.autoIncrement;
+
+  /// Device-independent identity of this row (research R5); indexed, not unique
+  /// (uniqueness held by construction and migration step 17).
+  @Index()
+  String syncGuid = newSyncGuid();
 
   /// Links to `SharedSpace.id`.
   @Index(composite: [CompositeIndex('profileId')], unique: true, replace: true)

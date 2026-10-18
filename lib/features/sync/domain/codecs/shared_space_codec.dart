@@ -12,7 +12,7 @@ class SharedSpaceCodec extends SyncCodec<SharedSpace> {
 
   @override
   Map<String, Object?> toJson(SharedSpace value) => {
-        'id': value.id,
+        'syncGuid': value.syncGuid,
         'name': value.name,
         'avatar': value.avatar,
         'currency': value.currency.name,
@@ -23,7 +23,7 @@ class SharedSpaceCodec extends SyncCodec<SharedSpace> {
 
   @override
   SharedSpace fromJson(Map<String, Object?> json) => SharedSpace()
-    ..id = decodeInt(json['id'])
+    ..syncGuid = decodeGuid(json['syncGuid'])
     ..name = (json['name'] as String?) ?? ''
     ..avatar = (json['avatar'] as String?) ?? '👨‍👩‍👧'
     ..currency = decodeEnum(PrimaryCurrency.values, json['currency'])

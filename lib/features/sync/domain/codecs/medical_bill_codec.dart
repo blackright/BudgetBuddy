@@ -11,13 +11,8 @@ class MedicalBillCodec extends SyncCodec<MedicalBill> {
 
   @override
   Map<String, Object?> toJson(MedicalBill value) => {
-        'id': value.id,
+        'syncGuid': value.syncGuid,
         'profileId': value.profileId,
-        'sharedSpaceId': value.sharedSpaceId,
-        'linkedExpenseId': value.linkedExpenseId,
-        'familyMemberId': value.familyMemberId,
-        'providerId': value.providerId,
-        'serviceTypeId': value.serviceTypeId,
         'paymentMethod': value.paymentMethod.name,
         'patientSharePercent': value.patientSharePercent,
         'state': value.state.name,
@@ -34,13 +29,8 @@ class MedicalBillCodec extends SyncCodec<MedicalBill> {
 
   @override
   MedicalBill fromJson(Map<String, Object?> json) => MedicalBill()
-    ..id = decodeInt(json['id'])
+    ..syncGuid = decodeGuid(json['syncGuid'])
     ..profileId = decodeIntOrNull(json['profileId'])
-    ..sharedSpaceId = decodeIntOrNull(json['sharedSpaceId'])
-    ..linkedExpenseId = decodeIntOrNull(json['linkedExpenseId'])
-    ..familyMemberId = decodeIntOrNull(json['familyMemberId'])
-    ..providerId = decodeIntOrNull(json['providerId'])
-    ..serviceTypeId = decodeIntOrNull(json['serviceTypeId'])
     ..paymentMethod =
         decodeEnum(MedicalPaymentMethod.values, json['paymentMethod'])
     ..patientSharePercent = decodeDouble(json['patientSharePercent'])

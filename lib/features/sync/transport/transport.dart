@@ -53,3 +53,21 @@ abstract class Transport {
   /// Opens a connection to [peer].
   Future<TransportConnection> connect(PeerAdvertisement peer);
 }
+
+/// Advertises this device and yields connections from peers that completed the
+/// handshake (`contracts/runtime-orchestration.md` §1/§3).
+///
+/// The exchange loop accepts inbound sessions from [connections]; the real
+/// implementation is `LanTransportHost` (mDNS advertise + pinned-TLS accept) and
+/// tests supply an in-memory host over `FakeTransportHub`. There is no background
+/// service: while [stop] has run, the device accepts nothing.
+abstract class TransportHost {
+  /// Connections from peers that just proved they hold their paired key.
+  Stream<TransportConnection> get connections;
+
+  /// Begins advertising and accepting connections.
+  Future<void> start();
+
+  /// Stops advertising and closes the accept socket.
+  Future<void> stop();
+}

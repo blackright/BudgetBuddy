@@ -1,5 +1,7 @@
 import 'package:isar/isar.dart';
 
+import '../../features/sync/domain/sync_guid.dart';
+
 part 'medical_service_type.g.dart';
 
 /// User-editable classification of a medical service (FR-039, FR-040).
@@ -9,6 +11,11 @@ part 'medical_service_type.g.dart';
 @collection
 class MedicalServiceType {
   Id id = Isar.autoIncrement;
+
+  /// Device-independent identity of this row (research R5); indexed, not unique
+  /// (uniqueness held by construction and migration step 17).
+  @Index()
+  String syncGuid = newSyncGuid();
 
   /// Links to `UserProfile.id`.
   @Index()

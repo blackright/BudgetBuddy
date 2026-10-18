@@ -1,4 +1,6 @@
+import 'package:budget_buddy/core/models/context_kind.dart';
 import 'package:budget_buddy/core/models/monthly_budget.dart';
+import 'package:budget_buddy/core/models/paired_context.dart';
 import 'package:budget_buddy/core/models/shared_member.dart';
 import 'package:budget_buddy/core/models/shared_space.dart';
 import 'package:budget_buddy/core/models/user_profile.dart';
@@ -307,6 +309,19 @@ void main() {
       spaceId: spaceId,
       newOwnerProfileId: editorId,
     );
+
+    // FR-010: the space is shared with a paired peer before the leave...
+    final paired = await harness.isar.writeTxn(
+      () => harness.isar.pairedContexts.put(
+        PairedContext()
+          ..peerId = 7
+          ..contextKind = ContextKind.shared
+          ..contextLocalId = spaceId
+          ..peerRole = SharedMemberRole.editor
+          ..pairedAt = DateTime(2026),
+      ),
+    );
+
     await repo.leaveSpace(profileId: ownerId, spaceId: spaceId);
     final remaining = await harness.isar.sharedMembers
         .filter()
@@ -314,6 +329,12 @@ void main() {
         .findAll();
     expect(remaining.map((m) => m.profileId), isNot(contains(ownerId)));
     expect(remaining.map((m) => m.profileId), contains(editorId));
+
+    // ...and leaving stops delivery for it: the paired context is deactivated so
+    // the coordinator neither dials nor accepts that space any more.
+    final context = (await harness.isar.pairedContexts.get(paired))!;
+    expect(context.active, isFalse,
+        reason: "FR-010: leaving deactivates the space's paired contexts");
   });
 
   test('removeMember: Owner removes a member; the last Owner is protected',

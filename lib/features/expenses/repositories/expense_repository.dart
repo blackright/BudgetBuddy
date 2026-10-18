@@ -6,6 +6,8 @@ import '../../../core/models/expense.dart';
 import '../../../core/providers/active_profile_provider.dart';
 import '../../../core/providers/budget_context_provider.dart';
 import '../../spaces/repositories/space_write_guard.dart';
+import '../../sync/providers/sync_recorder_provider.dart';
+import '../../sync/repositories/sync_recorder.dart';
 import '../models/reimbursement.dart';
 
 final expenseRepositoryProvider = Provider<ExpenseRepository>((ref) {
@@ -13,6 +15,7 @@ final expenseRepositoryProvider = Provider<ExpenseRepository>((ref) {
     IsarHelper.instance,
     guard: ref.watch(spaceWriteGuardProvider),
     actingProfileId: ref.watch(actingProfileIdProvider),
+    syncRecorder: ref.watch(syncRecorderProvider),
   );
 });
 
@@ -21,12 +24,18 @@ class ExpenseRepository {
   final SpaceWriteGuard? _writeGuard;
   final int? _actingProfileId;
 
+  /// Appends a signed change for a paired shared context on every write
+  /// (FR-006). Optional and inert when no signer/identity is attached.
+  final SyncRecorder? _syncRecorder;
+
   ExpenseRepository(
     this._isar, {
     SpaceWriteGuard? guard,
     int? actingProfileId,
+    SyncRecorder? syncRecorder,
   })  : _writeGuard = guard,
-        _actingProfileId = actingProfileId;
+        _actingProfileId = actingProfileId,
+        _syncRecorder = syncRecorder;
 
   /// Refuses a shared write the acting profile has no right to make (role +
   /// sealed month). Personal writes (`null` space) pass through.
@@ -42,6 +51,7 @@ class ExpenseRepository {
     await _guardWrite(expense.sharedSpaceId, expense.yearMonth);
     await _isar.writeTxn(() async {
       await _isar.expenses.put(expense);
+      await _syncRecorder?.recordExpense(expense);
     });
   }
 
@@ -49,6 +59,7 @@ class ExpenseRepository {
     await _guardWrite(expense.sharedSpaceId, expense.yearMonth);
     await _isar.writeTxn(() async {
       await _isar.expenses.put(expense);
+      await _syncRecorder?.recordExpense(expense);
     });
   }
 
@@ -64,6 +75,9 @@ class ExpenseRepository {
     }
     await _isar.writeTxn(() async {
       await _isar.expenses.delete(id);
+      if (existing != null) {
+        await _syncRecorder?.recordExpenseRemoved(existing);
+      }
 
       final linked =
           await _isar.reimbursements.filter().expenseIdEqualTo(id).findAll();
@@ -72,6 +86,9 @@ class ExpenseRepository {
         reimbursement.orphaned = true;
       }
       await _isar.reimbursements.putAll(linked);
+      for (final reimbursement in linked) {
+        await _syncRecorder?.recordReimbursement(reimbursement);
+      }
     });
   }
 
@@ -189,6 +206,7 @@ class ExpenseRepository {
         }
       }
       await _isar.reimbursements.put(reimbursement);
+      await _syncRecorder?.recordReimbursement(reimbursement);
     });
   }
 
@@ -217,6 +235,9 @@ class ExpenseRepository {
     }
     await _isar.writeTxn(() async {
       await _isar.reimbursements.delete(id);
+      if (existing != null) {
+        await _syncRecorder?.recordReimbursementRemoved(existing);
+      }
     });
   }
 
@@ -241,6 +262,7 @@ class ExpenseRepository {
         ..orphaned = false
         ..originYearMonth = expense?.yearMonth ?? reimbursement.originYearMonth;
       await _isar.reimbursements.put(reimbursement);
+      await _syncRecorder?.recordReimbursement(reimbursement);
     });
   }
 

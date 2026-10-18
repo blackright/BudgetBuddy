@@ -18,7 +18,15 @@ class ChangeRecord {
   @enumerated
   late ContextKind contextKind;
 
-  /// The `SharedSpace.id`.
+  /// The owning space's `syncGuid` — the device-independent identity of the
+  /// context, and part of the signed bytes (data-model §2). Empty until stamped
+  /// (Phase 2f); `''` never matches a real GUID.
+  @Index()
+  String contextSyncGuid = '';
+
+  /// The local `SharedSpace.id` — bookkeeping only, resolved at apply time and
+  /// **excluded** from the signature so each device keeps its own value
+  /// (data-model §2).
   @Index(composite: [
     CompositeIndex('entityType'),
     CompositeIndex('entityLocalId'),
@@ -28,7 +36,14 @@ class ChangeRecord {
   /// One of the covered entity class names (data-model §2.6, FR-010).
   late String entityType;
 
-  /// The row's Isar id within the context.
+  /// The entity's `syncGuid` — the device-independent identity and the
+  /// dedupe/merge key, and part of the signed bytes (data-model §2). Empty until
+  /// stamped (Phase 2f).
+  @Index()
+  String entitySyncGuid = '';
+
+  /// The row's local Isar id within the context — bookkeeping only, resolved at
+  /// apply time and excluded from the signature (data-model §2).
   late int entityLocalId;
 
   /// `upsert` or `delete` (a delete is a retained tombstone).

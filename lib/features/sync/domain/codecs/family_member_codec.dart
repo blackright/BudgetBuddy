@@ -11,18 +11,16 @@ class FamilyMemberCodec extends SyncCodec<FamilyMember> {
 
   @override
   Map<String, Object?> toJson(FamilyMember value) => {
-        'id': value.id,
+        'syncGuid': value.syncGuid,
         'profileId': value.profileId,
-        'sharedSpaceId': value.sharedSpaceId,
         'name': value.name,
         'relation': value.relation,
       };
 
   @override
   FamilyMember fromJson(Map<String, Object?> json) => FamilyMember()
-    ..id = decodeInt(json['id'])
+    ..syncGuid = decodeGuid(json['syncGuid'])
     ..profileId = decodeIntOrNull(json['profileId'])
-    ..sharedSpaceId = decodeIntOrNull(json['sharedSpaceId'])
     ..name = (json['name'] as String?) ?? ''
     ..relation = (json['relation'] as String?) ?? '';
 }

@@ -210,4 +210,55 @@ void main() {
       expect(syncCodecs, hasLength(10));
     });
   });
+
+  group('the wire carries GUID identity, never a local id (015, FR-010)', () {
+    // Local row ids and numeric foreign keys are device-specific, so a payload
+    // must not contain them; identity travels as `syncGuid` (the row's own) and
+    // `*SyncGuid` (its references). `profileId` is the deliberate exception: it
+    // is the stable membership key, not a row id (entity-identity §4 R3).
+    const forbidden = {
+      'id',
+      'sharedSpaceId',
+      'budgetId',
+      'expenseId',
+      'linkedExpenseId',
+      'familyMemberId',
+      'providerId',
+      'serviceTypeId',
+    };
+
+    void expectGuidWire<T>(SyncCodec<T> codec, T entity) {
+      final json = canonicalJsonDecode(codec.toPayload(entity));
+      expect(json['syncGuid'],
+          isA<String>().having((s) => s.isNotEmpty, 'non-empty', true),
+          reason: '${codec.entityType} must carry its own syncGuid');
+      for (final key in forbidden) {
+        expect(json.containsKey(key), isFalse,
+            reason:
+                '${codec.entityType} must not put the local id/FK `$key` on the wire');
+      }
+    }
+
+    test('SharedSpace',
+        () => expectGuidWire(const SharedSpaceCodec(), _space()));
+    test('SharedMember',
+        () => expectGuidWire(const SharedMemberCodec(), _member()));
+    test('MonthlyBudget',
+        () => expectGuidWire(const MonthlyBudgetCodec(), _budget()));
+    test('Expense', () => expectGuidWire(const ExpenseCodec(), _expense()));
+    test('Reimbursement',
+        () => expectGuidWire(const ReimbursementCodec(), _reimbursement()));
+    test(
+        'MedicalBill', () => expectGuidWire(const MedicalBillCodec(), _bill()));
+    test('FamilyMember',
+        () => expectGuidWire(const FamilyMemberCodec(), _familyMember()));
+    test('MedicalProvider',
+        () => expectGuidWire(const MedicalProviderCodec(), _provider()));
+    test('MedicalServiceType',
+        () => expectGuidWire(const MedicalServiceTypeCodec(), _serviceType()));
+    test(
+        'InsuranceProfile',
+        () =>
+            expectGuidWire(const InsuranceProfileCodec(), _insuranceProfile()));
+  });
 }

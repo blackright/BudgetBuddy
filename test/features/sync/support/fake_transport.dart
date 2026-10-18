@@ -32,7 +32,31 @@ class FakeTransportHub {
   Future<TransportConnection> nextIncoming(String identityId) =>
       _endpoints[identityId]!.nextIncomingConnection();
 
+  /// An accept-side host for the endpoint [identityId], yielding every inbound
+  /// connection — the in-memory stand-in for `LanTransportHost`.
+  FakeTransportHost host(String identityId) =>
+      FakeTransportHost._(_endpoints[identityId]!);
+
   _FakeEndpoint? _lookup(String identityId) => _endpoints[identityId];
+}
+
+/// The in-memory [TransportHost]: exposing an endpoint's inbound connections.
+class FakeTransportHost implements TransportHost {
+  FakeTransportHost._(this._endpoint);
+
+  final _FakeEndpoint _endpoint;
+  bool _started = false;
+
+  bool get isStarted => _started;
+
+  @override
+  Stream<TransportConnection> get connections => _endpoint.incomingConnections;
+
+  @override
+  Future<void> start() async => _started = true;
+
+  @override
+  Future<void> stop() async => _started = false;
 }
 
 class _FakeEndpoint implements Transport {
@@ -56,6 +80,10 @@ class _FakeEndpoint implements Transport {
   Future<TransportConnection> nextIncomingConnection() =>
       _incomingConnections.stream.first;
 
+  /// Every connection opened *to* this endpoint (the accept-side stream).
+  Stream<TransportConnection> get incomingConnections =>
+      _incomingConnections.stream;
+
   @override
   Stream<PeerAdvertisement> discover({
     Duration timeout = const Duration(seconds: 5),
@@ -72,8 +100,12 @@ class _FakeEndpoint implements Transport {
       throw StateError('No such peer: ${peer.identityId}');
     }
     // Two linked inboxes: what A sends lands in B's inbox and vice versa.
-    final aInbox = StreamController<String>.broadcast();
-    final bInbox = StreamController<String>.broadcast();
+    // Single-subscription (not broadcast) so a message sent before the other
+    // side subscribes is buffered, never dropped — matching the production
+    // `_LanConnection` and closing the coordinator's subscribe-after-connect
+    // race.
+    final aInbox = StreamController<String>();
+    final bInbox = StreamController<String>();
     final aSide = _FakeConnection(peer.identityId, aInbox, bInbox);
     final bSide = _FakeConnection(identityId, bInbox, aInbox);
     target._incomingConnections.add(bSide);
@@ -104,7 +136,11 @@ class _FakeConnection implements TransportConnection {
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
-    if (!_inbox.isClosed) await _inbox.close();
-    if (!_outbox.isClosed) await _outbox.close();
+    // `close()` resolves only once the (single-subscription) stream has been
+    // listened to and drained; a side that never reads would leave that future
+    // pending forever, so we don't await it — closing still marks the controller
+    // done, which is what a late listener observes.
+    if (!_inbox.isClosed) unawaited(_inbox.close());
+    if (!_outbox.isClosed) unawaited(_outbox.close());
   }
 }

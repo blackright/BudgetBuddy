@@ -1,5 +1,6 @@
 import 'package:isar/isar.dart';
 
+import '../../features/sync/domain/sync_guid.dart';
 import 'currency_code.dart';
 
 part 'medical_bill.g.dart';
@@ -13,6 +14,11 @@ part 'medical_bill.g.dart';
 @collection
 class MedicalBill {
   Id id = Isar.autoIncrement;
+
+  /// Device-independent identity of this row (research R5); indexed, not unique
+  /// (uniqueness held by construction and migration step 17).
+  @Index()
+  String syncGuid = newSyncGuid();
 
   @Index()
   int? profileId;

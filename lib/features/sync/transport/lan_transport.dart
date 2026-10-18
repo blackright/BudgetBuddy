@@ -2,10 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
-import 'dart:typed_data';
 
 import 'package:basic_utils/basic_utils.dart' as bu;
 import 'package:cryptography/cryptography.dart';
+import 'package:flutter/foundation.dart';
 import 'package:nsd/nsd.dart' as nsd;
 
 import 'transport.dart';
@@ -90,7 +90,21 @@ class LanTransport implements Transport {
     Timer? timer;
 
     controller.onListen = () async {
-      discovery = await nsd.startDiscovery(_serviceType, autoResolve: true);
+      // mDNS discovery is best-effort: the Android plugin can reject a fresh
+      // discovery with `NsdError` ("maximum outstanding requests reached") when
+      // passes overlap. `onListen` is an async callback whose future nobody
+      // awaits, so an escaping error would surface as an unhandled async
+      // exception — report it on the stream instead, where the coordinator's
+      // per-pass try/catch ends this pass quietly and retries next round.
+      try {
+        discovery = await nsd.startDiscovery(_serviceType, autoResolve: true);
+      } on Object catch (error, stackTrace) {
+        if (!controller.isClosed) {
+          controller.addError(error, stackTrace);
+          await controller.close();
+        }
+        return;
+      }
 
       void listener(nsd.Service service, nsd.ServiceStatus status) {
         if (status != nsd.ServiceStatus.found) return;
@@ -113,7 +127,14 @@ class LanTransport implements Transport {
       timer?.cancel();
       final active = discovery;
       discovery = null;
-      if (active != null) await nsd.stopDiscovery(active);
+      if (active != null) {
+        try {
+          await nsd.stopDiscovery(active);
+        } on Object {
+          // Already stopped, or the plugin hiccuped on teardown — there is
+          // nothing left to clean up, and it must not escape unhandled.
+        }
+      }
     };
 
     return controller.stream;
@@ -245,7 +266,7 @@ class LanTransport implements Transport {
 /// The app constructs one while a pairing or exchange screen is open, holding
 /// the identity key that was just unlocked; there is no background service, so
 /// nothing signs while the phone is locked.
-class LanTransportHost {
+class LanTransportHost implements TransportHost {
   LanTransportHost({
     required this.identityId,
     required this.username,
@@ -266,7 +287,14 @@ class LanTransportHost {
   final String _serviceType;
   final LanTlsIdentity _tls;
 
-  final StreamController<TransportConnection> _connections =
+  /// Inbound-connection fan-out.
+  ///
+  /// [stop] closes it, so [start] must **recreate** it: `main.dart` reuses one
+  /// host across every foreground/background cycle (start on resume, stop on
+  /// pause). A controller left closed would make `_connections.add` throw on the
+  /// next connection — swallowed by `_handleSocket`, so every later inbound
+  /// connection died and a briefly-backgrounded phone never saw its peer again.
+  StreamController<TransportConnection> _connections =
       StreamController<TransportConnection>.broadcast();
 
   SecureServerSocket? _server;
@@ -274,13 +302,18 @@ class LanTransportHost {
   StreamSubscription<SecureSocket>? _subscription;
 
   /// Connections from peers that just proved they hold their paired key.
+  @override
   Stream<TransportConnection> get connections => _connections.stream;
 
   /// The port the socket is bound to (useful for tests and diagnostics).
   int? get port => _server?.port;
 
   /// Binds an ephemeral TLS port and starts advertising. Returns that port.
+  @override
   Future<int> start() async {
+    if (_connections.isClosed) {
+      _connections = StreamController<TransportConnection>.broadcast();
+    }
     final server = await SecureServerSocket.bind(
       InternetAddress.anyIPv4,
       0,
@@ -288,23 +321,48 @@ class LanTransportHost {
     );
     _server = server;
     _subscription = server.listen(_handleSocket, onError: (_) {});
-    try {
-      _registration = await nsd.register(
-        nsd.Service(
-          name: 'Buddy ${identityId.substring(0, 6)}',
-          type: _serviceType,
-          port: server.port,
-          txt: {
-            'id': Uint8List.fromList(utf8.encode(identityId)),
-            'name': Uint8List.fromList(utf8.encode(username)),
-          },
-        ),
-      );
-    } on Object {
-      await server.close();
-      rethrow;
-    }
+    await _advertise(server.port);
     return server.port;
+  }
+
+  /// Registers the mDNS advertisement, **best-effort** (T080).
+  ///
+  /// The Android/Apple mDNS plugins refuse a fresh registration with
+  /// `NsdError: Maximum outstanding requests reached` when two sync passes
+  /// overlap. That used to escape `start()` and blow up through a
+  /// fire-and-forget `unawaited(...)` in the lifecycle observer — and worse, it
+  /// tore down a perfectly good TLS socket, so nothing synced at all.
+  ///
+  /// Losing only the advertisement is survivable: a phone that cannot advertise
+  /// still **dials** every peer it discovers, and a dialed connection carries
+  /// changes in both directions. So we retry briefly — the overload clears as
+  /// fast as the overlapping passes finish — and if that still fails we keep the
+  /// socket and let the next [start] (a foreground/background cycle) try again.
+  Future<void> _advertise(int port) async {
+    const backoff = [
+      Duration(milliseconds: 400),
+      Duration(milliseconds: 1200),
+    ];
+    for (var attempt = 0; attempt <= backoff.length; attempt++) {
+      try {
+        _registration = await nsd.register(
+          nsd.Service(
+            name: 'Buddy ${identityId.substring(0, 6)}',
+            type: _serviceType,
+            port: port,
+            txt: {
+              'id': Uint8List.fromList(utf8.encode(identityId)),
+              'name': Uint8List.fromList(utf8.encode(username)),
+            },
+          ),
+        );
+        return;
+      } on Object {
+        if (attempt < backoff.length) {
+          await Future<void>.delayed(backoff[attempt]);
+        }
+      }
+    }
   }
 
   Future<void> _handleSocket(SecureSocket socket) async {
@@ -361,6 +419,7 @@ class LanTransportHost {
     }
   }
 
+  @override
   Future<void> stop() async {
     await _subscription?.cancel();
     _subscription = null;

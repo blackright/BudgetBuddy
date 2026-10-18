@@ -104,8 +104,13 @@ const MedicalBillSchema = CollectionSchema(
       type: IsarType.byte,
       enumMap: _MedicalBillstateEnumValueMap,
     ),
-    r'yearMonth': PropertySchema(
+    r'syncGuid': PropertySchema(
       id: 17,
+      name: r'syncGuid',
+      type: IsarType.string,
+    ),
+    r'yearMonth': PropertySchema(
+      id: 18,
       name: r'yearMonth',
       type: IsarType.string,
     )
@@ -116,6 +121,19 @@ const MedicalBillSchema = CollectionSchema(
   deserializeProp: _medicalBillDeserializeProp,
   idName: r'id',
   indexes: {
+    r'syncGuid': IndexSchema(
+      id: 6159741003405035971,
+      name: r'syncGuid',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'syncGuid',
+          type: IndexType.hash,
+          caseSensitive: true,
+        )
+      ],
+    ),
     r'profileId': IndexSchema(
       id: 6052971939042612300,
       name: r'profileId',
@@ -267,6 +285,7 @@ int _medicalBillEstimateSize(
       bytesCount += 3 + value.length * 3;
     }
   }
+  bytesCount += 3 + object.syncGuid.length * 3;
   bytesCount += 3 + object.yearMonth.length * 3;
   return bytesCount;
 }
@@ -294,7 +313,8 @@ void _medicalBillSerialize(
   writer.writeLong(offsets[14], object.serviceTypeId);
   writer.writeLong(offsets[15], object.sharedSpaceId);
   writer.writeByte(offsets[16], object.state.index);
-  writer.writeString(offsets[17], object.yearMonth);
+  writer.writeString(offsets[17], object.syncGuid);
+  writer.writeString(offsets[18], object.yearMonth);
 }
 
 MedicalBill _medicalBillDeserialize(
@@ -326,7 +346,8 @@ MedicalBill _medicalBillDeserialize(
   object.state =
       _MedicalBillstateValueEnumMap[reader.readByteOrNull(offsets[16])] ??
           MedicalBillState.planned;
-  object.yearMonth = reader.readString(offsets[17]);
+  object.syncGuid = reader.readString(offsets[17]);
+  object.yearMonth = reader.readString(offsets[18]);
   return object;
 }
 
@@ -375,6 +396,8 @@ P _medicalBillDeserializeProp<P>(
       return (_MedicalBillstateValueEnumMap[reader.readByteOrNull(offset)] ??
           MedicalBillState.planned) as P;
     case 17:
+      return (reader.readString(offset)) as P;
+    case 18:
       return (reader.readString(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -555,6 +578,51 @@ extension MedicalBillQueryWhere
         upper: upperId,
         includeUpper: includeUpper,
       ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterWhereClause> syncGuidEqualTo(
+      String syncGuid) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'syncGuid',
+        value: [syncGuid],
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterWhereClause> syncGuidNotEqualTo(
+      String syncGuid) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncGuid',
+              lower: [],
+              upper: [syncGuid],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncGuid',
+              lower: [syncGuid],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncGuid',
+              lower: [syncGuid],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncGuid',
+              lower: [],
+              upper: [syncGuid],
+              includeUpper: false,
+            ));
+      }
     });
   }
 
@@ -3026,6 +3094,141 @@ extension MedicalBillQueryFilter
     });
   }
 
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition> syncGuidEqualTo(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      syncGuidGreaterThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      syncGuidLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition> syncGuidBetween(
+    String lower,
+    String upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'syncGuid',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      syncGuidStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      syncGuidEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      syncGuidContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition> syncGuidMatches(
+      String pattern,
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'syncGuid',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      syncGuidIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'syncGuid',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
+      syncGuidIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'syncGuid',
+        value: '',
+      ));
+    });
+  }
+
   QueryBuilder<MedicalBill, MedicalBill, QAfterFilterCondition>
       yearMonthEqualTo(
     String value, {
@@ -3390,6 +3593,18 @@ extension MedicalBillQuerySortBy
     });
   }
 
+  QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy> sortBySyncGuid() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncGuid', Sort.asc);
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy> sortBySyncGuidDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncGuid', Sort.desc);
+    });
+  }
+
   QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy> sortByYearMonth() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'yearMonth', Sort.asc);
@@ -3636,6 +3851,18 @@ extension MedicalBillQuerySortThenBy
     });
   }
 
+  QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy> thenBySyncGuid() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncGuid', Sort.asc);
+    });
+  }
+
+  QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy> thenBySyncGuidDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncGuid', Sort.desc);
+    });
+  }
+
   QueryBuilder<MedicalBill, MedicalBill, QAfterSortBy> thenByYearMonth() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'yearMonth', Sort.asc);
@@ -3763,6 +3990,13 @@ extension MedicalBillQueryWhereDistinct
     });
   }
 
+  QueryBuilder<MedicalBill, MedicalBill, QDistinct> distinctBySyncGuid(
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'syncGuid', caseSensitive: caseSensitive);
+    });
+  }
+
   QueryBuilder<MedicalBill, MedicalBill, QDistinct> distinctByYearMonth(
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
@@ -3884,6 +4118,12 @@ extension MedicalBillQueryProperty
       stateProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'state');
+    });
+  }
+
+  QueryBuilder<MedicalBill, String, QQueryOperations> syncGuidProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'syncGuid');
     });
   }
 

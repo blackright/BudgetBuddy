@@ -4,12 +4,14 @@ import 'package:budget_buddy/core/models/change_record.dart';
 import 'package:budget_buddy/core/models/expense.dart';
 import 'package:budget_buddy/core/models/identity.dart';
 import 'package:budget_buddy/core/models/shared_member.dart';
+import 'package:budget_buddy/core/models/sync_cursor.dart';
 import 'package:budget_buddy/core/models/user_profile.dart';
 import 'package:budget_buddy/features/spaces/domain/shared_member_key.dart';
 import 'package:budget_buddy/features/spaces/repositories/spaces_repository.dart';
 import 'package:budget_buddy/features/sync/domain/codecs/expense_codec.dart';
 import 'package:budget_buddy/features/sync/domain/codecs/shared_member_codec.dart';
 import 'package:budget_buddy/features/sync/domain/hlc.dart';
+import 'package:budget_buddy/features/sync/domain/sync_codec.dart';
 import 'package:budget_buddy/features/sync/repositories/change_signer.dart';
 import 'package:budget_buddy/features/sync/repositories/sync_engine.dart';
 import 'package:budget_buddy/features/sync/repositories/sync_recorder.dart';
@@ -49,9 +51,11 @@ SharedMember _member({
   required int id,
   required int profileId,
   required SharedMemberRole role,
+  required String syncGuid,
 }) =>
     SharedMember()
       ..id = id
+      ..syncGuid = syncGuid
       ..sharedSpaceId = 1
       ..profileId = profileId
       ..role = role
@@ -65,6 +69,10 @@ void main() {
   late DeviceKeys editor;
   late DeviceKeys viewer;
   late SyncEngine engineB;
+  late String spaceGuid;
+  late String ownerMemberGuid;
+  late String editorMemberGuid;
+  late String viewerMemberGuid;
 
   /// Seeds the same signed (012-managed) space 1 on both devices, so the engine
   /// treats it as authorization-managed and enforces the role matrix.
@@ -83,30 +91,39 @@ void main() {
     int millis = 1000,
     int id = 1,
     String yearMonth = '2026-03',
-  }) =>
-      signedChange(
-        keys: author,
-        deviceId: 'A',
-        hlcMillis: millis,
-        entityType: 'Expense',
-        entityLocalId: id,
-        payload: const ExpenseCodec()
-            .toPayload(_expense(id: id, yearMonth: yearMonth)),
-      );
+  }) async {
+    final json =
+        const ExpenseCodec().toJson(_expense(id: id, yearMonth: yearMonth));
+    json['sharedSpaceSyncGuid'] = spaceGuid;
+    return signedChange(
+      keys: author,
+      deviceId: 'A',
+      hlcMillis: millis,
+      entityType: 'Expense',
+      contextSyncGuid: spaceGuid,
+      payload: canonicalJsonEncode(json),
+    );
+  }
 
   Future<ChangeRecord> memberChange(
     DeviceKeys author, {
     required SharedMember member,
     int millis = 1000,
-  }) =>
-      signedChange(
-        keys: author,
-        deviceId: 'A',
-        hlcMillis: millis,
-        entityType: 'SharedMember',
-        entityLocalId: member.id,
-        payload: const SharedMemberCodec().toPayload(member),
-      );
+  }) async {
+    // A role change reuses the *existing* membership row's syncGuid (015 keys on
+    // syncGuid), so the change updates the member rather than cloning a new one.
+    final json = const SharedMemberCodec().toJson(member);
+    json['sharedSpaceSyncGuid'] = spaceGuid;
+    return signedChange(
+      keys: author,
+      deviceId: 'A',
+      hlcMillis: millis,
+      entityType: 'SharedMember',
+      entitySyncGuid: member.syncGuid,
+      contextSyncGuid: spaceGuid,
+      payload: canonicalJsonEncode(json),
+    );
+  }
 
   setUp(() async {
     harnessA = await SyncTestHarness.create();
@@ -122,6 +139,16 @@ void main() {
     engineB = SyncEngine(harnessB.isar, trustedKeys: trusted);
     await seedSpace(harnessA);
     await seedSpace(harnessB);
+    spaceGuid = await harnessB.spaceGuid(1);
+    ownerMemberGuid =
+        (await harnessB.memberFor(1, sharedMemberKey(owner.identityId)))!
+            .syncGuid;
+    editorMemberGuid =
+        (await harnessB.memberFor(1, sharedMemberKey(editor.identityId)))!
+            .syncGuid;
+    viewerMemberGuid =
+        (await harnessB.memberFor(1, sharedMemberKey(viewer.identityId)))!
+            .syncGuid;
   });
 
   tearDown(() async {
@@ -140,6 +167,33 @@ void main() {
     final outcome = await engineB.applyIncoming(await expenseChange(viewer));
     expect(outcome, ApplyOutcome.droppedUnauthorized);
     expect(await harnessB.isar.expenses.get(1), isNull);
+  });
+
+  test(
+      'a refused change is never counted as a kept-aside conflict, however many '
+      'times it is re-offered (FR-007/FR-008)', () async {
+    // The coordinator re-offers the same change on every discovery round (a
+    // sealed month frozen after the edit, or a Viewer's money edit). A refusal
+    // is a deliberate, repeated "no" — not an edit the app kept aside — so it
+    // must never inflate the user-visible conflict count. Before the fix each
+    // re-offer added +1, which is how a badge reached "967 conflicts".
+    final viewerChange = await expenseChange(viewer);
+    expect(
+      await engineB.applyIncoming(viewerChange, peerId: 1),
+      ApplyOutcome.droppedUnauthorized,
+    );
+    expect(
+      await engineB.applyIncoming(viewerChange, peerId: 1),
+      ApplyOutcome.droppedUnauthorized,
+    );
+
+    final cursor = await harnessB.isar.syncCursors
+        .filter()
+        .peerIdEqualTo(1)
+        .contextLocalIdEqualTo(1)
+        .findFirst();
+    expect(cursor?.conflictCount ?? 0, 0,
+        reason: 'a refusal is not a conflict and must not snowball per round');
   });
 
   test('an unknown author (trusted key, no membership) is dropped', () async {
@@ -205,6 +259,7 @@ void main() {
       id: 3,
       profileId: sharedMemberKey(viewer.identityId),
       role: SharedMemberRole.owner,
+      syncGuid: viewerMemberGuid,
     );
 
     final denied = await engineB
@@ -215,7 +270,7 @@ void main() {
         await engineB.applyIncoming(await memberChange(owner, member: promote));
     expect(allowed, ApplyOutcome.applied);
     expect(
-      (await harnessB.isar.sharedMembers.get(3))!.role,
+      (await harnessB.memberByGuid(viewerMemberGuid))!.role,
       SharedMemberRole.owner,
       reason: 'the Owner-authored promotion is the one that lands',
     );
@@ -228,11 +283,13 @@ void main() {
       id: 2,
       profileId: sharedMemberKey(editor.identityId),
       role: SharedMemberRole.owner,
+      syncGuid: editorMemberGuid,
     );
     final demoteOwner = _member(
       id: 1,
       profileId: sharedMemberKey(owner.identityId),
       role: SharedMemberRole.editor,
+      syncGuid: ownerMemberGuid,
     );
 
     expect(

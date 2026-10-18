@@ -8,6 +8,7 @@ import '../../../core/models/monthly_budget.dart';
 import '../../../core/models/shared_member.dart';
 import '../../../core/models/shared_space.dart';
 import '../../expenses/models/reimbursement.dart';
+import 'codec_support.dart';
 import 'codecs/expense_codec.dart';
 import 'codecs/family_member_codec.dart';
 import 'codecs/insurance_profile_codec.dart';
@@ -18,6 +19,8 @@ import 'codecs/monthly_budget_codec.dart';
 import 'codecs/reimbursement_codec.dart';
 import 'codecs/shared_member_codec.dart';
 import 'codecs/shared_space_codec.dart';
+import 'sync_codec.dart';
+import 'sync_id_translator.dart';
 
 /// Applies a `ChangeRecord.payload` to the local entity rows — the *write* side
 /// of a [`SyncCodec`] (`contracts/sync-protocol.md` §3 step 3).
@@ -26,6 +29,15 @@ import 'codecs/shared_space_codec.dart';
 /// into a row for the local device. Applying goes through Isar directly (the
 /// same tables the repositories write), which keeps one storage path even when a
 /// remote change wins over a local edit.
+///
+/// **Identity (015)**: the payload carries the row's own `syncGuid` and refers to
+/// other rows by GUID, never by a local `Id` (data-model §3). [upsert] therefore
+/// finds the existing local row by `syncGuid` (inserting a fresh row the first
+/// time the GUID is seen) and rewrites each GUID reference to a local id via
+/// [SyncIdTranslator]. Since the [SyncEngine] applies a batch in dependency order
+/// (`data-model` §4 step 2), an upserted row's targets are already local when the
+/// reference is resolved; a reference to a row that has not arrived yet is left
+/// unset and healed on the next exchange (rule R2).
 ///
 /// **Transaction contract**: [upsert] / [delete] never open their own
 /// transaction; the [SyncEngine] calls them inside a single `isar.writeTxn` per
@@ -73,8 +85,15 @@ class SharedSpaceApplier extends EntityApplier {
   String get entityType => 'SharedSpace';
 
   @override
-  Future<int> upsert(Isar isar, String payload) =>
-      isar.sharedSpaces.put(const SharedSpaceCodec().fromPayload(payload));
+  Future<int> upsert(Isar isar, String payload) async {
+    final json = canonicalJsonDecode(payload);
+    final guid = decodeGuid(json['syncGuid']);
+    final existing =
+        await isar.sharedSpaces.filter().syncGuidEqualTo(guid).findFirst();
+    final space = const SharedSpaceCodec().fromJson(json)
+      ..id = existing?.id ?? Isar.autoIncrement;
+    return isar.sharedSpaces.put(space);
+  }
 
   @override
   Future<void> delete(Isar isar, int entityLocalId) =>
@@ -88,8 +107,22 @@ class SharedMemberApplier extends EntityApplier {
   String get entityType => 'SharedMember';
 
   @override
-  Future<int> upsert(Isar isar, String payload) =>
-      isar.sharedMembers.put(const SharedMemberCodec().fromPayload(payload));
+  Future<int> upsert(Isar isar, String payload) async {
+    final json = canonicalJsonDecode(payload);
+    final guid = decodeGuid(json['syncGuid']);
+    final existing =
+        await isar.sharedMembers.filter().syncGuidEqualTo(guid).findFirst();
+    final member = const SharedMemberCodec().fromJson(json)
+      ..id = existing?.id ?? Isar.autoIncrement;
+    // `sharedSpaceId` is a non-null `late int`, so an unresolved reference uses
+    // 0 as the "not yet known" sentinel (rule R2); the space row normally
+    // precedes the membership in dependency order (data-model §4 step 2).
+    final spaceGuid = decodeGuidOrNull(json['sharedSpaceSyncGuid']);
+    member.sharedSpaceId = spaceGuid == null
+        ? 0
+        : await SyncIdTranslator(isar).resolveLocalContext(spaceGuid);
+    return isar.sharedMembers.put(member);
+  }
 
   @override
   Future<void> delete(Isar isar, int entityLocalId) =>
@@ -103,8 +136,19 @@ class MonthlyBudgetApplier extends EntityApplier {
   String get entityType => 'MonthlyBudget';
 
   @override
-  Future<int> upsert(Isar isar, String payload) =>
-      isar.monthlyBudgets.put(const MonthlyBudgetCodec().fromPayload(payload));
+  Future<int> upsert(Isar isar, String payload) async {
+    final json = canonicalJsonDecode(payload);
+    final guid = decodeGuid(json['syncGuid']);
+    final existing =
+        await isar.monthlyBudgets.filter().syncGuidEqualTo(guid).findFirst();
+    final budget = const MonthlyBudgetCodec().fromJson(json)
+      ..id = existing?.id ?? Isar.autoIncrement
+      ..sharedSpaceId = await SyncIdTranslator(isar).resolveLocalEntity(
+        'SharedSpace',
+        decodeGuidOrNull(json['sharedSpaceSyncGuid']),
+      );
+    return isar.monthlyBudgets.put(budget);
+  }
 
   @override
   Future<void> delete(Isar isar, int entityLocalId) =>
@@ -118,8 +162,25 @@ class ExpenseApplier extends EntityApplier {
   String get entityType => 'Expense';
 
   @override
-  Future<int> upsert(Isar isar, String payload) =>
-      isar.expenses.put(const ExpenseCodec().fromPayload(payload));
+  Future<int> upsert(Isar isar, String payload) async {
+    final json = canonicalJsonDecode(payload);
+    final guid = decodeGuid(json['syncGuid']);
+    final translator = SyncIdTranslator(isar);
+    final existing =
+        await isar.expenses.filter().syncGuidEqualTo(guid).findFirst();
+    final expense = const ExpenseCodec().fromJson(json)
+      ..id = existing?.id ?? Isar.autoIncrement
+      ..sharedSpaceId = await translator.resolveLocalEntity(
+        'SharedSpace',
+        decodeGuidOrNull(json['sharedSpaceSyncGuid']),
+      )
+      ..budgetId = await translator.resolveLocalEntity(
+            'MonthlyBudget',
+            decodeGuidOrNull(json['budgetSyncGuid']),
+          ) ??
+          0;
+    return isar.expenses.put(expense);
+  }
 
   @override
   Future<void> delete(Isar isar, int entityLocalId) =>
@@ -133,8 +194,24 @@ class ReimbursementApplier extends EntityApplier {
   String get entityType => 'Reimbursement';
 
   @override
-  Future<int> upsert(Isar isar, String payload) =>
-      isar.reimbursements.put(const ReimbursementCodec().fromPayload(payload));
+  Future<int> upsert(Isar isar, String payload) async {
+    final json = canonicalJsonDecode(payload);
+    final guid = decodeGuid(json['syncGuid']);
+    final translator = SyncIdTranslator(isar);
+    final existing =
+        await isar.reimbursements.filter().syncGuidEqualTo(guid).findFirst();
+    final reimbursement = const ReimbursementCodec().fromJson(json)
+      ..id = existing?.id ?? Isar.autoIncrement
+      ..sharedSpaceId = await translator.resolveLocalEntity(
+        'SharedSpace',
+        decodeGuidOrNull(json['sharedSpaceSyncGuid']),
+      )
+      ..expenseId = await translator.resolveLocalEntity(
+        'Expense',
+        decodeGuidOrNull(json['expenseSyncGuid']),
+      );
+    return isar.reimbursements.put(reimbursement);
+  }
 
   @override
   Future<void> delete(Isar isar, int entityLocalId) =>
@@ -148,8 +225,36 @@ class MedicalBillApplier extends EntityApplier {
   String get entityType => 'MedicalBill';
 
   @override
-  Future<int> upsert(Isar isar, String payload) =>
-      isar.medicalBills.put(const MedicalBillCodec().fromPayload(payload));
+  Future<int> upsert(Isar isar, String payload) async {
+    final json = canonicalJsonDecode(payload);
+    final guid = decodeGuid(json['syncGuid']);
+    final translator = SyncIdTranslator(isar);
+    final existing =
+        await isar.medicalBills.filter().syncGuidEqualTo(guid).findFirst();
+    final bill = const MedicalBillCodec().fromJson(json)
+      ..id = existing?.id ?? Isar.autoIncrement
+      ..sharedSpaceId = await translator.resolveLocalEntity(
+        'SharedSpace',
+        decodeGuidOrNull(json['sharedSpaceSyncGuid']),
+      )
+      ..linkedExpenseId = await translator.resolveLocalEntity(
+        'Expense',
+        decodeGuidOrNull(json['linkedExpenseSyncGuid']),
+      )
+      ..familyMemberId = await translator.resolveLocalEntity(
+        'FamilyMember',
+        decodeGuidOrNull(json['familyMemberSyncGuid']),
+      )
+      ..providerId = await translator.resolveLocalEntity(
+        'MedicalProvider',
+        decodeGuidOrNull(json['providerSyncGuid']),
+      )
+      ..serviceTypeId = await translator.resolveLocalEntity(
+        'MedicalServiceType',
+        decodeGuidOrNull(json['serviceTypeSyncGuid']),
+      );
+    return isar.medicalBills.put(bill);
+  }
 
   @override
   Future<void> delete(Isar isar, int entityLocalId) =>
@@ -163,8 +268,19 @@ class FamilyMemberApplier extends EntityApplier {
   String get entityType => 'FamilyMember';
 
   @override
-  Future<int> upsert(Isar isar, String payload) =>
-      isar.familyMembers.put(const FamilyMemberCodec().fromPayload(payload));
+  Future<int> upsert(Isar isar, String payload) async {
+    final json = canonicalJsonDecode(payload);
+    final guid = decodeGuid(json['syncGuid']);
+    final existing =
+        await isar.familyMembers.filter().syncGuidEqualTo(guid).findFirst();
+    final member = const FamilyMemberCodec().fromJson(json)
+      ..id = existing?.id ?? Isar.autoIncrement
+      ..sharedSpaceId = await SyncIdTranslator(isar).resolveLocalEntity(
+        'SharedSpace',
+        decodeGuidOrNull(json['sharedSpaceSyncGuid']),
+      );
+    return isar.familyMembers.put(member);
+  }
 
   @override
   Future<void> delete(Isar isar, int entityLocalId) =>
@@ -178,8 +294,19 @@ class MedicalProviderApplier extends EntityApplier {
   String get entityType => 'MedicalProvider';
 
   @override
-  Future<int> upsert(Isar isar, String payload) => isar.medicalProviders
-      .put(const MedicalProviderCodec().fromPayload(payload));
+  Future<int> upsert(Isar isar, String payload) async {
+    final json = canonicalJsonDecode(payload);
+    final guid = decodeGuid(json['syncGuid']);
+    final existing =
+        await isar.medicalProviders.filter().syncGuidEqualTo(guid).findFirst();
+    final provider = const MedicalProviderCodec().fromJson(json)
+      ..id = existing?.id ?? Isar.autoIncrement
+      ..sharedSpaceId = await SyncIdTranslator(isar).resolveLocalEntity(
+        'SharedSpace',
+        decodeGuidOrNull(json['sharedSpaceSyncGuid']),
+      );
+    return isar.medicalProviders.put(provider);
+  }
 
   @override
   Future<void> delete(Isar isar, int entityLocalId) =>
@@ -193,8 +320,21 @@ class MedicalServiceTypeApplier extends EntityApplier {
   String get entityType => 'MedicalServiceType';
 
   @override
-  Future<int> upsert(Isar isar, String payload) => isar.medicalServiceTypes
-      .put(const MedicalServiceTypeCodec().fromPayload(payload));
+  Future<int> upsert(Isar isar, String payload) async {
+    final json = canonicalJsonDecode(payload);
+    final guid = decodeGuid(json['syncGuid']);
+    final existing = await isar.medicalServiceTypes
+        .filter()
+        .syncGuidEqualTo(guid)
+        .findFirst();
+    final serviceType = const MedicalServiceTypeCodec().fromJson(json)
+      ..id = existing?.id ?? Isar.autoIncrement
+      ..sharedSpaceId = await SyncIdTranslator(isar).resolveLocalEntity(
+        'SharedSpace',
+        decodeGuidOrNull(json['sharedSpaceSyncGuid']),
+      );
+    return isar.medicalServiceTypes.put(serviceType);
+  }
 
   @override
   Future<void> delete(Isar isar, int entityLocalId) =>
@@ -208,8 +348,19 @@ class InsuranceProfileApplier extends EntityApplier {
   String get entityType => 'InsuranceProfile';
 
   @override
-  Future<int> upsert(Isar isar, String payload) => isar.insuranceProfiles
-      .put(const InsuranceProfileCodec().fromPayload(payload));
+  Future<int> upsert(Isar isar, String payload) async {
+    final json = canonicalJsonDecode(payload);
+    final guid = decodeGuid(json['syncGuid']);
+    final existing =
+        await isar.insuranceProfiles.filter().syncGuidEqualTo(guid).findFirst();
+    final profile = const InsuranceProfileCodec().fromJson(json)
+      ..id = existing?.id ?? Isar.autoIncrement
+      ..sharedSpaceId = await SyncIdTranslator(isar).resolveLocalEntity(
+        'SharedSpace',
+        decodeGuidOrNull(json['sharedSpaceSyncGuid']),
+      );
+    return isar.insuranceProfiles.put(profile);
+  }
 
   @override
   Future<void> delete(Isar isar, int entityLocalId) =>

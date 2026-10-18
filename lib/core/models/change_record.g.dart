@@ -33,48 +33,58 @@ const ChangeRecordSchema = CollectionSchema(
       name: r'contextLocalId',
       type: IsarType.long,
     ),
-    r'createdAt': PropertySchema(
+    r'contextSyncGuid': PropertySchema(
       id: 3,
+      name: r'contextSyncGuid',
+      type: IsarType.string,
+    ),
+    r'createdAt': PropertySchema(
+      id: 4,
       name: r'createdAt',
       type: IsarType.dateTime,
     ),
     r'deviceId': PropertySchema(
-      id: 4,
+      id: 5,
       name: r'deviceId',
       type: IsarType.string,
     ),
     r'entityLocalId': PropertySchema(
-      id: 5,
+      id: 6,
       name: r'entityLocalId',
       type: IsarType.long,
     ),
+    r'entitySyncGuid': PropertySchema(
+      id: 7,
+      name: r'entitySyncGuid',
+      type: IsarType.string,
+    ),
     r'entityType': PropertySchema(
-      id: 6,
+      id: 8,
       name: r'entityType',
       type: IsarType.string,
     ),
     r'hlcCounter': PropertySchema(
-      id: 7,
+      id: 9,
       name: r'hlcCounter',
       type: IsarType.long,
     ),
     r'hlcMillis': PropertySchema(
-      id: 8,
+      id: 10,
       name: r'hlcMillis',
       type: IsarType.long,
     ),
     r'op': PropertySchema(
-      id: 9,
+      id: 11,
       name: r'op',
       type: IsarType.string,
     ),
     r'payload': PropertySchema(
-      id: 10,
+      id: 12,
       name: r'payload',
       type: IsarType.string,
     ),
     r'signature': PropertySchema(
-      id: 11,
+      id: 13,
       name: r'signature',
       type: IsarType.string,
     )
@@ -85,6 +95,19 @@ const ChangeRecordSchema = CollectionSchema(
   deserializeProp: _changeRecordDeserializeProp,
   idName: r'id',
   indexes: {
+    r'contextSyncGuid': IndexSchema(
+      id: -6068982201345244215,
+      name: r'contextSyncGuid',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'contextSyncGuid',
+          type: IndexType.hash,
+          caseSensitive: true,
+        )
+      ],
+    ),
     r'contextLocalId_entityType_entityLocalId': IndexSchema(
       id: 5691460144188255998,
       name: r'contextLocalId_entityType_entityLocalId',
@@ -105,6 +128,19 @@ const ChangeRecordSchema = CollectionSchema(
           name: r'entityLocalId',
           type: IndexType.value,
           caseSensitive: false,
+        )
+      ],
+    ),
+    r'entitySyncGuid': IndexSchema(
+      id: 498820119685140544,
+      name: r'entitySyncGuid',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'entitySyncGuid',
+          type: IndexType.hash,
+          caseSensitive: true,
         )
       ],
     ),
@@ -137,7 +173,9 @@ int _changeRecordEstimateSize(
 ) {
   var bytesCount = offsets.last;
   bytesCount += 3 + object.authorIdentityId.length * 3;
+  bytesCount += 3 + object.contextSyncGuid.length * 3;
   bytesCount += 3 + object.deviceId.length * 3;
+  bytesCount += 3 + object.entitySyncGuid.length * 3;
   bytesCount += 3 + object.entityType.length * 3;
   bytesCount += 3 + object.op.length * 3;
   bytesCount += 3 + object.payload.length * 3;
@@ -154,15 +192,17 @@ void _changeRecordSerialize(
   writer.writeString(offsets[0], object.authorIdentityId);
   writer.writeByte(offsets[1], object.contextKind.index);
   writer.writeLong(offsets[2], object.contextLocalId);
-  writer.writeDateTime(offsets[3], object.createdAt);
-  writer.writeString(offsets[4], object.deviceId);
-  writer.writeLong(offsets[5], object.entityLocalId);
-  writer.writeString(offsets[6], object.entityType);
-  writer.writeLong(offsets[7], object.hlcCounter);
-  writer.writeLong(offsets[8], object.hlcMillis);
-  writer.writeString(offsets[9], object.op);
-  writer.writeString(offsets[10], object.payload);
-  writer.writeString(offsets[11], object.signature);
+  writer.writeString(offsets[3], object.contextSyncGuid);
+  writer.writeDateTime(offsets[4], object.createdAt);
+  writer.writeString(offsets[5], object.deviceId);
+  writer.writeLong(offsets[6], object.entityLocalId);
+  writer.writeString(offsets[7], object.entitySyncGuid);
+  writer.writeString(offsets[8], object.entityType);
+  writer.writeLong(offsets[9], object.hlcCounter);
+  writer.writeLong(offsets[10], object.hlcMillis);
+  writer.writeString(offsets[11], object.op);
+  writer.writeString(offsets[12], object.payload);
+  writer.writeString(offsets[13], object.signature);
 }
 
 ChangeRecord _changeRecordDeserialize(
@@ -177,16 +217,18 @@ ChangeRecord _changeRecordDeserialize(
       _ChangeRecordcontextKindValueEnumMap[reader.readByteOrNull(offsets[1])] ??
           ContextKind.personal;
   object.contextLocalId = reader.readLong(offsets[2]);
-  object.createdAt = reader.readDateTime(offsets[3]);
-  object.deviceId = reader.readString(offsets[4]);
-  object.entityLocalId = reader.readLong(offsets[5]);
-  object.entityType = reader.readString(offsets[6]);
-  object.hlcCounter = reader.readLong(offsets[7]);
-  object.hlcMillis = reader.readLong(offsets[8]);
+  object.contextSyncGuid = reader.readString(offsets[3]);
+  object.createdAt = reader.readDateTime(offsets[4]);
+  object.deviceId = reader.readString(offsets[5]);
+  object.entityLocalId = reader.readLong(offsets[6]);
+  object.entitySyncGuid = reader.readString(offsets[7]);
+  object.entityType = reader.readString(offsets[8]);
+  object.hlcCounter = reader.readLong(offsets[9]);
+  object.hlcMillis = reader.readLong(offsets[10]);
   object.id = id;
-  object.op = reader.readString(offsets[9]);
-  object.payload = reader.readString(offsets[10]);
-  object.signature = reader.readString(offsets[11]);
+  object.op = reader.readString(offsets[11]);
+  object.payload = reader.readString(offsets[12]);
+  object.signature = reader.readString(offsets[13]);
   return object;
 }
 
@@ -206,22 +248,26 @@ P _changeRecordDeserializeProp<P>(
     case 2:
       return (reader.readLong(offset)) as P;
     case 3:
-      return (reader.readDateTime(offset)) as P;
+      return (reader.readString(offset)) as P;
     case 4:
-      return (reader.readString(offset)) as P;
+      return (reader.readDateTime(offset)) as P;
     case 5:
-      return (reader.readLong(offset)) as P;
+      return (reader.readString(offset)) as P;
     case 6:
-      return (reader.readString(offset)) as P;
+      return (reader.readLong(offset)) as P;
     case 7:
-      return (reader.readLong(offset)) as P;
+      return (reader.readString(offset)) as P;
     case 8:
-      return (reader.readLong(offset)) as P;
+      return (reader.readString(offset)) as P;
     case 9:
-      return (reader.readString(offset)) as P;
+      return (reader.readLong(offset)) as P;
     case 10:
-      return (reader.readString(offset)) as P;
+      return (reader.readLong(offset)) as P;
     case 11:
+      return (reader.readString(offset)) as P;
+    case 12:
+      return (reader.readString(offset)) as P;
+    case 13:
       return (reader.readString(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -325,6 +371,51 @@ extension ChangeRecordQueryWhere
         upper: upperId,
         includeUpper: includeUpper,
       ));
+    });
+  }
+
+  QueryBuilder<ChangeRecord, ChangeRecord, QAfterWhereClause>
+      contextSyncGuidEqualTo(String contextSyncGuid) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'contextSyncGuid',
+        value: [contextSyncGuid],
+      ));
+    });
+  }
+
+  QueryBuilder<ChangeRecord, ChangeRecord, QAfterWhereClause>
+      contextSyncGuidNotEqualTo(String contextSyncGuid) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'contextSyncGuid',
+              lower: [],
+              upper: [contextSyncGuid],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'contextSyncGuid',
+              lower: [contextSyncGuid],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'contextSyncGuid',
+              lower: [contextSyncGuid],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'contextSyncGuid',
+              lower: [],
+              upper: [contextSyncGuid],
+              includeUpper: false,
+            ));
+      }
     });
   }
 
@@ -566,6 +657,51 @@ extension ChangeRecordQueryWhere
         upper: [contextLocalId, entityType, upperEntityLocalId],
         includeUpper: includeUpper,
       ));
+    });
+  }
+
+  QueryBuilder<ChangeRecord, ChangeRecord, QAfterWhereClause>
+      entitySyncGuidEqualTo(String entitySyncGuid) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'entitySyncGuid',
+        value: [entitySyncGuid],
+      ));
+    });
+  }
+
+  QueryBuilder<ChangeRecord, ChangeRecord, QAfterWhereClause>
+      entitySyncGuidNotEqualTo(String entitySyncGuid) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'entitySyncGuid',
+              lower: [],
+              upper: [entitySyncGuid],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'entitySyncGuid',
+              lower: [entitySyncGuid],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'entitySyncGuid',
+              lower: [entitySyncGuid],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'entitySyncGuid',
+              lower: [],
+              upper: [entitySyncGuid],
+              includeUpper: false,
+            ));
+      }
     });
   }
 
@@ -866,6 +1002,142 @@ extension ChangeRecordQueryFilter
   }
 
   QueryBuilder<ChangeRecord, ChangeRecord, QAfterFilterCondition>
+      contextSyncGuidEqualTo(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'contextSyncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ChangeRecord, ChangeRecord, QAfterFilterCondition>
+      contextSyncGuidGreaterThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'contextSyncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ChangeRecord, ChangeRecord, QAfterFilterCondition>
+      contextSyncGuidLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'contextSyncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ChangeRecord, ChangeRecord, QAfterFilterCondition>
+      contextSyncGuidBetween(
+    String lower,
+    String upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'contextSyncGuid',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ChangeRecord, ChangeRecord, QAfterFilterCondition>
+      contextSyncGuidStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'contextSyncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ChangeRecord, ChangeRecord, QAfterFilterCondition>
+      contextSyncGuidEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'contextSyncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ChangeRecord, ChangeRecord, QAfterFilterCondition>
+      contextSyncGuidContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'contextSyncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ChangeRecord, ChangeRecord, QAfterFilterCondition>
+      contextSyncGuidMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'contextSyncGuid',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ChangeRecord, ChangeRecord, QAfterFilterCondition>
+      contextSyncGuidIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'contextSyncGuid',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<ChangeRecord, ChangeRecord, QAfterFilterCondition>
+      contextSyncGuidIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'contextSyncGuid',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<ChangeRecord, ChangeRecord, QAfterFilterCondition>
       createdAtEqualTo(DateTime value) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
@@ -1109,6 +1381,142 @@ extension ChangeRecordQueryFilter
         includeLower: includeLower,
         upper: upper,
         includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<ChangeRecord, ChangeRecord, QAfterFilterCondition>
+      entitySyncGuidEqualTo(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'entitySyncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ChangeRecord, ChangeRecord, QAfterFilterCondition>
+      entitySyncGuidGreaterThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'entitySyncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ChangeRecord, ChangeRecord, QAfterFilterCondition>
+      entitySyncGuidLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'entitySyncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ChangeRecord, ChangeRecord, QAfterFilterCondition>
+      entitySyncGuidBetween(
+    String lower,
+    String upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'entitySyncGuid',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ChangeRecord, ChangeRecord, QAfterFilterCondition>
+      entitySyncGuidStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'entitySyncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ChangeRecord, ChangeRecord, QAfterFilterCondition>
+      entitySyncGuidEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'entitySyncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ChangeRecord, ChangeRecord, QAfterFilterCondition>
+      entitySyncGuidContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'entitySyncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ChangeRecord, ChangeRecord, QAfterFilterCondition>
+      entitySyncGuidMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'entitySyncGuid',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<ChangeRecord, ChangeRecord, QAfterFilterCondition>
+      entitySyncGuidIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'entitySyncGuid',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<ChangeRecord, ChangeRecord, QAfterFilterCondition>
+      entitySyncGuidIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'entitySyncGuid',
+        value: '',
       ));
     });
   }
@@ -1867,6 +2275,20 @@ extension ChangeRecordQuerySortBy
     });
   }
 
+  QueryBuilder<ChangeRecord, ChangeRecord, QAfterSortBy>
+      sortByContextSyncGuid() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'contextSyncGuid', Sort.asc);
+    });
+  }
+
+  QueryBuilder<ChangeRecord, ChangeRecord, QAfterSortBy>
+      sortByContextSyncGuidDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'contextSyncGuid', Sort.desc);
+    });
+  }
+
   QueryBuilder<ChangeRecord, ChangeRecord, QAfterSortBy> sortByCreatedAt() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'createdAt', Sort.asc);
@@ -1901,6 +2323,20 @@ extension ChangeRecordQuerySortBy
       sortByEntityLocalIdDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'entityLocalId', Sort.desc);
+    });
+  }
+
+  QueryBuilder<ChangeRecord, ChangeRecord, QAfterSortBy>
+      sortByEntitySyncGuid() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'entitySyncGuid', Sort.asc);
+    });
+  }
+
+  QueryBuilder<ChangeRecord, ChangeRecord, QAfterSortBy>
+      sortByEntitySyncGuidDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'entitySyncGuid', Sort.desc);
     });
   }
 
@@ -2022,6 +2458,20 @@ extension ChangeRecordQuerySortThenBy
     });
   }
 
+  QueryBuilder<ChangeRecord, ChangeRecord, QAfterSortBy>
+      thenByContextSyncGuid() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'contextSyncGuid', Sort.asc);
+    });
+  }
+
+  QueryBuilder<ChangeRecord, ChangeRecord, QAfterSortBy>
+      thenByContextSyncGuidDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'contextSyncGuid', Sort.desc);
+    });
+  }
+
   QueryBuilder<ChangeRecord, ChangeRecord, QAfterSortBy> thenByCreatedAt() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'createdAt', Sort.asc);
@@ -2056,6 +2506,20 @@ extension ChangeRecordQuerySortThenBy
       thenByEntityLocalIdDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'entityLocalId', Sort.desc);
+    });
+  }
+
+  QueryBuilder<ChangeRecord, ChangeRecord, QAfterSortBy>
+      thenByEntitySyncGuid() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'entitySyncGuid', Sort.asc);
+    });
+  }
+
+  QueryBuilder<ChangeRecord, ChangeRecord, QAfterSortBy>
+      thenByEntitySyncGuidDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'entitySyncGuid', Sort.desc);
     });
   }
 
@@ -2169,6 +2633,14 @@ extension ChangeRecordQueryWhereDistinct
     });
   }
 
+  QueryBuilder<ChangeRecord, ChangeRecord, QDistinct> distinctByContextSyncGuid(
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'contextSyncGuid',
+          caseSensitive: caseSensitive);
+    });
+  }
+
   QueryBuilder<ChangeRecord, ChangeRecord, QDistinct> distinctByCreatedAt() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'createdAt');
@@ -2186,6 +2658,14 @@ extension ChangeRecordQueryWhereDistinct
       distinctByEntityLocalId() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'entityLocalId');
+    });
+  }
+
+  QueryBuilder<ChangeRecord, ChangeRecord, QDistinct> distinctByEntitySyncGuid(
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'entitySyncGuid',
+          caseSensitive: caseSensitive);
     });
   }
 
@@ -2258,6 +2738,13 @@ extension ChangeRecordQueryProperty
     });
   }
 
+  QueryBuilder<ChangeRecord, String, QQueryOperations>
+      contextSyncGuidProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'contextSyncGuid');
+    });
+  }
+
   QueryBuilder<ChangeRecord, DateTime, QQueryOperations> createdAtProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'createdAt');
@@ -2273,6 +2760,13 @@ extension ChangeRecordQueryProperty
   QueryBuilder<ChangeRecord, int, QQueryOperations> entityLocalIdProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'entityLocalId');
+    });
+  }
+
+  QueryBuilder<ChangeRecord, String, QQueryOperations>
+      entitySyncGuidProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'entitySyncGuid');
     });
   }
 

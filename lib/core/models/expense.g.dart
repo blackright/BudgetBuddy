@@ -84,19 +84,24 @@ const ExpenseSchema = CollectionSchema(
       type: IsarType.byte,
       enumMap: _ExpensestatusEnumValueMap,
     ),
-    r'title': PropertySchema(
+    r'syncGuid': PropertySchema(
       id: 13,
+      name: r'syncGuid',
+      type: IsarType.string,
+    ),
+    r'title': PropertySchema(
+      id: 14,
       name: r'title',
       type: IsarType.string,
     ),
     r'type': PropertySchema(
-      id: 14,
+      id: 15,
       name: r'type',
       type: IsarType.byte,
       enumMap: _ExpensetypeEnumValueMap,
     ),
     r'yearMonth': PropertySchema(
-      id: 15,
+      id: 16,
       name: r'yearMonth',
       type: IsarType.string,
     )
@@ -107,6 +112,19 @@ const ExpenseSchema = CollectionSchema(
   deserializeProp: _expenseDeserializeProp,
   idName: r'id',
   indexes: {
+    r'syncGuid': IndexSchema(
+      id: 6159741003405035971,
+      name: r'syncGuid',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'syncGuid',
+          type: IndexType.hash,
+          caseSensitive: true,
+        )
+      ],
+    ),
     r'profileId': IndexSchema(
       id: 6052971939042612300,
       name: r'profileId',
@@ -175,6 +193,7 @@ int _expenseEstimateSize(
       bytesCount += 3 + value.length * 3;
     }
   }
+  bytesCount += 3 + object.syncGuid.length * 3;
   bytesCount += 3 + object.title.length * 3;
   bytesCount += 3 + object.yearMonth.length * 3;
   return bytesCount;
@@ -199,9 +218,10 @@ void _expenseSerialize(
   writer.writeString(offsets[10], object.receiptPath);
   writer.writeLong(offsets[11], object.sharedSpaceId);
   writer.writeByte(offsets[12], object.status.index);
-  writer.writeString(offsets[13], object.title);
-  writer.writeByte(offsets[14], object.type.index);
-  writer.writeString(offsets[15], object.yearMonth);
+  writer.writeString(offsets[13], object.syncGuid);
+  writer.writeString(offsets[14], object.title);
+  writer.writeByte(offsets[15], object.type.index);
+  writer.writeString(offsets[16], object.yearMonth);
 }
 
 Expense _expenseDeserialize(
@@ -228,11 +248,12 @@ Expense _expenseDeserialize(
     sharedSpaceId: reader.readLongOrNull(offsets[11]),
     status: _ExpensestatusValueEnumMap[reader.readByteOrNull(offsets[12])] ??
         ExpenseStatus.paid,
-    title: reader.readString(offsets[13]),
-    type: _ExpensetypeValueEnumMap[reader.readByteOrNull(offsets[14])] ??
+    title: reader.readString(offsets[14]),
+    type: _ExpensetypeValueEnumMap[reader.readByteOrNull(offsets[15])] ??
         ExpenseType.standard,
-    yearMonth: reader.readString(offsets[15]),
+    yearMonth: reader.readString(offsets[16]),
   );
+  object.syncGuid = reader.readString(offsets[13]);
   return object;
 }
 
@@ -274,9 +295,11 @@ P _expenseDeserializeProp<P>(
     case 13:
       return (reader.readString(offset)) as P;
     case 14:
+      return (reader.readString(offset)) as P;
+    case 15:
       return (_ExpensetypeValueEnumMap[reader.readByteOrNull(offset)] ??
           ExpenseType.standard) as P;
-    case 15:
+    case 16:
       return (reader.readString(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -415,6 +438,51 @@ extension ExpenseQueryWhere on QueryBuilder<Expense, Expense, QWhereClause> {
         upper: upperId,
         includeUpper: includeUpper,
       ));
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterWhereClause> syncGuidEqualTo(
+      String syncGuid) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'syncGuid',
+        value: [syncGuid],
+      ));
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterWhereClause> syncGuidNotEqualTo(
+      String syncGuid) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncGuid',
+              lower: [],
+              upper: [syncGuid],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncGuid',
+              lower: [syncGuid],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncGuid',
+              lower: [syncGuid],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncGuid',
+              lower: [],
+              upper: [syncGuid],
+              includeUpper: false,
+            ));
+      }
     });
   }
 
@@ -1739,6 +1807,136 @@ extension ExpenseQueryFilter
     });
   }
 
+  QueryBuilder<Expense, Expense, QAfterFilterCondition> syncGuidEqualTo(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterFilterCondition> syncGuidGreaterThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterFilterCondition> syncGuidLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterFilterCondition> syncGuidBetween(
+    String lower,
+    String upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'syncGuid',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterFilterCondition> syncGuidStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterFilterCondition> syncGuidEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterFilterCondition> syncGuidContains(
+      String value,
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterFilterCondition> syncGuidMatches(
+      String pattern,
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'syncGuid',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterFilterCondition> syncGuidIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'syncGuid',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterFilterCondition> syncGuidIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'syncGuid',
+        value: '',
+      ));
+    });
+  }
+
   QueryBuilder<Expense, Expense, QAfterFilterCondition> titleEqualTo(
     String value, {
     bool caseSensitive = true,
@@ -2216,6 +2414,18 @@ extension ExpenseQuerySortBy on QueryBuilder<Expense, Expense, QSortBy> {
     });
   }
 
+  QueryBuilder<Expense, Expense, QAfterSortBy> sortBySyncGuid() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncGuid', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterSortBy> sortBySyncGuidDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncGuid', Sort.desc);
+    });
+  }
+
   QueryBuilder<Expense, Expense, QAfterSortBy> sortByTitle() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'title', Sort.asc);
@@ -2423,6 +2633,18 @@ extension ExpenseQuerySortThenBy
     });
   }
 
+  QueryBuilder<Expense, Expense, QAfterSortBy> thenBySyncGuid() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncGuid', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterSortBy> thenBySyncGuidDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncGuid', Sort.desc);
+    });
+  }
+
   QueryBuilder<Expense, Expense, QAfterSortBy> thenByTitle() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'title', Sort.asc);
@@ -2544,6 +2766,13 @@ extension ExpenseQueryWhereDistinct
     });
   }
 
+  QueryBuilder<Expense, Expense, QDistinct> distinctBySyncGuid(
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'syncGuid', caseSensitive: caseSensitive);
+    });
+  }
+
   QueryBuilder<Expense, Expense, QDistinct> distinctByTitle(
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
@@ -2648,6 +2877,12 @@ extension ExpenseQueryProperty
   QueryBuilder<Expense, ExpenseStatus, QQueryOperations> statusProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'status');
+    });
+  }
+
+  QueryBuilder<Expense, String, QQueryOperations> syncGuidProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'syncGuid');
     });
   }
 

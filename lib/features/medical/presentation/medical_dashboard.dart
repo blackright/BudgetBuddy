@@ -9,6 +9,7 @@ import '../../../core/models/medical_bill.dart';
 import '../../../core/models/medical_service_type.dart';
 import '../../../core/models/money.dart';
 import '../../../core/providers/active_profile_provider.dart';
+import '../../../core/providers/active_space_provider.dart';
 import '../../../core/providers/selected_month_provider.dart';
 import '../../../core/providers/clock_provider.dart';
 import '../../engine/currency_resolution.dart';
@@ -138,11 +139,11 @@ class MedicalDashboard extends ConsumerWidget {
   Future<void> _editInsuranceProfile(
       BuildContext context, WidgetRef ref) async {
     final profileId = ref.read(activeProfileProvider).value?.id;
-    final existing = profileId == null
-        ? ref.read(insuranceProfileProvider).value
-        : await ref
-            .read(medicalRepositoryProvider)
-            .getInsuranceProfile(profileId);
+    final spaceId = ref.read(activeSpaceIdProvider);
+    // The active context owns the plan (FR-013): read back the same
+    // context-scoped row the screen renders from, so editing inside a space
+    // never opens — or overwrites — the personal plan.
+    final existing = ref.read(insuranceProfileProvider).value;
 
     if (!context.mounted) return;
     final result = await showModalBottomSheet<InsuranceProfile>(
@@ -152,7 +153,9 @@ class MedicalDashboard extends ConsumerWidget {
     );
     if (result == null) return;
     result.profileId = profileId;
-    await ref.read(medicalRepositoryProvider).saveInsuranceProfile(result);
+    await ref
+        .read(medicalRepositoryProvider)
+        .saveInsuranceProfile(result, sharedSpaceId: spaceId);
   }
 
   Future<void> _openDirectory(BuildContext context, WidgetRef ref) async {
@@ -1055,6 +1058,9 @@ class _DirectorySheet extends ConsumerWidget {
     await ref.read(medicalRepositoryProvider).saveProvider(
           id: existing?.id,
           profileId: profileId,
+          // FR-013: while a space is active the row must carry the space key,
+          // or the space's own provider list can never show it.
+          sharedSpaceId: ref.read(activeSpaceIdProvider),
           name: draft.name,
           specialty: draft.specialty,
         );
@@ -1076,6 +1082,7 @@ class _DirectorySheet extends ConsumerWidget {
     await ref.read(medicalRepositoryProvider).saveFamilyMember(
           id: existing?.id,
           profileId: profileId,
+          sharedSpaceId: ref.read(activeSpaceIdProvider),
           name: draft.name,
           relation: draft.relation,
         );
@@ -1098,6 +1105,7 @@ class _DirectorySheet extends ConsumerWidget {
       await ref.read(medicalRepositoryProvider).saveServiceType(
             id: existing?.id,
             profileId: profileId,
+            sharedSpaceId: ref.read(activeSpaceIdProvider),
             name: draft.name,
           );
     } on DuplicateServiceTypeException {

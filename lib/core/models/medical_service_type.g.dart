@@ -47,6 +47,11 @@ const MedicalServiceTypeSchema = CollectionSchema(
       id: 5,
       name: r'sortOrder',
       type: IsarType.long,
+    ),
+    r'syncGuid': PropertySchema(
+      id: 6,
+      name: r'syncGuid',
+      type: IsarType.string,
     )
   },
   estimateSize: _medicalServiceTypeEstimateSize,
@@ -55,6 +60,19 @@ const MedicalServiceTypeSchema = CollectionSchema(
   deserializeProp: _medicalServiceTypeDeserializeProp,
   idName: r'id',
   indexes: {
+    r'syncGuid': IndexSchema(
+      id: 6159741003405035971,
+      name: r'syncGuid',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'syncGuid',
+          type: IndexType.hash,
+          caseSensitive: true,
+        )
+      ],
+    ),
     r'profileId': IndexSchema(
       id: 6052971939042612300,
       name: r'profileId',
@@ -97,6 +115,7 @@ int _medicalServiceTypeEstimateSize(
 ) {
   var bytesCount = offsets.last;
   bytesCount += 3 + object.name.length * 3;
+  bytesCount += 3 + object.syncGuid.length * 3;
   return bytesCount;
 }
 
@@ -112,6 +131,7 @@ void _medicalServiceTypeSerialize(
   writer.writeLong(offsets[3], object.profileId);
   writer.writeLong(offsets[4], object.sharedSpaceId);
   writer.writeLong(offsets[5], object.sortOrder);
+  writer.writeString(offsets[6], object.syncGuid);
 }
 
 MedicalServiceType _medicalServiceTypeDeserialize(
@@ -128,6 +148,7 @@ MedicalServiceType _medicalServiceTypeDeserialize(
   object.profileId = reader.readLongOrNull(offsets[3]);
   object.sharedSpaceId = reader.readLongOrNull(offsets[4]);
   object.sortOrder = reader.readLong(offsets[5]);
+  object.syncGuid = reader.readString(offsets[6]);
   return object;
 }
 
@@ -150,6 +171,8 @@ P _medicalServiceTypeDeserializeProp<P>(
       return (reader.readLongOrNull(offset)) as P;
     case 5:
       return (reader.readLong(offset)) as P;
+    case 6:
+      return (reader.readString(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
   }
@@ -263,6 +286,51 @@ extension MedicalServiceTypeQueryWhere
         upper: upperId,
         includeUpper: includeUpper,
       ));
+    });
+  }
+
+  QueryBuilder<MedicalServiceType, MedicalServiceType, QAfterWhereClause>
+      syncGuidEqualTo(String syncGuid) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'syncGuid',
+        value: [syncGuid],
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalServiceType, MedicalServiceType, QAfterWhereClause>
+      syncGuidNotEqualTo(String syncGuid) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncGuid',
+              lower: [],
+              upper: [syncGuid],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncGuid',
+              lower: [syncGuid],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncGuid',
+              lower: [syncGuid],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncGuid',
+              lower: [],
+              upper: [syncGuid],
+              includeUpper: false,
+            ));
+      }
     });
   }
 
@@ -914,6 +982,142 @@ extension MedicalServiceTypeQueryFilter
       ));
     });
   }
+
+  QueryBuilder<MedicalServiceType, MedicalServiceType, QAfterFilterCondition>
+      syncGuidEqualTo(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalServiceType, MedicalServiceType, QAfterFilterCondition>
+      syncGuidGreaterThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalServiceType, MedicalServiceType, QAfterFilterCondition>
+      syncGuidLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalServiceType, MedicalServiceType, QAfterFilterCondition>
+      syncGuidBetween(
+    String lower,
+    String upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'syncGuid',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalServiceType, MedicalServiceType, QAfterFilterCondition>
+      syncGuidStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalServiceType, MedicalServiceType, QAfterFilterCondition>
+      syncGuidEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalServiceType, MedicalServiceType, QAfterFilterCondition>
+      syncGuidContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalServiceType, MedicalServiceType, QAfterFilterCondition>
+      syncGuidMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'syncGuid',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalServiceType, MedicalServiceType, QAfterFilterCondition>
+      syncGuidIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'syncGuid',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<MedicalServiceType, MedicalServiceType, QAfterFilterCondition>
+      syncGuidIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'syncGuid',
+        value: '',
+      ));
+    });
+  }
 }
 
 extension MedicalServiceTypeQueryObject
@@ -1005,6 +1209,20 @@ extension MedicalServiceTypeQuerySortBy
       sortBySortOrderDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'sortOrder', Sort.desc);
+    });
+  }
+
+  QueryBuilder<MedicalServiceType, MedicalServiceType, QAfterSortBy>
+      sortBySyncGuid() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncGuid', Sort.asc);
+    });
+  }
+
+  QueryBuilder<MedicalServiceType, MedicalServiceType, QAfterSortBy>
+      sortBySyncGuidDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncGuid', Sort.desc);
     });
   }
 }
@@ -1108,6 +1326,20 @@ extension MedicalServiceTypeQuerySortThenBy
       return query.addSortBy(r'sortOrder', Sort.desc);
     });
   }
+
+  QueryBuilder<MedicalServiceType, MedicalServiceType, QAfterSortBy>
+      thenBySyncGuid() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncGuid', Sort.asc);
+    });
+  }
+
+  QueryBuilder<MedicalServiceType, MedicalServiceType, QAfterSortBy>
+      thenBySyncGuidDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncGuid', Sort.desc);
+    });
+  }
 }
 
 extension MedicalServiceTypeQueryWhereDistinct
@@ -1151,6 +1383,13 @@ extension MedicalServiceTypeQueryWhereDistinct
       distinctBySortOrder() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'sortOrder');
+    });
+  }
+
+  QueryBuilder<MedicalServiceType, MedicalServiceType, QDistinct>
+      distinctBySyncGuid({bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'syncGuid', caseSensitive: caseSensitive);
     });
   }
 }
@@ -1197,6 +1436,13 @@ extension MedicalServiceTypeQueryProperty
   QueryBuilder<MedicalServiceType, int, QQueryOperations> sortOrderProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'sortOrder');
+    });
+  }
+
+  QueryBuilder<MedicalServiceType, String, QQueryOperations>
+      syncGuidProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'syncGuid');
     });
   }
 }

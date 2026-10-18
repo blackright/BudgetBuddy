@@ -16,6 +16,7 @@ import '../../engine/currency_resolution.dart';
 import '../../engine/providers/rate_registry_provider.dart';
 import '../../settings/providers/settings_provider.dart';
 import '../../spaces/repositories/space_write_guard.dart';
+import '../../sync/providers/sync_recorder_provider.dart';
 import '../repositories/medical_repository.dart';
 
 final medicalRepositoryProvider = Provider<MedicalRepository>((ref) {
@@ -24,6 +25,7 @@ final medicalRepositoryProvider = Provider<MedicalRepository>((ref) {
     rateRegistry: ref.watch(rateRegistryProvider),
     guard: ref.watch(spaceWriteGuardProvider),
     actingProfileId: ref.watch(actingProfileIdProvider),
+    syncRecorder: ref.watch(syncRecorderProvider),
   );
 });
 

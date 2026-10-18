@@ -11,9 +11,8 @@ class MedicalProviderCodec extends SyncCodec<MedicalProvider> {
 
   @override
   Map<String, Object?> toJson(MedicalProvider value) => {
-        'id': value.id,
+        'syncGuid': value.syncGuid,
         'profileId': value.profileId,
-        'sharedSpaceId': value.sharedSpaceId,
         'name': value.name,
         'specialty': value.specialty,
         'autoCreated': value.autoCreated,
@@ -21,9 +20,8 @@ class MedicalProviderCodec extends SyncCodec<MedicalProvider> {
 
   @override
   MedicalProvider fromJson(Map<String, Object?> json) => MedicalProvider()
-    ..id = decodeInt(json['id'])
+    ..syncGuid = decodeGuid(json['syncGuid'])
     ..profileId = decodeIntOrNull(json['profileId'])
-    ..sharedSpaceId = decodeIntOrNull(json['sharedSpaceId'])
     ..name = (json['name'] as String?) ?? ''
     ..specialty = json['specialty'] as String?
     ..autoCreated = (json['autoCreated'] as bool?) ?? false;

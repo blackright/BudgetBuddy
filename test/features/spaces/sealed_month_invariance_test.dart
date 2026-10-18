@@ -8,6 +8,8 @@ import 'package:budget_buddy/features/spaces/domain/shared_member_key.dart';
 import 'package:budget_buddy/features/spaces/repositories/space_role_guard.dart';
 import 'package:budget_buddy/features/spaces/repositories/space_write_guard.dart';
 import 'package:budget_buddy/features/sync/domain/codecs/expense_codec.dart';
+import 'package:budget_buddy/features/sync/domain/sync_codec.dart';
+import 'package:budget_buddy/features/sync/domain/sync_guid.dart';
 import 'package:budget_buddy/features/sync/repositories/sync_engine.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:isar/isar.dart';
@@ -24,8 +26,11 @@ import '../sync/support/sync_harness.dart';
 /// month's totals from its *own* seal, so identical seals re-price identically in
 /// every currency.
 Expense _expense(
-        {required int id, int amount = 100, String yearMonth = '2026-03'}) =>
-    Expense(
+        {required int id,
+        int amount = 100,
+        String yearMonth = '2026-03',
+        String? syncGuid}) =>
+    (Expense(
       id: id,
       profileId: 1,
       sharedSpaceId: 1,
@@ -36,7 +41,8 @@ Expense _expense(
       categoryId: 'general',
       date: DateTime.utc(2026, 3, 5),
       budgetId: 1,
-    );
+    ))
+      ..syncGuid = syncGuid ?? newSyncGuid();
 
 void main() {
   late SyncTestHarness harnessA;
@@ -45,9 +51,10 @@ void main() {
   late DeviceKeys editor;
   late SyncEngine engineA;
   late SyncEngine engineB;
+  late String spaceGuid;
 
   Future<void> seedSpace(SyncTestHarness h) async {
-    await h.createSpace(name: 'Home');
+    await h.createSpaceAt(localId: 1, syncGuid: spaceGuid);
     await h.addSignedMember(
         spaceId: 1, keys: owner, role: SharedMemberRole.owner);
     await h.addSignedMember(
@@ -56,20 +63,25 @@ void main() {
 
   Future expenseChange(
     DeviceKeys author, {
+    required String guid,
     int millis = 1000,
     int id = 1,
     int amount = 100,
     String yearMonth = '2026-03',
-  }) =>
-      signedChange(
-        keys: author,
-        deviceId: 'A',
-        hlcMillis: millis,
-        entityType: 'Expense',
-        entityLocalId: id,
-        payload: const ExpenseCodec()
-            .toPayload(_expense(id: id, amount: amount, yearMonth: yearMonth)),
-      );
+  }) async {
+    final json = const ExpenseCodec().toJson(
+        _expense(id: id, amount: amount, yearMonth: yearMonth, syncGuid: guid));
+    json['sharedSpaceSyncGuid'] = spaceGuid;
+    return signedChange(
+      keys: author,
+      deviceId: 'A',
+      hlcMillis: millis,
+      entityType: 'Expense',
+      entitySyncGuid: guid,
+      contextSyncGuid: spaceGuid,
+      payload: canonicalJsonEncode(json),
+    );
+  }
 
   /// Writes a seal with a real four-currency rate table so totals can be re-priced
   /// deterministically on each device.
@@ -100,6 +112,7 @@ void main() {
     };
     engineA = SyncEngine(harnessA.isar, trustedKeys: trusted);
     engineB = SyncEngine(harnessB.isar, trustedKeys: trusted);
+    spaceGuid = newSyncGuid();
     await seedSpace(harnessA);
     await seedSpace(harnessB);
   });
@@ -111,13 +124,17 @@ void main() {
 
   test('a month is exchanged once, then frozen on every peer (FR-011, R6)',
       () async {
+    final exp1 = newSyncGuid();
+    final exp2 = newSyncGuid();
+    final exp3 = newSyncGuid();
+
     // 1. Unsealed: the change is exchanged normally.
     expect(
       await engineB.applyIncoming(
-          await expenseChange(editor, millis: 1000, amount: 100)),
+          await expenseChange(editor, guid: exp1, millis: 1000, amount: 100)),
       ApplyOutcome.applied,
     );
-    expect((await harnessB.isar.expenses.get(1))!.amount, 100);
+    expect((await harnessB.expenseByGuid(exp1))!.amount, 100);
 
     // 2. The Owner seals the month on both devices.
     await sealWithRates(harnessA, '2026-03');
@@ -127,32 +144,32 @@ void main() {
     //    though the author is an Editor and the signature verifies.
     expect(
       await engineA.applyIncoming(
-          await expenseChange(editor, millis: 2000, amount: 999)),
+          await expenseChange(editor, guid: exp1, millis: 2000, amount: 999)),
       ApplyOutcome.droppedUnauthorized,
     );
     expect(
       await engineB.applyIncoming(
-          await expenseChange(editor, millis: 2000, amount: 999)),
+          await expenseChange(editor, guid: exp1, millis: 2000, amount: 999)),
       ApplyOutcome.droppedUnauthorized,
     );
-    expect((await harnessB.isar.expenses.get(1))!.amount, 100,
+    expect((await harnessB.expenseByGuid(exp1))!.amount, 100,
         reason: 'the sealed month keeps the content it froze with');
 
     // 4. A brand-new record in the sealed month is dropped too.
     expect(
-      await engineB
-          .applyIncoming(await expenseChange(editor, millis: 3000, id: 2)),
+      await engineB.applyIncoming(
+          await expenseChange(editor, guid: exp2, millis: 3000, id: 2)),
       ApplyOutcome.droppedUnauthorized,
     );
-    expect(await harnessB.isar.expenses.get(2), isNull);
+    expect(await harnessB.expenseByGuid(exp2), isNull);
 
     // 5. An unsealed month still exchanges (only the sealed one is frozen).
     expect(
       await engineB.applyIncoming(await expenseChange(editor,
-          millis: 4000, id: 3, yearMonth: '2026-04')),
+          guid: exp3, millis: 4000, id: 3, yearMonth: '2026-04')),
       ApplyOutcome.applied,
     );
-    expect(await harnessB.isar.expenses.get(3), isNotNull);
+    expect(await harnessB.expenseByGuid(exp3), isNotNull);
   });
 
   test('a sealed month is also refused on the local write path (both paths)',
