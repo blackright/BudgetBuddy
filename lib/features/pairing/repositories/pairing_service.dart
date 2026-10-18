@@ -158,6 +158,31 @@ class PairingService {
         }
       });
 
+  /// Forgets a peer entirely (FR-014, `pairing.md` §5): every paired context is
+  /// deactivated so nothing is exchanged any more, **and** the `PairedPeer` row
+  /// is deleted so the person leaves the People list.
+  ///
+  /// [unpair] deliberately stops short of this — it only deactivates contexts,
+  /// which is why an unpaired person used to linger in People forever. The local
+  /// copy of the data is still kept: removing a person never destroys money.
+  Future<void> forgetPeer({required String peerIdentityId}) =>
+      _isar.writeTxn(() async {
+        final peer = await _isar.pairedPeers
+            .filter()
+            .peerIdentityIdEqualTo(peerIdentityId)
+            .findFirst();
+        if (peer == null) return;
+        final contexts = await _isar.pairedContexts
+            .filter()
+            .peerIdEqualTo(peer.id)
+            .findAll();
+        for (final context in contexts) {
+          context.active = false;
+          await _isar.pairedContexts.put(context);
+        }
+        await _isar.pairedPeers.delete(peer.id);
+      });
+
   /// Validates a scanner's [claim] and, on success, grants the membership and
   /// records the pairing (`pairing.md` §3 step 4–5).
   ///
@@ -316,6 +341,10 @@ class PairingService {
       if (result.membership != null) {
         final member =
             const SharedMemberCodec().fromPayload(result.membership!);
+        // The payload carries the GUID of the owning space, not a local id; the
+        // scanned space row is not created here, so bind the membership to the
+        // caller-supplied local space id (applied later by the sync bootstrap).
+        member.sharedSpaceId = spaceId;
         member.id = await _isar.sharedMembers.put(member);
       }
     });

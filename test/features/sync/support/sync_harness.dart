@@ -101,6 +101,34 @@ class SyncTestHarness {
     });
   }
 
+  /// Creates a [SharedSpace] at a **chosen** local row id, returning that id.
+  ///
+  /// Isar only auto-increments an id that is left unset, so an explicit id is
+  /// honoured (isar.dev/schema.html). This lets two peers hold the same logical
+  /// entity under **different** local ids — the case 012's same-id tests never
+  /// exercised, and the gap the per-entity `syncGuid` closes (research R5).
+  ///
+  /// Pass [syncGuid] to pin the device-independent identity so two peers can
+  /// share it; omit it to let the model generate one.
+  Future<int> createSpaceAt({
+    required int localId,
+    String name = 'Home',
+    int createdByProfileId = 1,
+    String? syncGuid,
+  }) {
+    return isar.writeTxn(() async {
+      final space = SharedSpace()
+        ..id = localId
+        ..name = name
+        ..currency = PrimaryCurrency.usd
+        ..defaultIncome = 0
+        ..createdByProfileId = createdByProfileId
+        ..createdAt = DateTime(2026);
+      if (syncGuid != null) space.syncGuid = syncGuid;
+      return isar.sharedSpaces.put(space);
+    });
+  }
+
   /// Adds a membership row, returning its id.
   Future<int> addMember({
     required int spaceId,
@@ -212,6 +240,28 @@ class SyncTestHarness {
 
   Future<List<ChangeRecord>> changeRecords() =>
       isar.changeRecords.where().findAll();
+
+  /// The device-independent `syncGuid` a space was seeded with (T032/GUID
+  /// identity) — needed so a test can stamp the matching `contextSyncGuid`.
+  Future<String> spaceGuid(int localId) async =>
+      (await isar.sharedSpaces.get(localId))!.syncGuid;
+
+  /// Finds an applied expense by its `syncGuid` — the wire identity 015 keys on
+  /// (replacing the old local-int-id asserts).
+  Future<Expense?> expenseByGuid(String guid) =>
+      isar.expenses.filter().syncGuidEqualTo(guid).findFirst();
+
+  /// Finds a membership by its `syncGuid`.
+  Future<SharedMember?> memberByGuid(String guid) =>
+      isar.sharedMembers.filter().syncGuidEqualTo(guid).findFirst();
+
+  /// Finds a membership by its stable `(space, profile)` key.
+  Future<SharedMember?> memberFor(int spaceId, int profileId) =>
+      isar.sharedMembers
+          .filter()
+          .sharedSpaceIdEqualTo(spaceId)
+          .profileIdEqualTo(profileId)
+          .findFirst();
 
   Future<void> close() async {
     await isar.close(deleteFromDisk: true);

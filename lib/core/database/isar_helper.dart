@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -28,6 +29,12 @@ class IsarHelper {
   static late Isar _isar;
 
   static Isar get instance => _isar;
+
+  /// Test-only injection of the singleton so provider-level tests can point the
+  /// app's providers at a temporary Isar. The running app never calls this
+  /// (`instance` is otherwise only ever set by [init]).
+  @visibleForTesting
+  static set instance(Isar isar) => _isar = isar;
 
   static Future<void> init() async {
     final dir = await getApplicationDocumentsDirectory();

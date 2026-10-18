@@ -1,12 +1,18 @@
 import 'package:isar/isar.dart';
 
 import '../../../core/models/currency_code.dart';
+import '../../sync/domain/sync_guid.dart';
 
 part 'reimbursement.g.dart';
 
 @collection
 class Reimbursement {
   Id id = Isar.autoIncrement;
+
+  /// Device-independent identity of this row (research R5); indexed, not unique
+  /// (uniqueness held by construction and migration step 17).
+  @Index()
+  String syncGuid = newSyncGuid();
 
   @Index()
   int profileId;

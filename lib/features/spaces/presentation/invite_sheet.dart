@@ -82,12 +82,17 @@ class _InviteSheetState extends ConsumerState<InviteSheet> {
 
   /// Adds a paired person (US7, T064): the membership is signed by this
   /// device's identity, so the phone must unlock first.
+  ///
+  /// A declined prompt leaves the unlock session retryable (T073), so the very
+  /// next tap asks again instead of reporting a permanently locked identity.
   Future<void> _addContact() async {
     final spaceId = ref.read(activeSpaceIdProvider);
     final peerIdentityId = _selectedPeerIdentityId;
     if (spaceId == null || peerIdentityId == null) return;
 
-    final service = await ref.read(signingPairingServiceProvider.future);
+    final service = await ref.read(signingPairingServiceProvider)(
+      reason: 'Confirm it is you',
+    );
     if (service == null) {
       _warn('Your identity stayed locked, so nothing was shared.');
       return;

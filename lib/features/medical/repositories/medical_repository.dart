@@ -15,6 +15,7 @@ import '../../engine/expense_delta.dart';
 import '../../engine/providers/rate_registry_provider.dart';
 import '../../expenses/models/reimbursement.dart';
 import '../../spaces/repositories/space_write_guard.dart';
+import '../../sync/repositories/sync_recorder.dart';
 
 /// Budget-scoped inputs needed to keep a [MedicalBill] and its linked [Expense]
 /// consistent. Supplied by the UI layer from the active context.
@@ -104,9 +105,11 @@ class MedicalRepository {
     RateTableRegistry? rateRegistry,
     SpaceWriteGuard? guard,
     int? actingProfileId,
+    SyncRecorder? syncRecorder,
   })  : _rateRegistry = rateRegistry,
         _writeGuard = guard,
-        _actingProfileId = actingProfileId;
+        _actingProfileId = actingProfileId,
+        _syncRecorder = syncRecorder;
 
   /// Matches the seeded `Category` with `categoryId == 'health'`.
   static const String medicalCategoryId = 'health';
@@ -121,6 +124,12 @@ class MedicalRepository {
   /// reimbursement write is refused for a Viewer or a sealed month (US4).
   final SpaceWriteGuard? _writeGuard;
   final int? _actingProfileId;
+
+  /// Appends a signed change for a paired shared context on every write
+  /// (FR-006). Optional and inert when no signer/identity is attached, so 011's
+  /// behaviour and its tests are unchanged. Personal rows (a `null`
+  /// `sharedSpaceId`) are never exchanged, so the recorder no-ops for them.
+  final SyncRecorder? _syncRecorder;
 
   Future<void> _guardWrite(int? sharedSpaceId, String yearMonth) async {
     await _writeGuard?.assertSharedMoneyWrite(
@@ -141,14 +150,20 @@ class MedicalRepository {
   /// Bills belonging to [context]'s month — the context-scoped route (R3,
   /// data-model §3.5): `profileIdEqualTo` for personal, `sharedSpaceIdEqualTo`
   /// for shared.
+  ///
+  /// The personal branch also demands `sharedSpaceId == null`: the personal and
+  /// the shared drawer never cross (FR-013), so a space row that carries a
+  /// profile key — written by an older build, or delivered by a peer that way —
+  /// can never answer for a personal profile.
   Stream<List<MedicalBill>> watchMedicalBillsForContext(ContextRef context) {
     return _isar.medicalBills
         .filter()
-        .group(
-          (q) => context.isShared
-              ? q.sharedSpaceIdEqualTo(context.spaceId)
-              : q.profileIdEqualTo(context.profileKey),
-        )
+        .group((q) => context.isShared
+            ? q.sharedSpaceIdEqualTo(context.spaceId)
+            : q
+                .profileIdEqualTo(context.profileKey)
+                .and()
+                .sharedSpaceIdIsNull())
         .and()
         .yearMonthEqualTo(context.yearMonth)
         .sortByServiceDateDesc()
@@ -163,11 +178,12 @@ class MedicalRepository {
       ContextRef context) {
     return _isar.insuranceProfiles
         .filter()
-        .group(
-          (q) => context.isShared
-              ? q.sharedSpaceIdEqualTo(context.spaceId)
-              : q.profileIdEqualTo(context.profileKey),
-        )
+        .group((q) => context.isShared
+            ? q.sharedSpaceIdEqualTo(context.spaceId)
+            : q
+                .profileIdEqualTo(context.profileKey)
+                .and()
+                .sharedSpaceIdIsNull())
         .watch(fireImmediately: true)
         .map((rows) => rows.isEmpty
             ? null
@@ -179,11 +195,12 @@ class MedicalRepository {
   Stream<List<FamilyMember>> watchFamilyMembersForContext(ContextRef context) {
     return _isar.familyMembers
         .filter()
-        .group(
-          (q) => context.isShared
-              ? q.sharedSpaceIdEqualTo(context.spaceId)
-              : q.profileIdEqualTo(context.profileKey),
-        )
+        .group((q) => context.isShared
+            ? q.sharedSpaceIdEqualTo(context.spaceId)
+            : q
+                .profileIdEqualTo(context.profileKey)
+                .and()
+                .sharedSpaceIdIsNull())
         .sortByName()
         .watch(fireImmediately: true);
   }
@@ -192,11 +209,12 @@ class MedicalRepository {
       ContextRef context) {
     return _isar.medicalProviders
         .filter()
-        .group(
-          (q) => context.isShared
-              ? q.sharedSpaceIdEqualTo(context.spaceId)
-              : q.profileIdEqualTo(context.profileKey),
-        )
+        .group((q) => context.isShared
+            ? q.sharedSpaceIdEqualTo(context.spaceId)
+            : q
+                .profileIdEqualTo(context.profileKey)
+                .and()
+                .sharedSpaceIdIsNull())
         .sortByName()
         .watch(fireImmediately: true);
   }
@@ -282,16 +300,21 @@ class MedicalRepository {
     await _guardWrite(context.sharedSpaceId, context.yearMonth);
     _validateBill(bill);
 
+    // The context owns the row (FR-003, FR-013): a bill saved into a space is
+    // keyed on the space and never on a profile, whatever the caller pinned on
+    // it. Without this a shared bill kept the personal key it was built with
+    // and answered for the personal drawer too (data-model §3,
+    // "exactly-one-context").
     bill
       ..serviceDate ??= DateTime.now()
-      ..sharedSpaceId ??= context.sharedSpaceId
-      ..profileId ??= context.profileId
+      ..sharedSpaceId = context.sharedSpaceId
+      ..profileId = context.profileId
       ..patientSharePercent = bill.patientSharePercent.clamp(0.0, 100.0);
 
     await _isar.writeTxn(() async {
       final expense = await _syncLinkedExpense(bill, context, status: status);
       bill.linkedExpenseId = expense.id;
-      await _isar.medicalBills.put(bill);
+      await _putBillRecorded(bill);
     });
     return bill;
   }
@@ -398,7 +421,7 @@ class MedicalRepository {
       }
 
       bill.state = state;
-      await _isar.medicalBills.put(bill);
+      await _putBillRecorded(bill);
 
       final syncContext = context ?? await _contextForExistingBill(bill);
       if (syncContext != null) {
@@ -449,7 +472,7 @@ class MedicalRepository {
       }
 
       bill.paymentMethod = method;
-      await _isar.medicalBills.put(bill);
+      await _putBillRecorded(bill);
 
       final syncContext = context ?? await _contextForExistingBill(bill);
       if (syncContext != null) {
@@ -471,7 +494,7 @@ class MedicalRepository {
             : MedicalBillState
                 .waiting; // or however we want to represent partial
       }
-      await _isar.medicalBills.put(bill);
+      await _putBillRecorded(bill);
     });
   }
 
@@ -524,19 +547,20 @@ class MedicalRepository {
           .expenseIdEqualTo(expenseId)
           .findAll();
 
+      final Reimbursement reimbursement;
       if (existing.isEmpty) {
-        await _isar.reimbursements.put(
-          Reimbursement(
-            profileId: bill.profileId ?? expense.profileId,
-            sharedSpaceId: bill.sharedSpaceId ?? expense.sharedSpaceId,
-            expenseId: expenseId,
-            amount: amount,
-            currency: expense.currency,
-            originYearMonth: nextMonth(
-                bill.yearMonth.isNotEmpty ? bill.yearMonth : expense.yearMonth),
-            date: date ?? DateTime.now(),
-          ),
+        final created = Reimbursement(
+          profileId: bill.profileId ?? expense.profileId,
+          sharedSpaceId: bill.sharedSpaceId ?? expense.sharedSpaceId,
+          expenseId: expenseId,
+          amount: amount,
+          currency: expense.currency,
+          originYearMonth: nextMonth(
+              bill.yearMonth.isNotEmpty ? bill.yearMonth : expense.yearMonth),
+          date: date ?? DateTime.now(),
         );
+        created.id = await _isar.reimbursements.put(created);
+        reimbursement = created;
       } else {
         // Collapse to a single row so the engine never sees a doubled payout.
         existing.sort((a, b) => a.id.compareTo(b.id));
@@ -550,12 +574,14 @@ class MedicalRepository {
         if (extras.isNotEmpty) {
           await _isar.reimbursements.deleteAll(extras);
         }
+        reimbursement = existing.first;
       }
+      await _syncRecorder?.recordReimbursement(reimbursement);
 
       bill
         ..reimbursedAmount = amount
         ..state = MedicalBillState.finished;
-      await _isar.medicalBills.put(bill);
+      await _putBillRecorded(bill);
     });
   }
 
@@ -566,7 +592,7 @@ class MedicalRepository {
     }
     await _isar.writeTxn(() async {
       bill.followUpDate = date;
-      await _isar.medicalBills.put(bill);
+      await _putBillRecorded(bill);
     });
 
     if (date != null) {
@@ -584,7 +610,7 @@ class MedicalRepository {
   Future<void> setCalendarEventId(MedicalBill bill, String? eventId) async {
     await _isar.writeTxn(() async {
       bill.calendarEventId = eventId;
-      await _isar.medicalBills.put(bill);
+      await _putBillRecorded(bill);
     });
   }
 
@@ -595,7 +621,7 @@ class MedicalRepository {
         // Optionally, clear calendarEventId here if we are removing the event too,
         // but removing device_calendar event requires device_calendar plugin.
         // The UI or a dedicated service should probably handle device_calendar deletion.
-        await _isar.medicalBills.put(bill);
+        await _putBillRecorded(bill);
       });
       await ReminderNotificationService().cancelReminder(bill.id);
     }
@@ -621,9 +647,14 @@ class MedicalRepository {
       await _clearReimbursementFor(bill);
       final expenseId = bill.linkedExpenseId;
       if (expenseId != null) {
+        final expense = await _isar.expenses.get(expenseId);
         await _isar.expenses.delete(expenseId);
+        if (expense != null) {
+          await _syncRecorder?.recordExpenseRemoved(expense);
+        }
       }
       await _isar.medicalBills.delete(billId);
+      await _syncRecorder?.recordMedicalBillRemoved(bill);
     });
 
     await ReminderNotificationService().cancelReminder(billId);
@@ -648,11 +679,12 @@ class MedicalRepository {
       ContextRef context) {
     return _isar.medicalServiceTypes
         .filter()
-        .group(
-          (q) => context.isShared
-              ? q.sharedSpaceIdEqualTo(context.spaceId)
-              : q.profileIdEqualTo(context.profileKey),
-        )
+        .group((q) => context.isShared
+            ? q.sharedSpaceIdEqualTo(context.spaceId)
+            : q
+                .profileIdEqualTo(context.profileKey)
+                .and()
+                .sharedSpaceIdIsNull())
         .sortBySortOrder()
         .thenByName()
         .watch(fireImmediately: true);
@@ -689,24 +721,51 @@ class MedicalRepository {
   /// with an empty picker. Same rule as that step: seed only when the profile
   /// has no types at all, so a user who curated their own list is never
   /// re-seeded.
-  Future<void> ensureDefaultServiceTypes(int profileId) async {
+  ///
+  /// Pass [sharedSpaceId] to seed a **shared space** instead: the rows carry the
+  /// space key (`profileId == 0`, FR-013) and are journalised so the peer
+  /// receives them. Seeding happens once, on the device that creates the space.
+  Future<void> ensureDefaultServiceTypes(
+    int profileId, {
+    int? sharedSpaceId,
+  }) async {
     final existing = await _isar.medicalServiceTypes
         .filter()
-        .profileIdEqualTo(profileId)
+        .group((q) => sharedSpaceId == null
+            ? q.profileIdEqualTo(profileId)
+            : q.sharedSpaceIdEqualTo(sharedSpaceId))
         .count();
     if (existing > 0) return;
+    final seed = MedicalServiceTypeDefaults.seed(
+      _directoryProfileId(profileId, sharedSpaceId),
+    );
+    for (final type in seed) {
+      type.sharedSpaceId = sharedSpaceId;
+    }
     await _isar.writeTxn(() async {
-      await _isar.medicalServiceTypes.putAll(
-        MedicalServiceTypeDefaults.seed(profileId),
-      );
+      await _isar.medicalServiceTypes.putAll(seed);
+      for (final type in seed) {
+        await _syncRecorder?.recordMedicalServiceType(type);
+      }
     });
   }
 
-  /// Creates or renames a service type, rejecting a name that already exists for
-  /// the same profile regardless of case (FR-040).
+  /// Seeds the six default service types for a shared space (FR-039, FR-013).
+  ///
+  /// Called once by the device that creates the space; the change-log carries
+  /// them to the peer, so two phones never seed a space twice.
+  Future<void> ensureDefaultServiceTypesForSpace(int spaceId) =>
+      ensureDefaultServiceTypes(0, sharedSpaceId: spaceId);
+
+  /// Creates or renames a service type, rejecting a name that already exists in
+  /// the same context regardless of case (FR-040, FR-013).
+  ///
+  /// [sharedSpaceId] routes the row into that shared space; without it the row
+  /// is personal and keyed by [profileId].
   Future<MedicalServiceType> saveServiceType({
     int? id,
     required int profileId,
+    int? sharedSpaceId,
     required String name,
   }) async {
     final trimmed = name.trim();
@@ -716,7 +775,9 @@ class MedicalRepository {
 
     final siblings = await _isar.medicalServiceTypes
         .filter()
-        .profileIdEqualTo(profileId)
+        .group((q) => sharedSpaceId == null
+            ? q.profileIdEqualTo(profileId)
+            : q.sharedSpaceIdEqualTo(sharedSpaceId))
         .findAll();
 
     for (final type in siblings) {
@@ -738,7 +799,8 @@ class MedicalRepository {
     }
     target
       ..id = id ?? target.id
-      ..profileId = profileId
+      ..profileId = _directoryProfileId(profileId, sharedSpaceId)
+      ..sharedSpaceId = sharedSpaceId
       ..name = trimmed
       // Renaming a seeded type keeps its seeded status; only an unseeded type
       // loses it.
@@ -746,6 +808,7 @@ class MedicalRepository {
 
     await _isar.writeTxn(() async {
       await isarPutServiceType(target);
+      await _syncRecorder?.recordMedicalServiceType(target);
     });
     return target;
   }
@@ -761,6 +824,7 @@ class MedicalRepository {
     type.archived = true;
     await _isar.writeTxn(() async {
       await _isar.medicalServiceTypes.put(type);
+      await _syncRecorder?.recordMedicalServiceType(type);
     });
   }
 
@@ -774,6 +838,7 @@ class MedicalRepository {
     type.archived = archived;
     await _isar.writeTxn(() async {
       await _isar.medicalServiceTypes.put(type);
+      await _syncRecorder?.recordMedicalServiceType(type);
     });
   }
 
@@ -781,15 +846,34 @@ class MedicalRepository {
   // Insurance profile + directories
   // ---------------------------------------------------------------------------
 
-  Future<void> saveInsuranceProfile(InsuranceProfile profile) async {
+  /// Creates or updates the insurance plan for the context the row belongs to.
+  ///
+  /// [sharedSpaceId] routes the row into that shared space (FR-013): a shared
+  /// plan is keyed on the space (`profileId == 0`) and never on a personal
+  /// profile, so saving inside a space can neither hide the plan from the space
+  /// nor overwrite the personal one. Without it the row stays personal and keeps
+  /// the profile key it already carries.
+  Future<void> saveInsuranceProfile(
+    InsuranceProfile profile, {
+    int? sharedSpaceId,
+  }) async {
+    profile
+      ..sharedSpaceId = sharedSpaceId
+      ..profileId = sharedSpaceId == null ? profile.profileId : 0;
     await _isar.writeTxn(() async {
       await _isar.insuranceProfiles.put(profile);
+      await _syncRecorder?.recordInsuranceProfile(profile);
     });
   }
 
+  /// Creates or updates a family member (FR-008).
+  ///
+  /// [sharedSpaceId] routes the row into that shared space (FR-013); without it
+  /// the row is personal and keyed by [profileId].
   Future<FamilyMember> saveFamilyMember({
     int? id,
     required int profileId,
+    int? sharedSpaceId,
     required String name,
     required String relation,
   }) async {
@@ -800,27 +884,37 @@ class MedicalRepository {
     final member = existing ?? FamilyMember();
     member
       ..id = id ?? member.id
-      ..profileId = profileId
+      ..profileId = _directoryProfileId(profileId, sharedSpaceId)
+      ..sharedSpaceId = sharedSpaceId
       ..name = name.trim()
       ..relation = relation.trim();
 
     await _isar.writeTxn(() async {
       await _isar.familyMembers.put(member);
+      await _syncRecorder?.recordFamilyMember(member);
     });
     return member;
   }
 
   Future<void> deleteFamilyMember(int id) async {
+    final member = await _isar.familyMembers.get(id);
     await _isar.writeTxn(() async {
       await _isar.familyMembers.delete(id);
+      if (member != null) {
+        await _syncRecorder?.recordFamilyMemberRemoved(member);
+      }
     });
   }
 
   /// Creates or updates a provider, de-duplicating on (case-insensitive) name
   /// so the directory does not fill with near-identical entries (FR-008).
+  ///
+  /// [sharedSpaceId] routes the row into that shared space (FR-013); without it
+  /// the row is personal and keyed by [profileId].
   Future<MedicalProvider> saveProvider({
     int? id,
     required int profileId,
+    int? sharedSpaceId,
     required String name,
     String? specialty,
   }) async {
@@ -831,7 +925,9 @@ class MedicalRepository {
 
     final siblings = await _isar.medicalProviders
         .filter()
-        .profileIdEqualTo(profileId)
+        .group((q) => sharedSpaceId == null
+            ? q.profileIdEqualTo(profileId)
+            : q.sharedSpaceIdEqualTo(sharedSpaceId))
         .findAll();
 
     MedicalProvider? duplicate;
@@ -847,7 +943,8 @@ class MedicalRepository {
         MedicalProvider();
     target
       ..id = duplicate?.id ?? id ?? target.id
-      ..profileId = profileId
+      ..profileId = _directoryProfileId(profileId, sharedSpaceId)
+      ..sharedSpaceId = sharedSpaceId
       ..name = trimmed
       ..specialty = (specialty == null || specialty.trim().isEmpty)
           ? null
@@ -856,6 +953,7 @@ class MedicalRepository {
 
     await _isar.writeTxn(() async {
       await _isar.medicalProviders.put(target);
+      await _syncRecorder?.recordMedicalProvider(target);
     });
     return target;
   }
@@ -863,8 +961,12 @@ class MedicalRepository {
   /// Returns the provider matching [name] for [profileId], creating a
   /// placeholder entry when it is new. Used when a bill is saved with a typed
   /// provider name instead of a directory pick.
+  ///
+  /// Mirrors [saveProvider]'s context: pass [sharedSpaceId] to keep the row in
+  /// the shared space the bill was written from (FR-013).
   Future<MedicalProvider> findOrCreateProvider({
     required int profileId,
+    int? sharedSpaceId,
     required String name,
     String? specialty,
   }) async {
@@ -874,13 +976,16 @@ class MedicalRepository {
     }
     final existing = await _isar.medicalProviders
         .filter()
-        .profileIdEqualTo(profileId)
+        .group((q) => sharedSpaceId == null
+            ? q.profileIdEqualTo(profileId)
+            : q.sharedSpaceIdEqualTo(sharedSpaceId))
         .findAll();
     for (final p in existing) {
       if (p.name.trim().toLowerCase() == trimmed.toLowerCase()) return p;
     }
     final created = MedicalProvider()
-      ..profileId = profileId
+      ..profileId = _directoryProfileId(profileId, sharedSpaceId)
+      ..sharedSpaceId = sharedSpaceId
       ..name = trimmed
       ..specialty = (specialty == null || specialty.trim().isEmpty)
           ? null
@@ -888,19 +993,30 @@ class MedicalRepository {
       ..autoCreated = true;
     await _isar.writeTxn(() async {
       await _isar.medicalProviders.put(created);
+      await _syncRecorder?.recordMedicalProvider(created);
     });
     return created;
   }
 
   Future<void> deleteProvider(int id) async {
+    final provider = await _isar.medicalProviders.get(id);
     await _isar.writeTxn(() async {
       await _isar.medicalProviders.delete(id);
+      if (provider != null) {
+        await _syncRecorder?.recordMedicalProviderRemoved(provider);
+      }
     });
   }
 
   // ---------------------------------------------------------------------------
   // Internals
   // ---------------------------------------------------------------------------
+
+  /// The `profileId` a directory row carries: a shared row keys on the space, so
+  /// its profile key is `0` — exactly how `MonthMoveOperations` re-homes
+  /// directory rows and how the peer's applier stores them (FR-013).
+  static int _directoryProfileId(int profileId, int? sharedSpaceId) =>
+      sharedSpaceId == null ? profileId : 0;
 
   /// Pre-loaded so callers cannot fail the common case of a profile-less legacy
   /// row.
@@ -959,6 +1075,13 @@ class MedicalRepository {
     if (bill.yearMonth.isNotEmpty) return;
     bill.yearMonth =
         serviceDate == null ? expenseYearMonth : _yearMonthOf(serviceDate);
+  }
+
+  /// Persists a bill and appends its signed change if the context is shared
+  /// (FR-006). Every bill write funnels through here so nothing is missed.
+  Future<void> _putBillRecorded(MedicalBill bill) async {
+    await _isar.medicalBills.put(bill);
+    await _syncRecorder?.recordMedicalBill(bill);
   }
 
   /// Creates or refreshes the linked expense inside the caller's transaction.
@@ -1033,6 +1156,7 @@ class MedicalRepository {
     }
 
     await _isar.expenses.put(expense);
+    await _syncRecorder?.recordExpense(expense);
     return expense;
   }
 
@@ -1077,6 +1201,9 @@ class MedicalRepository {
         .findAll();
     if (rows.isEmpty) return;
     await _isar.reimbursements.deleteAll(rows.map((r) => r.id).toList());
+    for (final row in rows) {
+      await _syncRecorder?.recordReimbursementRemoved(row);
+    }
   }
 }
 

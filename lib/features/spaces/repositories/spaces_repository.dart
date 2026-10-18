@@ -2,11 +2,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:isar/isar.dart';
 
 import '../../../core/database/isar_helper.dart';
+import '../../../core/models/context_kind.dart';
 import '../../../core/models/insurance_profile.dart';
 import '../../../core/models/medical_service_type.dart';
 import '../../../core/models/monthly_budget.dart';
 import '../../../core/models/medical_bill.dart';
 import '../../../core/models/expense.dart';
+import '../../../core/models/paired_context.dart';
 import '../../../core/models/shared_member.dart';
 import '../../../core/models/shared_space.dart';
 import '../../../core/models/user_profile.dart';
@@ -453,6 +455,18 @@ class SpacesRepository {
         await _syncRecorder?.recordMemberRemoved(member);
       }
       await _isar.sharedMembers.delete(member.id);
+      // FR-010 (stop-delivery): leaving stops future delivery for this space.
+      // Deactivate every paired context for it so the coordinator neither dials
+      // nor accepts that space with any peer again.
+      final contexts = await _isar.pairedContexts
+          .filter()
+          .contextKindEqualTo(ContextKind.shared)
+          .contextLocalIdEqualTo(spaceId)
+          .findAll();
+      for (final context in contexts) {
+        context.active = false;
+        await _isar.pairedContexts.put(context);
+      }
     });
   }
 
@@ -460,13 +474,27 @@ class SpacesRepository {
   // Internals
   // ---------------------------------------------------------------------------
 
+  /// The acting profile's membership row for [spaceId], or `null` (T060/T079).
+  ///
+  /// Membership rows are **stored** under the uniform identity key
+  /// ([sharedMemberKeyForLocalProfile]) on every paired/syncing phone, but a
+  /// pre-012 local profile keeps its raw id. Resolve the uniform key and match
+  /// **either** it or the raw [profileId] — the same dual-key read
+  /// [MonthMoveOperations._member] uses. Matching only the raw id locked the
+  /// Owner out of their own brand-new space, so the edit gate refused
+  /// (`UnauthorizedSpaceAction`) and creation rolled back.
   Future<SharedMember?> _member(int spaceId, int profileId) async {
     final key = await sharedMemberKeyForLocalProfile(_isar, profileId);
-    return _isar.sharedMembers
+    final members = await _isar.sharedMembers
         .filter()
         .sharedSpaceIdEqualTo(spaceId)
-        .profileIdEqualTo(key)
-        .findFirst();
+        .findAll();
+    for (final member in members) {
+      if (member.profileId == key || member.profileId == profileId) {
+        return member;
+      }
+    }
+    return null;
   }
 
   /// The HLC generator used to version a membership change. Only reached when a

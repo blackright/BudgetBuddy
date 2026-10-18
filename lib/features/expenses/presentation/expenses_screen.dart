@@ -192,6 +192,10 @@ class ExpensesScreen extends ConsumerWidget {
       ),
       floatingActionButton: canEdit
           ? FloatingActionButton(
+              // A unique hero tag: two default-tagged FABs on one route (this
+              // screen and the category list it opens) make Flutter throw
+              // "There are multiple heroes that share the same tag" (T081).
+              heroTag: 'expensesAddFab',
               onPressed: () => context.push('/add_expense'),
               child: const Icon(Icons.add),
             )

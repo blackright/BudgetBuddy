@@ -6,6 +6,12 @@ import '../sync_codec.dart';
 ///
 /// Carries the signing columns too, so a membership change travels as a signed,
 /// versioned authorization record (role-authorization §2).
+///
+/// The owning space travels as `sharedSpaceSyncGuid` (a GUID the applier
+/// resolves to a local id), **not** as `sharedSpaceId`: a foreign space id would
+/// name the author's space, never this device's. `profileId` stays on the wire
+/// because it is the stable membership key that makes authorization work across
+/// devices (`entity-identity.md` §4 R3).
 class SharedMemberCodec extends SyncCodec<SharedMember> {
   const SharedMemberCodec();
 
@@ -14,8 +20,7 @@ class SharedMemberCodec extends SyncCodec<SharedMember> {
 
   @override
   Map<String, Object?> toJson(SharedMember value) => {
-        'id': value.id,
-        'sharedSpaceId': value.sharedSpaceId,
+        'syncGuid': value.syncGuid,
         'profileId': value.profileId,
         'role': value.role.name,
         'joinedAt': encodeDate(value.joinedAt),
@@ -28,8 +33,7 @@ class SharedMemberCodec extends SyncCodec<SharedMember> {
 
   @override
   SharedMember fromJson(Map<String, Object?> json) => SharedMember()
-    ..id = decodeInt(json['id'])
-    ..sharedSpaceId = decodeInt(json['sharedSpaceId'])
+    ..syncGuid = decodeGuid(json['syncGuid'])
     ..profileId = decodeInt(json['profileId'])
     ..role = decodeEnum(SharedMemberRole.values, json['role'])
     ..joinedAt = decodeDateRequired(json['joinedAt'])

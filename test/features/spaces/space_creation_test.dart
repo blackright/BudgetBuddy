@@ -8,6 +8,8 @@ import 'package:budget_buddy/core/providers/active_profile_provider.dart';
 import 'package:budget_buddy/core/providers/active_space_provider.dart';
 import 'package:budget_buddy/core/providers/budget_context_provider.dart';
 import 'package:budget_buddy/core/providers/selected_month_provider.dart';
+import 'package:budget_buddy/features/medical/providers/medical_providers.dart';
+import 'package:budget_buddy/features/medical/repositories/medical_repository.dart';
 import 'package:budget_buddy/features/spaces/models/bring_in_past.dart';
 import 'package:budget_buddy/features/settings/presentation/profile_switcher_section.dart';
 import 'package:budget_buddy/features/spaces/presentation/space_settings_section.dart';
@@ -34,6 +36,7 @@ void main() {
     late UserProfile ava;
     late UserProfile bea;
     late _FakeSpacesRepository repo;
+    late _RecordingMedicalRepo medicalRepo;
     final now = DateTime(2026, 1, 1);
 
     await tester.runAsync(() async {
@@ -62,6 +65,7 @@ void main() {
       );
     });
     repo = _FakeSpacesRepository(harness.isar);
+    medicalRepo = _RecordingMedicalRepo(harness.isar);
 
     final spacesController = StreamController<List<SharedSpace>>.broadcast();
     final spacesById = <int, SharedSpace>{};
@@ -124,6 +128,10 @@ void main() {
         // (same rule the profile-switcher suite follows). The real-repository
         // role/persistence matrix is owned by T031 (spaces_repository_test).
         spacesRepositoryProvider.overrideWithValue(repo),
+        // Creating a space seeds its six medical service types (FR-039/FR-013).
+        // The call is recorded rather than executed: real Isar I/O must not
+        // start under the widget-test fake clock.
+        medicalRepositoryProvider.overrideWithValue(medicalRepo),
         profileSwitcherControllerProvider
             .overrideWithValue(const _StubProfileController()),
       ],
@@ -212,6 +220,9 @@ void main() {
         reason: 'the creator becomes Owner (FR-006)');
     expect(container.read(activeSpaceIdProvider), created.id,
         reason: 'creating a space switches into it');
+    expect(medicalRepo.seededSpaces, [created.id],
+        reason: 'a new space is seeded with the default medical service '
+            'types, or its picker starts empty (FR-039, FR-013)');
 
     // Feed the created space back into the UI-facing stream overrides.
     rebroadcast([created], List.of(repo.members));
@@ -484,5 +495,22 @@ class _FakeSpacesRepository extends SpacesRepository {
         ..role = role
         ..joinedAt = DateTime(2026, 1, 1),
     );
+  }
+}
+
+/// Records which spaces the creation flow asked to seed (FR-039/FR-013), so the
+/// assertion can prove the wiring without starting real Isar I/O under the
+/// widget-test fake clock.
+class _RecordingMedicalRepo extends MedicalRepository {
+  _RecordingMedicalRepo(super.isar);
+
+  final List<int> seededSpaces = [];
+
+  @override
+  Future<void> ensureDefaultServiceTypes(
+    int profileId, {
+    int? sharedSpaceId,
+  }) async {
+    if (sharedSpaceId != null) seededSpaces.add(sharedSpaceId);
   }
 }

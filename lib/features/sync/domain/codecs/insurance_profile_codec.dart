@@ -11,9 +11,8 @@ class InsuranceProfileCodec extends SyncCodec<InsuranceProfile> {
 
   @override
   Map<String, Object?> toJson(InsuranceProfile value) => {
-        'id': value.id,
+        'syncGuid': value.syncGuid,
         'profileId': value.profileId,
-        'sharedSpaceId': value.sharedSpaceId,
         'defaultPatientPercent': value.defaultPatientPercent,
         'insurerName': value.insurerName,
         'planName': value.planName,
@@ -21,9 +20,8 @@ class InsuranceProfileCodec extends SyncCodec<InsuranceProfile> {
 
   @override
   InsuranceProfile fromJson(Map<String, Object?> json) => InsuranceProfile()
-    ..id = decodeInt(json['id'])
+    ..syncGuid = decodeGuid(json['syncGuid'])
     ..profileId = decodeIntOrNull(json['profileId'])
-    ..sharedSpaceId = decodeIntOrNull(json['sharedSpaceId'])
     ..defaultPatientPercent = decodeDouble(json['defaultPatientPercent'])
     ..insurerName = json['insurerName'] as String?
     ..planName = json['planName'] as String?;

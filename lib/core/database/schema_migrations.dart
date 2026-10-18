@@ -1,20 +1,24 @@
 import 'package:isar/isar.dart';
 
 import '../models/currency_code.dart';
+import '../models/change_record.dart';
 import '../models/expense.dart';
 import '../models/insurance_profile.dart';
 import '../models/medical_service_type.dart';
 import '../models/monthly_budget.dart';
 import '../models/shared_member.dart';
+import '../models/shared_space.dart';
+import '../models/sync_cursor.dart';
 import '../models/user_profile.dart';
 import '../../features/expenses/models/reimbursement.dart';
+import '../../features/sync/domain/sync_guid.dart';
 import '../models/medical_bill.dart';
 
 part 'schema_migrations.g.dart';
 
 /// Schema version this build expects. Bump whenever a numbered step is added to
 /// [_applySteps]; databases stamped at or above it are left untouched.
-const int schemaVersion = 16;
+const int schemaVersion = 18;
 
 const String schemaVersionKey = 'schema_version';
 
@@ -108,6 +112,139 @@ Future<void> _applySteps(Isar isar) async {
   await _step14AddSyncCollections(isar);
   await _step15BackfillMembershipSyncColumns(isar);
   await _step16AddConfirmSharedSavePreference(isar);
+  await _step17AddSyncGuids(isar);
+  await _step18RepairSyncConflictCounts(isar);
+}
+
+/// Step 17 (015-wire-device-sync, research R5, data-model §1) — give every
+/// syncable row a device-independent [`syncGuid`] and retire the old
+/// local-id-based change log.
+///
+/// The ten synced collections gain a `syncGuid` column. Isar reconciles the
+/// stored schema on open, so a row written by an earlier build arrives with an
+/// empty `syncGuid` (an initializer cannot run for a row that never had the
+/// field). This step fills each empty one exactly once, so two devices can agree
+/// that a row is *the same row* without sharing local ids — the collision the
+/// 012 wire format could not survive.
+///
+/// Every `ChangeRecord` is then cleared: the signed bytes change shape (they now
+/// carry the GUIDs), so a record signed under the old shape could not be
+/// verified, and no production device ever wrote one — the recorder ships
+/// un-wired until this feature connects it (015 §Context). Nothing else — no
+/// amount, seal or month total — is touched (011 SC-003 preserved). Idempotent:
+/// a second run finds every GUID stamped and no change records.
+Future<void> _step17AddSyncGuids(Isar isar) async {
+  Future<void> stamp<T>(
+    Future<List<T>> Function() rows,
+    String Function(T) read,
+    void Function(T, String) write,
+    Future<void> Function(List<T>) save,
+  ) async {
+    final all = await rows();
+    if (all.isEmpty) return;
+    var changed = false;
+    for (final row in all) {
+      if (read(row).isEmpty) {
+        write(row, newSyncGuid());
+        changed = true;
+      }
+    }
+    if (changed) await save(all);
+  }
+
+  await stamp(
+    () => isar.sharedSpaces.where().findAll(),
+    (r) => r.syncGuid,
+    (r, v) => r.syncGuid = v,
+    isar.sharedSpaces.putAll,
+  );
+  await stamp(
+    () => isar.sharedMembers.where().findAll(),
+    (r) => r.syncGuid,
+    (r, v) => r.syncGuid = v,
+    isar.sharedMembers.putAll,
+  );
+  await stamp(
+    () => isar.monthlyBudgets.where().findAll(),
+    (r) => r.syncGuid,
+    (r, v) => r.syncGuid = v,
+    isar.monthlyBudgets.putAll,
+  );
+  await stamp(
+    () => isar.expenses.where().findAll(),
+    (r) => r.syncGuid,
+    (r, v) => r.syncGuid = v,
+    isar.expenses.putAll,
+  );
+  await stamp(
+    () => isar.reimbursements.where().findAll(),
+    (r) => r.syncGuid,
+    (r, v) => r.syncGuid = v,
+    isar.reimbursements.putAll,
+  );
+  await stamp(
+    () => isar.medicalBills.where().findAll(),
+    (r) => r.syncGuid,
+    (r, v) => r.syncGuid = v,
+    isar.medicalBills.putAll,
+  );
+  await stamp(
+    () => isar.insuranceProfiles.where().findAll(),
+    (r) => r.syncGuid,
+    (r, v) => r.syncGuid = v,
+    isar.insuranceProfiles.putAll,
+  );
+  await stamp(
+    () => isar.familyMembers.where().findAll(),
+    (r) => r.syncGuid,
+    (r, v) => r.syncGuid = v,
+    isar.familyMembers.putAll,
+  );
+  await stamp(
+    () => isar.medicalProviders.where().findAll(),
+    (r) => r.syncGuid,
+    (r, v) => r.syncGuid = v,
+    isar.medicalProviders.putAll,
+  );
+  await stamp(
+    () => isar.medicalServiceTypes.where().findAll(),
+    (r) => r.syncGuid,
+    (r, v) => r.syncGuid = v,
+    isar.medicalServiceTypes.putAll,
+  );
+
+  await isar.changeRecords.clear();
+}
+
+/// Step 18 (015-wire-device-sync, US3) — one-time repair of the inflated
+/// per-space conflict tally.
+///
+/// Before the fix, every **refusal** (a sealed month frozen after the edit, a
+/// demoted or removed author's stale change) added +1 to
+/// `SyncCursor.conflictCount`, and the coordinator re-offered the same change on
+/// every discovery round. A badge that should have read "Up to date" therefore
+/// grew to a nonsense number ("967 conflicts") while the data stayed correct.
+///
+/// The engine no longer counts a refusal as a kept-aside conflict, so a fresh
+/// device counts correctly; this step resets the already-inflated numbers once so
+/// an upgraded device stops showing them. A conflict recorded **after** the
+/// upgrade counts normally from the repaired zero.
+///
+/// Only `conflictCount` is written — every peer id, watermark, timestamp and
+/// money/seal row is left byte-identical (011 SC-003 preserved). Idempotent: the
+/// version stamp short-circuits a second run.
+Future<void> _step18RepairSyncConflictCounts(Isar isar) async {
+  final cursors = await isar.syncCursors.where().findAll();
+  if (cursors.isEmpty) return;
+
+  var changed = false;
+  for (final cursor in cursors) {
+    if (cursor.conflictCount != 0) {
+      cursor.conflictCount = 0;
+      changed = true;
+    }
+  }
+  if (changed) await isar.syncCursors.putAll(cursors);
 }
 
 /// Step 16 (014-charts-and-analytics, US6) — additive only: `UserProfile` gains

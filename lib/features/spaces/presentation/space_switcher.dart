@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/models/shared_space.dart';
 import '../../../core/providers/active_profile_provider.dart';
 import '../../../core/providers/active_space_provider.dart';
+import '../../medical/providers/medical_providers.dart';
 import '../../settings/presentation/profile_switcher_section.dart';
 import '../providers/spaces_providers.dart';
 import '../repositories/spaces_repository.dart';
@@ -39,6 +40,14 @@ Future<SharedSpace?> showCreateSpaceFlow(
         defaultIncome: draft.defaultIncome,
         bringIn: draft.bringIn,
       );
+  // FR-039/FR-013: a new space starts with the same six service types the
+  // personal profiles get. Seeded only on the device that creates the space
+  // (exactly like `createProfile` for a profile) and journalised for the peer,
+  // so two phones can never each seed their own copy of "Radiology". Its own
+  // transaction: Isar forbids nesting inside the space write.
+  await ref
+      .read(medicalRepositoryProvider)
+      .ensureDefaultServiceTypesForSpace(space.id);
   ref.read(activeSpaceIdProvider.notifier).state = space.id;
   ref
       .read(profileSwitcherControllerProvider)
@@ -125,7 +134,7 @@ class ContextSwitcherMenu extends ConsumerWidget {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    space.name,
+                    space.displayName,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -171,7 +180,7 @@ class SpaceSwitcher extends ConsumerWidget {
     final profile = ref.watch(activeProfileProvider).valueOrNull;
 
     final label = activeSpace != null
-        ? '${activeSpace.avatar} ${activeSpace.name}'
+        ? '${activeSpace.avatar} ${activeSpace.displayName}'
         : profile != null
             ? '👤 ${profile.name}'
             : 'No profile';

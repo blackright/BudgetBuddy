@@ -11,10 +11,9 @@ class MonthlyBudgetCodec extends SyncCodec<MonthlyBudget> {
 
   @override
   Map<String, Object?> toJson(MonthlyBudget value) => {
-        'id': value.id,
+        'syncGuid': value.syncGuid,
         'yearMonth': value.yearMonth,
         'profileId': value.profileId,
-        'sharedSpaceId': value.sharedSpaceId,
         'sharedIncomeOverride': value.sharedIncomeOverride,
         'baseAvailableAmount': value.baseAvailableAmount,
         'openingBalanceConfirmed': value.openingBalanceConfirmed,
@@ -26,10 +25,9 @@ class MonthlyBudgetCodec extends SyncCodec<MonthlyBudget> {
 
   @override
   MonthlyBudget fromJson(Map<String, Object?> json) => MonthlyBudget()
-    ..id = decodeInt(json['id'])
+    ..syncGuid = decodeGuid(json['syncGuid'])
     ..yearMonth = (json['yearMonth'] as String?) ?? ''
     ..profileId = decodeIntOrNull(json['profileId'])
-    ..sharedSpaceId = decodeIntOrNull(json['sharedSpaceId'])
     ..sharedIncomeOverride = decodeIntOrNull(json['sharedIncomeOverride'])
     ..baseAvailableAmount = decodeDouble(json['baseAvailableAmount'])
     ..openingBalanceConfirmed =

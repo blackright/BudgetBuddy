@@ -10,6 +10,9 @@ multiple currencies and shared spaces.
 - **Monthly budget & opening balance** — one opening balance per month, resolved
   income (default salary or a per-month override), and a month that is either
   *complete* or clearly flagged *incomplete*.
+- **Bring in past months** — when creating a space, move this month, this year,
+  or every eligible month from your personal budget into it in one step (a move,
+  never a copy).
 - **Expenses** — create, edit, search, filter and cancel expenses; planned vs
   paid; per-category tracking; receipt attachments.
 - **Medical bills & insurance** — self-paid vs insurer-paid bills, patient and
@@ -24,9 +27,21 @@ multiple currencies and shared spaces.
   the total.
 - **Multi-currency** — expenses carry their own currency; a month displays in one
   currency through a single per-month rate table, so no screen can disagree about
-  a rate.
-- **Shared spaces & cross-device sync** — invite a person, share a month, and
-  keep devices in step. People are global; pairing is reachable anywhere.
+  a rate. A converted figure carries a footnote, and when a rate is missing the
+  original amount is shown beside the converted one rather than a wrong number.
+- **Sealed (frozen) months** — once a month is sealed it is immutable for every
+  role, including the Owner, so history cannot be rewritten after the fact.
+- **Money input** — a dedicated money field that groups digits as you type and
+  reports the exact value, so an amount is never misread while entering it.
+- **Time-picker safety** — the time picker degrades gracefully at small text
+  scales instead of throwing.
+- **Shared spaces** — create a space, give people a role (Owner can manage
+  people and settings, Editor can change money, Viewer is read-only) and share
+  months. People are global and pair once via QR; the same contact can join any
+  space.
+- **Profiles** — switch between personal profiles, create new ones, and delete a
+  profile along with its personal data.
+- **App theme** — follow the system, or pick light/dark, saved per profile.
 - **Charts & analytics** — pure aggregation over the existing rows (no chart
   reads the database or converts currency itself): spending by category, medical
   patient-vs-insurer split, a contribution breakdown per member, and shared vs
@@ -73,6 +88,22 @@ multiple currencies and shared spaces.
   runtime reads.
 - **Pure aggregation**: the chart layer computes from rows already in memory; no
   chart queries Isar or converts currency (FR-001).
+
+## Status
+
+Specs `011`–`015` and where they stand:
+
+| Spec | Feature | State |
+| --- | --- | --- |
+| `011` | Shared financial spaces | **Shipped** — spaces, Owner/Editor/Viewer roles, invites, months in a space |
+| `012` | Cross-device shared spaces | **Data layer built** — signed change log, sync engine, codecs and appliers exist and are tested; not yet wired end to end |
+| `013` | Money input & profile clarity | **Shipped** — money field, conversion footnotes, profile switcher/deletion, app theme, time-picker safety |
+| `014` | Charts & analytics | **Shipped** |
+| `015` | Wire device sync | **In progress** — peer-to-peer delivery between two paired phones is being wired; not usable end to end yet |
+
+Cross-device sync (`012`/`015`) is **local-network only**: two paired phones
+exchange changes directly — no server, no background service. It is not
+finished; see `specs/015-wire-device-sync` for the current phase.
 
 ## Getting Started
 

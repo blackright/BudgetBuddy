@@ -1,8 +1,10 @@
 import 'package:budget_buddy/core/models/currency_code.dart';
 import 'package:budget_buddy/core/models/expense.dart';
+import 'package:budget_buddy/core/models/insurance_profile.dart';
 import 'package:budget_buddy/core/models/medical_bill.dart';
 import 'package:budget_buddy/core/models/medical_service_type.dart';
 import 'package:budget_buddy/core/models/money.dart';
+import 'package:budget_buddy/core/providers/budget_context_provider.dart';
 import 'package:budget_buddy/features/expenses/models/reimbursement.dart';
 import 'package:budget_buddy/features/medical/providers/medical_providers.dart';
 import 'package:budget_buddy/features/medical/repositories/medical_repository.dart';
@@ -1131,6 +1133,328 @@ void main() {
             .name,
         'Physician',
       );
+    });
+  });
+
+  // The reported bug: in a shared space the directories listed nothing, yet
+  // adding a name already used personally said "already exists". Reads are
+  // context-scoped (R3, data-model §3.5/§3.6) while the writes were not, so
+  // every directory row landed in the personal context and the space's list
+  // stayed empty forever. FR-013: a row written while a shared space is active
+  // must carry the **space** key, never a profile key.
+  group('directory rows in a shared space (FR-013)', () {
+    late int spaceId;
+    late ContextRef sharedContext;
+
+    setUp(() async {
+      spaceId = await harness.createSpace();
+      await harness.seedBudget(spaceId: spaceId);
+      sharedContext = ContextRef.shared(spaceId: spaceId, yearMonth: '2026-01');
+    });
+
+    test('a provider added in a shared space carries the space key', () async {
+      final provider = await harness.repository.saveProvider(
+        profileId: context.profileId,
+        sharedSpaceId: spaceId,
+        name: 'Space Clinic',
+      );
+
+      expect(provider.sharedSpaceId, spaceId);
+      expect(provider.profileId, 0,
+          reason: 'a shared row keys on the space, never a profile');
+      final listed = await harness.repository
+          .watchMedicalProvidersForContext(sharedContext)
+          .first;
+      expect(listed.map((p) => p.name), contains('Space Clinic'));
+      expect(
+        await harness.repository.getMedicalProviders(context.profileId),
+        isEmpty,
+        reason: 'the space directory is not the personal one',
+      );
+    });
+
+    test('a person added in a shared space carries the space key', () async {
+      final member = await harness.repository.saveFamilyMember(
+        profileId: context.profileId,
+        sharedSpaceId: spaceId,
+        name: 'Sam',
+        relation: 'Child',
+      );
+
+      expect(member.sharedSpaceId, spaceId);
+      final listed = await harness.repository
+          .watchFamilyMembersForContext(sharedContext)
+          .first;
+      expect(listed.map((m) => m.name), contains('Sam'));
+    });
+
+    test('a typed provider stays inside the space it was saved from', () async {
+      final created = await harness.repository.findOrCreateProvider(
+        profileId: context.profileId,
+        sharedSpaceId: spaceId,
+        name: 'Typed Clinic',
+      );
+
+      expect(created.sharedSpaceId, spaceId);
+      expect(
+        await harness.repository.getMedicalProviders(context.profileId),
+        isEmpty,
+      );
+      final listed = await harness.repository
+          .watchMedicalProvidersForContext(sharedContext)
+          .first;
+      expect(listed.map((p) => p.name), contains('Typed Clinic'));
+    });
+
+    test('a space service type does not collide with the personal one',
+        () async {
+      await harness.repository.saveServiceType(
+        profileId: context.profileId,
+        name: 'Radiology',
+      );
+
+      final inSpace = await harness.repository.saveServiceType(
+        profileId: context.profileId,
+        sharedSpaceId: spaceId,
+        name: 'Radiology',
+      );
+
+      expect(inSpace.sharedSpaceId, spaceId);
+      final listed = await harness.repository
+          .watchServiceTypesForContext(sharedContext)
+          .first;
+      expect(listed.map((t) => t.name), contains('Radiology'));
+      final personal =
+          await harness.repository.getAllServiceTypes(context.profileId);
+      expect(personal.single.sharedSpaceId, isNull,
+          reason: 'the personal type of the same name is untouched');
+    });
+
+    test('a duplicate name inside the space is still refused', () async {
+      await harness.repository.saveServiceType(
+        profileId: context.profileId,
+        sharedSpaceId: spaceId,
+        name: 'Radiology',
+      );
+
+      expect(
+        () => harness.repository.saveServiceType(
+          profileId: context.profileId,
+          sharedSpaceId: spaceId,
+          name: 'radiology',
+        ),
+        throwsA(isA<DuplicateServiceTypeException>()),
+      );
+    });
+
+    test('the six defaults can be seeded into a shared space', () async {
+      await harness.repository.ensureDefaultServiceTypes(
+        0,
+        sharedSpaceId: spaceId,
+      );
+
+      final seeded = await harness.repository
+          .watchServiceTypesForContext(sharedContext)
+          .first;
+      expect(seeded, hasLength(MedicalServiceTypeDefaults.seedNames.length));
+      expect(seeded.map((t) => t.name),
+          containsAll(MedicalServiceTypeDefaults.seedNames));
+      expect(seeded.every((t) => t.sharedSpaceId == spaceId), isTrue);
+      expect(seeded.every((t) => t.profileId == 0), isTrue);
+    });
+  });
+
+  // The mirror image of the same bug: a row that belongs to a **space** but
+  // still carries a personal profile key. The personal reads keyed on
+  // `profileId` alone, so such a row answered for the personal context too —
+  // exactly how a space bill showed up in the personal drawer, and how a row
+  // delivered by a peer with a foreign profile id would leak. FR-013: personal
+  // and shared never cross (data-model §3).
+  group('context isolation (FR-013)', () {
+    late int spaceId;
+    late MedicalBillContext sharedBillContext;
+    late ContextRef personalContext;
+    late ContextRef sharedContext;
+
+    setUp(() async {
+      spaceId = await harness.createSpace();
+      sharedBillContext = await harness.seedBudget(spaceId: spaceId);
+      personalContext = ContextRef.personal(
+        profileId: context.profileId,
+        yearMonth: context.yearMonth,
+      );
+      sharedContext = ContextRef.shared(
+        spaceId: spaceId,
+        yearMonth: context.yearMonth,
+      );
+    });
+
+    test('saving a bill into a space stamps the space keys, never a profile',
+        () async {
+      // The caller pins a personal key on the row (as the form used to): the
+      // save itself must overwrite it, because the context owns the row.
+      final subject = bill()..profileId = context.profileId;
+
+      final saved =
+          await harness.repository.saveBill(subject, sharedBillContext);
+
+      expect(saved.sharedSpaceId, spaceId);
+      expect(saved.profileId, 0,
+          reason: 'a shared bill must not carry a personal key');
+    });
+
+    test(
+        'a shared bill carrying a personal key stays out of the personal '
+        'context', () async {
+      // A row shaped the way the pre-fix build wrote it: it belongs to the
+      // space but carries the personal profile key.
+      final stale = bill()
+        ..profileId = context.profileId
+        ..sharedSpaceId = spaceId
+        ..yearMonth = sharedContext.yearMonth;
+      await harness.isar.writeTxn(() async {
+        await harness.isar.medicalBills.put(stale);
+      });
+
+      expect(
+        await harness.repository
+            .watchMedicalBillsForContext(personalContext)
+            .first,
+        isEmpty,
+        reason: 'the space bill must not surface in the personal drawer',
+      );
+      expect(
+        await harness.repository
+            .watchMedicalBillsForContext(sharedContext)
+            .first,
+        hasLength(1),
+        reason: 'and the space still sees its own bill',
+      );
+    });
+
+    test('a personal bill is still listed in the personal context', () async {
+      await harness.repository.saveBill(bill(), context);
+
+      expect(
+        await harness.repository
+            .watchMedicalBillsForContext(personalContext)
+            .first,
+        hasLength(1),
+        reason: 'the isolation filter must not hide real personal rows',
+      );
+    });
+
+    test(
+        'directory rows carrying a stale personal key stay out of the '
+        'personal context', () async {
+      final provider = MedicalProvider()
+        ..profileId = context.profileId
+        ..sharedSpaceId = spaceId
+        ..name = 'Stale Clinic';
+      final member = FamilyMember()
+        ..profileId = context.profileId
+        ..sharedSpaceId = spaceId
+        ..name = 'Stale Person'
+        ..relation = 'Child';
+      final type = MedicalServiceType()
+        ..profileId = context.profileId
+        ..sharedSpaceId = spaceId
+        ..name = 'Stale Type';
+      await harness.isar.writeTxn(() async {
+        await harness.isar.medicalProviders.put(provider);
+        await harness.isar.familyMembers.put(member);
+        await harness.isar.medicalServiceTypes.put(type);
+      });
+
+      expect(
+        await harness.repository
+            .watchMedicalProvidersForContext(personalContext)
+            .first,
+        isEmpty,
+      );
+      expect(
+        await harness.repository
+            .watchFamilyMembersForContext(personalContext)
+            .first,
+        isEmpty,
+      );
+      expect(
+        await harness.repository
+            .watchServiceTypesForContext(personalContext)
+            .first,
+        isEmpty,
+      );
+
+      expect(
+        (await harness.repository
+                .watchMedicalProvidersForContext(sharedContext)
+                .first)
+            .map((p) => p.name),
+        contains('Stale Clinic'),
+      );
+      expect(
+        (await harness.repository
+                .watchFamilyMembersForContext(sharedContext)
+                .first)
+            .map((m) => m.name),
+        contains('Stale Person'),
+      );
+      expect(
+        (await harness.repository
+                .watchServiceTypesForContext(sharedContext)
+                .first)
+            .map((t) => t.name),
+        contains('Stale Type'),
+      );
+    });
+
+    test(
+        'a shared insurance plan carrying a personal key stays out of the '
+        'personal context', () async {
+      final stale = InsuranceProfile()
+        ..profileId = 777
+        ..sharedSpaceId = spaceId
+        ..defaultPatientPercent = 20;
+      await harness.isar.writeTxn(() async {
+        await harness.isar.insuranceProfiles.put(stale);
+      });
+
+      final personal = await harness.repository
+          .watchInsuranceProfileForContext(ContextRef.personal(
+            profileId: 777,
+            yearMonth: context.yearMonth,
+          ))
+          .first;
+
+      expect(personal, isNull,
+          reason: 'the space plan must not answer for a personal profile');
+    });
+
+    test(
+        'an insurance plan saved in a space is the space plan, and leaves the '
+        'personal one alone', () async {
+      final personalBefore =
+          await harness.repository.getInsuranceProfile(context.profileId);
+      expect(personalBefore?.defaultPatientPercent, 20);
+
+      final plan = InsuranceProfile()
+        ..profileId = context.profileId
+        ..defaultPatientPercent = 30;
+      await harness.repository
+          .saveInsuranceProfile(plan, sharedSpaceId: spaceId);
+
+      final inSpace = await harness.repository
+          .watchInsuranceProfileForContext(sharedContext)
+          .first;
+      expect(inSpace?.sharedSpaceId, spaceId,
+          reason: 'the space must see the plan that was saved into it');
+      expect(inSpace?.profileId, 0);
+      expect(inSpace?.defaultPatientPercent, 30);
+
+      final personalAfter =
+          await harness.repository.getInsuranceProfile(context.profileId);
+      expect(personalAfter?.defaultPatientPercent, 20,
+          reason: 'saving inside a space must not overwrite the personal plan');
     });
   });
 }

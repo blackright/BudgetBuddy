@@ -1,5 +1,7 @@
 import 'package:isar/isar.dart';
 
+import '../../features/sync/domain/sync_guid.dart';
+
 part 'insurance_profile.g.dart';
 
 /// Health insurance settings for a single [UserProfile].
@@ -10,6 +12,11 @@ part 'insurance_profile.g.dart';
 @collection
 class InsuranceProfile {
   Id id = Isar.autoIncrement;
+
+  /// Device-independent identity of this row (research R5); indexed, not unique
+  /// (uniqueness held by construction and migration step 17).
+  @Index()
+  String syncGuid = newSyncGuid();
 
   /// Links to `UserProfile.id`.
   @Index()
@@ -68,6 +75,11 @@ class InsuranceProfile {
 class FamilyMember {
   Id id = Isar.autoIncrement;
 
+  /// Device-independent identity of this row (research R5); indexed, not unique
+  /// (uniqueness held by construction and migration step 17).
+  @Index()
+  String syncGuid = newSyncGuid();
+
   @Index()
   int? profileId;
 
@@ -83,6 +95,11 @@ class FamilyMember {
 @collection
 class MedicalProvider {
   Id id = Isar.autoIncrement;
+
+  /// Device-independent identity of this row (research R5); indexed, not unique
+  /// (uniqueness held by construction and migration step 17).
+  @Index()
+  String syncGuid = newSyncGuid();
 
   @Index()
   int? profileId;

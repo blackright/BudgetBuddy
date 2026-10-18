@@ -17,6 +17,8 @@ import 'features/engine/providers/sweep_provider.dart';
 import 'features/engine/seal_coordinator.dart';
 import 'features/identity/presentation/app_lock_gate.dart';
 import 'features/settings/providers/settings_provider.dart';
+import 'features/sync/providers/sync_coordinator_provider.dart';
+import 'features/sync/repositories/sync_coordinator.dart';
 
 import 'core/services/reminder_notification_service.dart';
 
@@ -39,8 +41,13 @@ void main() async {
   // (invariant I3), and again whenever the app resumes (FR-004).
   final sealObserver = _SealLifecycleObserver(container);
   WidgetsBinding.instance.addObserver(sealObserver);
+  // The exchange loop follows the app lifecycle: it runs while foregrounded and
+  // an unlocked session exists, and stops the moment either goes away (FR-009).
+  final syncObserver = _SyncLifecycleObserver(container);
+  WidgetsBinding.instance.addObserver(syncObserver);
   WidgetsBinding.instance.addPostFrameCallback((_) {
     sealObserver.run();
+    syncObserver.run();
     // Warm up notifications only once the first frame is up, so the Android
     // plugin's context is guaranteed to exist (never block startup on it).
     unawaited(ReminderNotificationService().ensureInitialized());
@@ -75,6 +82,61 @@ class _SealLifecycleObserver extends WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) run();
+  }
+}
+
+/// Starts and stops the peer-to-peer exchange with the app lifecycle
+/// (FR-009, `contracts/runtime-orchestration.md` §1).
+///
+/// It runs the [SyncCoordinator] while the app is foregrounded **and** an
+/// unlocked session exists, and stops it when either goes away — so nothing is
+/// transmitted while backgrounded or locked, and there is no background service.
+class _SyncLifecycleObserver extends WidgetsBindingObserver {
+  _SyncLifecycleObserver(this._container) {
+    // Rebuilds whenever the session unlocks/locks or a pairing changes; only the
+    // running coordinator is started, and the previous one is always stopped.
+    _subscription = _container.listen<SyncCoordinator?>(
+      syncCoordinatorProvider,
+      _reconcile,
+    );
+  }
+
+  final ProviderContainer _container;
+  late final ProviderSubscription<SyncCoordinator?> _subscription;
+  bool _foreground = true;
+
+  void _reconcile(SyncCoordinator? previous, SyncCoordinator? next) {
+    if (identical(previous, next)) return;
+    if (previous != null) unawaited(previous.stop());
+    if (next != null && _foreground) unawaited(next.start());
+  }
+
+  /// Runs once after the first frame, when the app is already foregrounded.
+  void run() {
+    final coordinator = _container.read(syncCoordinatorProvider);
+    if (coordinator != null && _foreground) unawaited(coordinator.start());
+  }
+
+  /// Detaches the provider listener (the observer lives for the app's lifetime).
+  void dispose() => _subscription.close();
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.resumed:
+        _foreground = true;
+        final coordinator = _container.read(syncCoordinatorProvider);
+        if (coordinator != null) unawaited(coordinator.start());
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.paused:
+      case AppLifecycleState.detached:
+        _foreground = false;
+        final coordinator = _container.read(syncCoordinatorProvider);
+        if (coordinator != null) unawaited(coordinator.stop());
+      case AppLifecycleState.inactive:
+        // Transient (app switcher, a call); keep the loop running.
+        break;
+    }
   }
 }
 

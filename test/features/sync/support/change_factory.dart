@@ -30,14 +30,20 @@ Future<ChangeRecord> signedChange({
   String op = 'upsert',
   String payload = '',
   String entityType = 'Expense',
+  String entitySyncGuid = '',
   int entityLocalId = 1,
+  String contextSyncGuid = '',
   int contextLocalId = 1,
   ContextKind contextKind = ContextKind.shared,
 }) async {
+  final resolvedEntityGuid =
+      entitySyncGuid.isNotEmpty ? entitySyncGuid : syncGuidOf(payload);
   final record = ChangeRecord()
     ..contextKind = contextKind
+    ..contextSyncGuid = contextSyncGuid
     ..contextLocalId = contextLocalId
     ..entityType = entityType
+    ..entitySyncGuid = resolvedEntityGuid
     ..entityLocalId = entityLocalId
     ..op = op
     ..payload = payload
@@ -50,4 +56,23 @@ Future<ChangeRecord> signedChange({
       await Ed25519().sign(changeCanonicalBytes(record), keyPair: keys.keyPair);
   record.signature = base64Encode(signature.bytes);
   return record;
+}
+
+/// The entity `syncGuid` carried inside a codec payload.
+///
+/// 015 moves device-independent identity onto the wire, so a signed change's
+/// `entitySyncGuid` is simply the payload's own `syncGuid`. Tests that build a
+/// payload from a model can read it back with this (and [signedChange] derives
+/// `entitySyncGuid` from it automatically when left blank).
+String syncGuidOf(String payload) {
+  if (payload.isEmpty) return '';
+  try {
+    final decoded = jsonDecode(payload);
+    if (decoded is Map && decoded['syncGuid'] is String) {
+      return decoded['syncGuid'] as String;
+    }
+  } on FormatException {
+    return '';
+  }
+  return '';
 }

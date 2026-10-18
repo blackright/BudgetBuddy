@@ -14,9 +14,8 @@ class ExpenseCodec extends SyncCodec<Expense> {
 
   @override
   Map<String, Object?> toJson(Expense value) => {
-        'id': value.id,
+        'syncGuid': value.syncGuid,
         'profileId': value.profileId,
-        'sharedSpaceId': value.sharedSpaceId,
         'yearMonth': value.yearMonth,
         'type': value.type.name,
         'title': value.title,
@@ -29,15 +28,12 @@ class ExpenseCodec extends SyncCodec<Expense> {
         'date': encodeDate(value.date),
         'receiptPath': value.receiptPath,
         'notes': value.notes,
-        'budgetId': value.budgetId,
         'paidAt': encodeDate(value.paidAt),
       };
 
   @override
-  Expense fromJson(Map<String, Object?> json) => Expense(
-        id: decodeInt(json['id']),
+  Expense fromJson(Map<String, Object?> json) => (Expense(
         profileId: decodeInt(json['profileId']),
-        sharedSpaceId: decodeIntOrNull(json['sharedSpaceId']),
         yearMonth: (json['yearMonth'] as String?) ?? '',
         type: decodeEnum(ExpenseType.values, json['type']),
         title: (json['title'] as String?) ?? '',
@@ -51,7 +47,10 @@ class ExpenseCodec extends SyncCodec<Expense> {
         date: decodeDateRequired(json['date']),
         receiptPath: json['receiptPath'] as String?,
         notes: json['notes'] as String?,
-        budgetId: decodeInt(json['budgetId']),
+        // `budgetId` is resolved from `budgetSyncGuid` by the applier; the codec
+        // is pure and cannot look the budget up.
+        budgetId: 0,
         paidAt: decodeDate(json['paidAt']),
-      );
+      ))
+        ..syncGuid = decodeGuid(json['syncGuid']);
 }

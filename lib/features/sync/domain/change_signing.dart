@@ -5,16 +5,22 @@ import '../../../core/models/shared_member.dart';
 import 'sync_codec.dart';
 
 /// The canonical byte string every peer signs and verifies for a [ChangeRecord]
-/// (`contracts/sync-protocol.md` §1).
+/// (`contracts/sync-protocol.md` §1, `contracts/entity-identity.md`).
 ///
 /// It covers every field of the record **except** [ChangeRecord.signature]
 /// itself, in a key-sorted canonical JSON form, so a signature computed on one
 /// device verifies byte-for-byte on another.
+///
+/// Identity is the **device-independent** `syncGuid` of the context and the
+/// entity (data-model §2), **not** the local row ids: the two devices store the
+/// same logical row under different local ids, so signing local ids would make
+/// the same change produce two different signatures. The local ids are kept for
+/// per-device bookkeeping only and are never part of what is signed.
 String changeCanonicalString(ChangeRecord record) => canonicalJsonEncode({
       'contextKind': record.contextKind.name,
-      'contextLocalId': record.contextLocalId,
+      'contextSyncGuid': record.contextSyncGuid,
       'entityType': record.entityType,
-      'entityLocalId': record.entityLocalId,
+      'entitySyncGuid': record.entitySyncGuid,
       'op': record.op,
       'payload': record.payload,
       'hlcMillis': record.hlcMillis,

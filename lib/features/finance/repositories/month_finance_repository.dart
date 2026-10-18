@@ -9,12 +9,15 @@ import '../../../core/models/user_profile.dart';
 import '../../../core/providers/active_profile_provider.dart';
 import '../../../core/providers/budget_context_provider.dart';
 import '../../spaces/repositories/space_write_guard.dart';
+import '../../sync/providers/sync_recorder_provider.dart';
+import '../../sync/repositories/sync_recorder.dart';
 
 final monthFinanceRepositoryProvider = Provider<MonthFinanceRepository>((ref) {
   return MonthFinanceRepository(
     IsarHelper.instance,
     guard: ref.watch(spaceWriteGuardProvider),
     actingProfileId: ref.watch(actingProfileIdProvider),
+    syncRecorder: ref.watch(syncRecorderProvider),
   );
 });
 
@@ -65,8 +68,10 @@ class MonthFinanceRepository {
     this._isar, {
     SpaceWriteGuard? guard,
     int? actingProfileId,
+    SyncRecorder? syncRecorder,
   })  : _writeGuard = guard,
-        _actingProfileId = actingProfileId;
+        _actingProfileId = actingProfileId,
+        _syncRecorder = syncRecorder;
 
   final Isar _isar;
 
@@ -75,6 +80,12 @@ class MonthFinanceRepository {
   final SpaceWriteGuard? _writeGuard;
   final int? _actingProfileId;
 
+  /// Appends a signed change for a paired shared month on every write (FR-006).
+  /// Optional and inert when no signer/identity is attached; a personal budget
+  /// (`sharedSpaceId == null`) is never exchanged, so [SyncRecorder.recordBudget]
+  /// no-ops for it.
+  final SyncRecorder? _syncRecorder;
+
   Future<void> _guardWrite(ContextRef context) async {
     await _writeGuard?.assertSharedMoneyWrite(
       sharedSpaceId: context.spaceId,
@@ -82,6 +93,11 @@ class MonthFinanceRepository {
       yearMonth: context.yearMonth,
     );
   }
+
+  /// Appends a change record for a just-written shared month (FR-006). No-op
+  /// for a personal budget (never exchanged) or when recording is inert.
+  Future<void> _recordBudget(MonthlyBudget budget) =>
+      _syncRecorder?.recordBudget(budget) ?? Future.value();
 
   // ---------------------------------------------------------------------------
   // Context-scoped API (the single route, FR-004)
@@ -139,6 +155,7 @@ class MonthFinanceRepository {
       }
       unclaimed.updatedAt = DateTime.now();
       await _isar.monthlyBudgets.put(unclaimed);
+      await _recordBudget(unclaimed);
       return unclaimed;
     }
 
@@ -155,6 +172,7 @@ class MonthFinanceRepository {
       budget.profileId = context.profileKey;
     }
     budget.id = await _isar.monthlyBudgets.put(budget);
+    await _recordBudget(budget);
     return budget;
   }
 
@@ -198,6 +216,7 @@ class MonthFinanceRepository {
       budget.openingBalanceConfirmed = true;
       budget.updatedAt = DateTime.now();
       await _isar.monthlyBudgets.put(budget);
+      await _recordBudget(budget);
     });
   }
 
@@ -210,6 +229,7 @@ class MonthFinanceRepository {
       budget.currency = currency?.name;
       budget.updatedAt = DateTime.now();
       await _isar.monthlyBudgets.put(budget);
+      await _recordBudget(budget);
     });
   }
 
@@ -233,6 +253,7 @@ class MonthFinanceRepository {
       budget.netSalaryOverride = amount;
       budget.updatedAt = DateTime.now();
       await _isar.monthlyBudgets.put(budget);
+      await _recordBudget(budget);
     });
   }
 

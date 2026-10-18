@@ -57,13 +57,18 @@ const MonthlyBudgetSchema = CollectionSchema(
       name: r'sharedSpaceId',
       type: IsarType.long,
     ),
-    r'updatedAt': PropertySchema(
+    r'syncGuid': PropertySchema(
       id: 8,
+      name: r'syncGuid',
+      type: IsarType.string,
+    ),
+    r'updatedAt': PropertySchema(
+      id: 9,
       name: r'updatedAt',
       type: IsarType.dateTime,
     ),
     r'yearMonth': PropertySchema(
-      id: 9,
+      id: 10,
       name: r'yearMonth',
       type: IsarType.string,
     )
@@ -74,6 +79,19 @@ const MonthlyBudgetSchema = CollectionSchema(
   deserializeProp: _monthlyBudgetDeserializeProp,
   idName: r'id',
   indexes: {
+    r'syncGuid': IndexSchema(
+      id: 6159741003405035971,
+      name: r'syncGuid',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'syncGuid',
+          type: IndexType.hash,
+          caseSensitive: true,
+        )
+      ],
+    ),
     r'profileId_sharedSpaceId_yearMonth': IndexSchema(
       id: -1016589773913284345,
       name: r'profileId_sharedSpaceId_yearMonth',
@@ -118,6 +136,7 @@ int _monthlyBudgetEstimateSize(
       bytesCount += 3 + value.length * 3;
     }
   }
+  bytesCount += 3 + object.syncGuid.length * 3;
   bytesCount += 3 + object.yearMonth.length * 3;
   return bytesCount;
 }
@@ -136,8 +155,9 @@ void _monthlyBudgetSerialize(
   writer.writeLong(offsets[5], object.profileId);
   writer.writeLong(offsets[6], object.sharedIncomeOverride);
   writer.writeLong(offsets[7], object.sharedSpaceId);
-  writer.writeDateTime(offsets[8], object.updatedAt);
-  writer.writeString(offsets[9], object.yearMonth);
+  writer.writeString(offsets[8], object.syncGuid);
+  writer.writeDateTime(offsets[9], object.updatedAt);
+  writer.writeString(offsets[10], object.yearMonth);
 }
 
 MonthlyBudget _monthlyBudgetDeserialize(
@@ -156,8 +176,9 @@ MonthlyBudget _monthlyBudgetDeserialize(
   object.profileId = reader.readLongOrNull(offsets[5]);
   object.sharedIncomeOverride = reader.readLongOrNull(offsets[6]);
   object.sharedSpaceId = reader.readLongOrNull(offsets[7]);
-  object.updatedAt = reader.readDateTime(offsets[8]);
-  object.yearMonth = reader.readString(offsets[9]);
+  object.syncGuid = reader.readString(offsets[8]);
+  object.updatedAt = reader.readDateTime(offsets[9]);
+  object.yearMonth = reader.readString(offsets[10]);
   return object;
 }
 
@@ -185,8 +206,10 @@ P _monthlyBudgetDeserializeProp<P>(
     case 7:
       return (reader.readLongOrNull(offset)) as P;
     case 8:
-      return (reader.readDateTime(offset)) as P;
+      return (reader.readString(offset)) as P;
     case 9:
+      return (reader.readDateTime(offset)) as P;
+    case 10:
       return (reader.readString(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -393,6 +416,51 @@ extension MonthlyBudgetQueryWhere
         upper: upperId,
         includeUpper: includeUpper,
       ));
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterWhereClause> syncGuidEqualTo(
+      String syncGuid) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'syncGuid',
+        value: [syncGuid],
+      ));
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterWhereClause>
+      syncGuidNotEqualTo(String syncGuid) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncGuid',
+              lower: [],
+              upper: [syncGuid],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncGuid',
+              lower: [syncGuid],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncGuid',
+              lower: [syncGuid],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncGuid',
+              lower: [],
+              upper: [syncGuid],
+              includeUpper: false,
+            ));
+      }
     });
   }
 
@@ -1330,6 +1398,142 @@ extension MonthlyBudgetQueryFilter
   }
 
   QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterFilterCondition>
+      syncGuidEqualTo(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterFilterCondition>
+      syncGuidGreaterThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterFilterCondition>
+      syncGuidLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterFilterCondition>
+      syncGuidBetween(
+    String lower,
+    String upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'syncGuid',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterFilterCondition>
+      syncGuidStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterFilterCondition>
+      syncGuidEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterFilterCondition>
+      syncGuidContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'syncGuid',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterFilterCondition>
+      syncGuidMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'syncGuid',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterFilterCondition>
+      syncGuidIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'syncGuid',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterFilterCondition>
+      syncGuidIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'syncGuid',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterFilterCondition>
       updatedAtEqualTo(DateTime value) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
@@ -1639,6 +1843,19 @@ extension MonthlyBudgetQuerySortBy
     });
   }
 
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterSortBy> sortBySyncGuid() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncGuid', Sort.asc);
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterSortBy>
+      sortBySyncGuidDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncGuid', Sort.desc);
+    });
+  }
+
   QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterSortBy> sortByUpdatedAt() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'updatedAt', Sort.asc);
@@ -1789,6 +2006,19 @@ extension MonthlyBudgetQuerySortThenBy
     });
   }
 
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterSortBy> thenBySyncGuid() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncGuid', Sort.asc);
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterSortBy>
+      thenBySyncGuidDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncGuid', Sort.desc);
+    });
+  }
+
   QueryBuilder<MonthlyBudget, MonthlyBudget, QAfterSortBy> thenByUpdatedAt() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'updatedAt', Sort.asc);
@@ -1872,6 +2102,13 @@ extension MonthlyBudgetQueryWhereDistinct
     });
   }
 
+  QueryBuilder<MonthlyBudget, MonthlyBudget, QDistinct> distinctBySyncGuid(
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'syncGuid', caseSensitive: caseSensitive);
+    });
+  }
+
   QueryBuilder<MonthlyBudget, MonthlyBudget, QDistinct> distinctByUpdatedAt() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'updatedAt');
@@ -1943,6 +2180,12 @@ extension MonthlyBudgetQueryProperty
   QueryBuilder<MonthlyBudget, int?, QQueryOperations> sharedSpaceIdProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'sharedSpaceId');
+    });
+  }
+
+  QueryBuilder<MonthlyBudget, String, QQueryOperations> syncGuidProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'syncGuid');
     });
   }
 
