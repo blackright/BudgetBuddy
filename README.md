@@ -38,7 +38,8 @@ multiple currencies and shared spaces.
 - **Shared spaces** — create a space, give people a role (Owner can manage
   people and settings, Editor can change money, Viewer is read-only) and share
   months. People are global and pair once via QR; the same contact can join any
-  space.
+  space. Edits then travel directly to every paired phone on the same local
+  network — no server, no background service (see **Status**).
 - **Profiles** — switch between personal profiles, create new ones, and delete a
   profile along with its personal data.
 - **App theme** — follow the system, or pick light/dark, saved per profile.
@@ -96,14 +97,16 @@ Specs `011`–`015` and where they stand:
 | Spec | Feature | State |
 | --- | --- | --- |
 | `011` | Shared financial spaces | **Shipped** — spaces, Owner/Editor/Viewer roles, invites, months in a space |
-| `012` | Cross-device shared spaces | **Data layer built** — signed change log, sync engine, codecs and appliers exist and are tested; not yet wired end to end |
+| `012` | Cross-device shared spaces | **Delivered via 015** — signed change log, sync engine, codecs and appliers |
 | `013` | Money input & profile clarity | **Shipped** — money field, conversion footnotes, profile switcher/deletion, app theme, time-picker safety |
 | `014` | Charts & analytics | **Shipped** |
-| `015` | Wire device sync | **In progress** — peer-to-peer delivery between two paired phones is being wired; not usable end to end yet |
+| `015` | Wire device sync | **Code complete — manual sign-off pending** — peer-to-peer delivery between two paired phones is wired into the app and covered by the hermetic `test/features/sync/` suite; the two-phone checklist on real devices is the remaining sign-off |
 
 Cross-device sync (`012`/`015`) is **local-network only**: two paired phones
-exchange changes directly — no server, no background service. It is not
-finished; see `specs/015-wire-device-sync` for the current phase.
+exchange changes directly — no server, no background service. Delivery is wired
+and covered by the hermetic sync suite; until the two-phone checklist is run on
+real devices, treat cross-device sharing as not yet signed off (see
+`specs/015-wire-device-sync`).
 
 ## Getting Started
 
