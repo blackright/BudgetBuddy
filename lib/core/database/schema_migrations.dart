@@ -18,7 +18,7 @@ part 'schema_migrations.g.dart';
 
 /// Schema version this build expects. Bump whenever a numbered step is added to
 /// [_applySteps]; databases stamped at or above it are left untouched.
-const int schemaVersion = 18;
+const int schemaVersion = 19;
 
 const String schemaVersionKey = 'schema_version';
 
@@ -114,6 +114,24 @@ Future<void> _applySteps(Isar isar) async {
   await _step16AddConfirmSharedSavePreference(isar);
   await _step17AddSyncGuids(isar);
   await _step18RepairSyncConflictCounts(isar);
+  await _step19AddLockSetting(isar);
+}
+
+/// Step 19 (016-app-security, data-model §§2, 4) — additive only: the
+/// `LockSetting` collection appears and `SharedSpace` gains its three
+/// non-secret policy columns (`requirePin`, `forbidBiometrics`, `awayTime`).
+///
+/// Isar reconciles the stored schema on open, so a new collection and new
+/// columns materialise with their declared defaults before this runs: a
+/// `LockSetting` row simply does not exist yet (the lock is opt-in, so "no row"
+/// and "no lock" are the same thing), and an existing space reads back
+/// `requirePin == false`, `forbidBiometrics == false` and `awayTime == null` —
+/// "the Owner set no requirement", never a hidden two-minute default. There is
+/// no data to rewrite. The step exists so the version stamp records the upgrade
+/// and so the specification's numbering stays visible. No monetary amount, seal
+/// or month total is touched (011 SC-003 preserved).
+Future<void> _step19AddLockSetting(Isar isar) async {
+  // Intentionally empty: additive schema only — see doc comment.
 }
 
 /// Step 17 (015-wire-device-sync, research R5, data-model §1) — give every

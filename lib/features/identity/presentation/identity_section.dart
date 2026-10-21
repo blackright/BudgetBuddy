@@ -2,15 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers/identity_provider.dart';
-import '../repositories/consent_service.dart';
 import 'identity_onboarding_screen.dart';
 
 /// US1 (FR-002/014): the Settings card for the local identity.
 ///
 /// Before onboarding it offers a single "Set up your identity" entry. Once an
-/// identity exists it shows the username and fingerprint, the optional
-/// device-auth switch (with the same warning as onboarding), and a "Remove
-/// identity" action that wipes the key. Nothing here is ever exchanged.
+/// identity exists it shows the username and fingerprint and a "Remove identity"
+/// action that wipes the key. Nothing here is ever exchanged.
+///
+/// The device-authentication switch used to live here. It moved into the
+/// **Privacy & security** group beside the app lock, because that is what it
+/// belongs to: the phone's own PIN/biometrics are the same subject in both
+/// places (FR-002 with FR-009, `security_section.dart` → `_DeviceAuthCard`).
 class IdentitySection extends ConsumerWidget {
   const IdentitySection({super.key});
 
@@ -19,34 +22,6 @@ class IdentitySection extends ConsumerWidget {
       MaterialPageRoute<void>(
         builder: (_) => const IdentityOnboardingScreen(),
       ),
-    );
-  }
-
-  Future<void> _setDeviceAuth(
-    BuildContext context,
-    WidgetRef ref,
-    bool value,
-  ) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final consent = ref.read(consentServiceProvider);
-    if (!value) {
-      await consent.revoke();
-      return;
-    }
-    final ok = await ref.read(deviceAuthenticatorProvider).authenticate(
-          reason: 'Turn on device authentication for BudgetBuddy',
-        );
-    if (!ok) {
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text('Device authentication was not set up.'),
-        ),
-      );
-      return;
-    }
-    await consent.record(
-      noticeVersion: kConsentNoticeVersion,
-      deviceAuthGranted: true,
     );
   }
 
@@ -83,7 +58,6 @@ class IdentitySection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final identityAsync = ref.watch(identityProvider);
-    final deviceAuthEnabled = ref.watch(deviceAuthEnabledProvider);
     final theme = Theme.of(context);
 
     return identityAsync.when(
@@ -133,33 +107,6 @@ class IdentitySection extends ConsumerWidget {
                     key: const Key('identityFingerprint'),
                   ),
                 ),
-                SwitchListTile(
-                  key: const Key('deviceAuthSwitch'),
-                  value: deviceAuthEnabled,
-                  onChanged: (value) => _setDeviceAuth(context, ref, value),
-                  title: const Text('Use my phone\'s PIN or biometrics'),
-                ),
-                if (!deviceAuthEnabled)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(Icons.warning_amber_rounded,
-                            size: 18, color: theme.colorScheme.error),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Without your phone\'s PIN or biometrics, your '
-                            'data is less protected.',
-                            key: const Key('deviceAuthWarning'),
-                            style: theme.textTheme.bodySmall
-                                ?.copyWith(color: theme.colorScheme.error),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
                 const SizedBox(height: 8),
                 Align(
                   alignment: Alignment.centerLeft,

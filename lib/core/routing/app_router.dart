@@ -9,6 +9,7 @@ import '../../features/medical/presentation/medical_dashboard.dart';
 import '../../features/medical/presentation/medical_bill_form.dart';
 import '../../features/medical/presentation/medical_detail_screen.dart';
 import '../../features/analytics/presentation/analytics_screen.dart';
+import '../../features/spaces/presentation/spaces_screen.dart';
 import '../../features/settings/presentation/settings_screen.dart';
 import '../../shared/presentation/app_shell.dart';
 import '../../features/expenses/presentation/add_expense_screen.dart';
@@ -28,6 +29,8 @@ final shellNavigatorMedicalKey =
     GlobalKey<NavigatorState>(debugLabel: 'medicalShell');
 final shellNavigatorAnalyticsKey =
     GlobalKey<NavigatorState>(debugLabel: 'analyticsShell');
+final shellNavigatorSpacesKey =
+    GlobalKey<NavigatorState>(debugLabel: 'spacesShell');
 final shellNavigatorSettingsKey =
     GlobalKey<NavigatorState>(debugLabel: 'settingsShell');
 
@@ -43,6 +46,10 @@ GoRouter createAppRouter({String? initialLocation}) => GoRouter(
         GoRoute(
           path: '/setup',
           builder: (context, state) => const BudgetSetupScreen(),
+        ),
+        GoRoute(
+          path: '/settings',
+          builder: (context, state) => const SettingsScreen(),
         ),
         GoRoute(
           path: '/add_expense',
@@ -153,11 +160,11 @@ GoRouter createAppRouter({String? initialLocation}) => GoRouter(
               ],
             ),
             StatefulShellBranch(
-              navigatorKey: shellNavigatorSettingsKey,
+              navigatorKey: shellNavigatorSpacesKey,
               routes: [
                 GoRoute(
-                  path: '/settings',
-                  builder: (context, state) => const SettingsScreen(),
+                  path: '/spaces',
+                  builder: (context, state) => const SpacesScreen(),
                 ),
               ],
             ),

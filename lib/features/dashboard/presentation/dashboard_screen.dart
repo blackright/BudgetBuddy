@@ -7,7 +7,6 @@ import '../../../core/providers/active_budget_provider.dart';
 import '../../../core/providers/active_profile_provider.dart';
 import '../../../core/providers/active_space_provider.dart';
 import '../../../core/providers/selected_month_provider.dart';
-import '../../../shared/presentation/widgets/context_banner.dart';
 import '../../../shared/presentation/widgets/month_incomplete_banner.dart';
 import '../../../shared/presentation/widgets/sync_status_chip.dart';
 import '../../analytics/presentation/widgets/analytics_mini_charts.dart';
@@ -75,7 +74,6 @@ class DashboardScreen extends ConsumerWidget {
       ),
       body: Column(
         children: [
-          const ContextBanner(),
           Expanded(
             child: GestureDetector(
               onHorizontalDragEnd: (details) {

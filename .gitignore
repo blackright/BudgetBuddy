@@ -1,3 +1,7 @@
+# ==============================================================================
+# BudgetBuddy .gitignore
+# ==============================================================================
+
 # Miscellaneous
 *.class
 *.log
@@ -19,6 +23,15 @@ migrate_working_dir/
 *.ipr
 *.iws
 .idea/
+
+# Spec-Kit & Agent Infrastructure
+.agents/
+.specify/
+specs/
+Phase-Builder-Agent.md
+Specs-Dafting.md
+Troubleshoot.md
+Troubleshoot-app.md
 
 # Visual Studio Code related
 .vscode/

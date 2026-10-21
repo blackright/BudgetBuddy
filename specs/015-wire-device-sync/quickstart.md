@@ -92,8 +92,8 @@ Full suite: `flutter test` (expect all prior tests green plus the new ones).
 
 ## What "done" looks like
 
-- `flutter test` is green (existing 645 + new sync tests), `flutter analyze` clean, `dart format` no
-  diffs.
+- `flutter test` is green (currently 759 passed, 1 skipped — including the full `test/features/sync/`
+  suite), `flutter analyze` clean, `dart format` no diffs.
 - Scenarios A–E pass on two real phones.
 - The status chip appears beside the month on the shared-space money screen and in space settings, per
   space.

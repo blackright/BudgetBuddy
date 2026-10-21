@@ -22,34 +22,59 @@ const SharedSpaceSchema = CollectionSchema(
       name: r'avatar',
       type: IsarType.string,
     ),
-    r'createdAt': PropertySchema(
+    r'awayTimeIndex': PropertySchema(
       id: 1,
+      name: r'awayTimeIndex',
+      type: IsarType.long,
+    ),
+    r'createdAt': PropertySchema(
+      id: 2,
       name: r'createdAt',
       type: IsarType.dateTime,
     ),
     r'createdByProfileId': PropertySchema(
-      id: 2,
+      id: 3,
       name: r'createdByProfileId',
       type: IsarType.long,
     ),
     r'currency': PropertySchema(
-      id: 3,
+      id: 4,
       name: r'currency',
       type: IsarType.byte,
       enumMap: _SharedSpacecurrencyEnumValueMap,
     ),
     r'defaultIncome': PropertySchema(
-      id: 4,
+      id: 5,
       name: r'defaultIncome',
       type: IsarType.long,
     ),
+    r'displayName': PropertySchema(
+      id: 6,
+      name: r'displayName',
+      type: IsarType.string,
+    ),
+    r'forbidBiometrics': PropertySchema(
+      id: 7,
+      name: r'forbidBiometrics',
+      type: IsarType.bool,
+    ),
+    r'isPendingSync': PropertySchema(
+      id: 8,
+      name: r'isPendingSync',
+      type: IsarType.bool,
+    ),
     r'name': PropertySchema(
-      id: 5,
+      id: 9,
       name: r'name',
       type: IsarType.string,
     ),
+    r'requirePin': PropertySchema(
+      id: 10,
+      name: r'requirePin',
+      type: IsarType.bool,
+    ),
     r'syncGuid': PropertySchema(
-      id: 6,
+      id: 11,
       name: r'syncGuid',
       type: IsarType.string,
     )
@@ -89,6 +114,7 @@ int _sharedSpaceEstimateSize(
 ) {
   var bytesCount = offsets.last;
   bytesCount += 3 + object.avatar.length * 3;
+  bytesCount += 3 + object.displayName.length * 3;
   bytesCount += 3 + object.name.length * 3;
   bytesCount += 3 + object.syncGuid.length * 3;
   return bytesCount;
@@ -101,12 +127,17 @@ void _sharedSpaceSerialize(
   Map<Type, List<int>> allOffsets,
 ) {
   writer.writeString(offsets[0], object.avatar);
-  writer.writeDateTime(offsets[1], object.createdAt);
-  writer.writeLong(offsets[2], object.createdByProfileId);
-  writer.writeByte(offsets[3], object.currency.index);
-  writer.writeLong(offsets[4], object.defaultIncome);
-  writer.writeString(offsets[5], object.name);
-  writer.writeString(offsets[6], object.syncGuid);
+  writer.writeLong(offsets[1], object.awayTimeIndex);
+  writer.writeDateTime(offsets[2], object.createdAt);
+  writer.writeLong(offsets[3], object.createdByProfileId);
+  writer.writeByte(offsets[4], object.currency.index);
+  writer.writeLong(offsets[5], object.defaultIncome);
+  writer.writeString(offsets[6], object.displayName);
+  writer.writeBool(offsets[7], object.forbidBiometrics);
+  writer.writeBool(offsets[8], object.isPendingSync);
+  writer.writeString(offsets[9], object.name);
+  writer.writeBool(offsets[10], object.requirePin);
+  writer.writeString(offsets[11], object.syncGuid);
 }
 
 SharedSpace _sharedSpaceDeserialize(
@@ -117,15 +148,18 @@ SharedSpace _sharedSpaceDeserialize(
 ) {
   final object = SharedSpace();
   object.avatar = reader.readString(offsets[0]);
-  object.createdAt = reader.readDateTime(offsets[1]);
-  object.createdByProfileId = reader.readLong(offsets[2]);
+  object.awayTimeIndex = reader.readLong(offsets[1]);
+  object.createdAt = reader.readDateTime(offsets[2]);
+  object.createdByProfileId = reader.readLong(offsets[3]);
   object.currency =
-      _SharedSpacecurrencyValueEnumMap[reader.readByteOrNull(offsets[3])] ??
+      _SharedSpacecurrencyValueEnumMap[reader.readByteOrNull(offsets[4])] ??
           PrimaryCurrency.huf;
-  object.defaultIncome = reader.readLong(offsets[4]);
+  object.defaultIncome = reader.readLong(offsets[5]);
+  object.forbidBiometrics = reader.readBool(offsets[7]);
   object.id = id;
-  object.name = reader.readString(offsets[5]);
-  object.syncGuid = reader.readString(offsets[6]);
+  object.name = reader.readString(offsets[9]);
+  object.requirePin = reader.readBool(offsets[10]);
+  object.syncGuid = reader.readString(offsets[11]);
   return object;
 }
 
@@ -139,17 +173,27 @@ P _sharedSpaceDeserializeProp<P>(
     case 0:
       return (reader.readString(offset)) as P;
     case 1:
-      return (reader.readDateTime(offset)) as P;
-    case 2:
       return (reader.readLong(offset)) as P;
+    case 2:
+      return (reader.readDateTime(offset)) as P;
     case 3:
+      return (reader.readLong(offset)) as P;
+    case 4:
       return (_SharedSpacecurrencyValueEnumMap[reader.readByteOrNull(offset)] ??
           PrimaryCurrency.huf) as P;
-    case 4:
-      return (reader.readLong(offset)) as P;
     case 5:
-      return (reader.readString(offset)) as P;
+      return (reader.readLong(offset)) as P;
     case 6:
+      return (reader.readString(offset)) as P;
+    case 7:
+      return (reader.readBool(offset)) as P;
+    case 8:
+      return (reader.readBool(offset)) as P;
+    case 9:
+      return (reader.readString(offset)) as P;
+    case 10:
+      return (reader.readBool(offset)) as P;
+    case 11:
       return (reader.readString(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -442,6 +486,62 @@ extension SharedSpaceQueryFilter
   }
 
   QueryBuilder<SharedSpace, SharedSpace, QAfterFilterCondition>
+      awayTimeIndexEqualTo(int value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'awayTimeIndex',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<SharedSpace, SharedSpace, QAfterFilterCondition>
+      awayTimeIndexGreaterThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'awayTimeIndex',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<SharedSpace, SharedSpace, QAfterFilterCondition>
+      awayTimeIndexLessThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'awayTimeIndex',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<SharedSpace, SharedSpace, QAfterFilterCondition>
+      awayTimeIndexBetween(
+    int lower,
+    int upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'awayTimeIndex',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<SharedSpace, SharedSpace, QAfterFilterCondition>
       createdAtEqualTo(DateTime value) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
@@ -664,6 +764,152 @@ extension SharedSpaceQueryFilter
     });
   }
 
+  QueryBuilder<SharedSpace, SharedSpace, QAfterFilterCondition>
+      displayNameEqualTo(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'displayName',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SharedSpace, SharedSpace, QAfterFilterCondition>
+      displayNameGreaterThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'displayName',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SharedSpace, SharedSpace, QAfterFilterCondition>
+      displayNameLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'displayName',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SharedSpace, SharedSpace, QAfterFilterCondition>
+      displayNameBetween(
+    String lower,
+    String upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'displayName',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SharedSpace, SharedSpace, QAfterFilterCondition>
+      displayNameStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'displayName',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SharedSpace, SharedSpace, QAfterFilterCondition>
+      displayNameEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'displayName',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SharedSpace, SharedSpace, QAfterFilterCondition>
+      displayNameContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'displayName',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SharedSpace, SharedSpace, QAfterFilterCondition>
+      displayNameMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'displayName',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SharedSpace, SharedSpace, QAfterFilterCondition>
+      displayNameIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'displayName',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<SharedSpace, SharedSpace, QAfterFilterCondition>
+      displayNameIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'displayName',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<SharedSpace, SharedSpace, QAfterFilterCondition>
+      forbidBiometricsEqualTo(bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'forbidBiometrics',
+        value: value,
+      ));
+    });
+  }
+
   QueryBuilder<SharedSpace, SharedSpace, QAfterFilterCondition> idEqualTo(
       Id value) {
     return QueryBuilder.apply(this, (query) {
@@ -713,6 +959,16 @@ extension SharedSpaceQueryFilter
         includeLower: includeLower,
         upper: upper,
         includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<SharedSpace, SharedSpace, QAfterFilterCondition>
+      isPendingSyncEqualTo(bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'isPendingSync',
+        value: value,
       ));
     });
   }
@@ -844,6 +1100,16 @@ extension SharedSpaceQueryFilter
       return query.addFilterCondition(FilterCondition.greaterThan(
         property: r'name',
         value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<SharedSpace, SharedSpace, QAfterFilterCondition>
+      requirePinEqualTo(bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'requirePin',
+        value: value,
       ));
     });
   }
@@ -1004,6 +1270,19 @@ extension SharedSpaceQuerySortBy
     });
   }
 
+  QueryBuilder<SharedSpace, SharedSpace, QAfterSortBy> sortByAwayTimeIndex() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'awayTimeIndex', Sort.asc);
+    });
+  }
+
+  QueryBuilder<SharedSpace, SharedSpace, QAfterSortBy>
+      sortByAwayTimeIndexDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'awayTimeIndex', Sort.desc);
+    });
+  }
+
   QueryBuilder<SharedSpace, SharedSpace, QAfterSortBy> sortByCreatedAt() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'createdAt', Sort.asc);
@@ -1055,6 +1334,45 @@ extension SharedSpaceQuerySortBy
     });
   }
 
+  QueryBuilder<SharedSpace, SharedSpace, QAfterSortBy> sortByDisplayName() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'displayName', Sort.asc);
+    });
+  }
+
+  QueryBuilder<SharedSpace, SharedSpace, QAfterSortBy> sortByDisplayNameDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'displayName', Sort.desc);
+    });
+  }
+
+  QueryBuilder<SharedSpace, SharedSpace, QAfterSortBy>
+      sortByForbidBiometrics() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'forbidBiometrics', Sort.asc);
+    });
+  }
+
+  QueryBuilder<SharedSpace, SharedSpace, QAfterSortBy>
+      sortByForbidBiometricsDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'forbidBiometrics', Sort.desc);
+    });
+  }
+
+  QueryBuilder<SharedSpace, SharedSpace, QAfterSortBy> sortByIsPendingSync() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isPendingSync', Sort.asc);
+    });
+  }
+
+  QueryBuilder<SharedSpace, SharedSpace, QAfterSortBy>
+      sortByIsPendingSyncDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isPendingSync', Sort.desc);
+    });
+  }
+
   QueryBuilder<SharedSpace, SharedSpace, QAfterSortBy> sortByName() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'name', Sort.asc);
@@ -1064,6 +1382,18 @@ extension SharedSpaceQuerySortBy
   QueryBuilder<SharedSpace, SharedSpace, QAfterSortBy> sortByNameDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'name', Sort.desc);
+    });
+  }
+
+  QueryBuilder<SharedSpace, SharedSpace, QAfterSortBy> sortByRequirePin() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'requirePin', Sort.asc);
+    });
+  }
+
+  QueryBuilder<SharedSpace, SharedSpace, QAfterSortBy> sortByRequirePinDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'requirePin', Sort.desc);
     });
   }
 
@@ -1091,6 +1421,19 @@ extension SharedSpaceQuerySortThenBy
   QueryBuilder<SharedSpace, SharedSpace, QAfterSortBy> thenByAvatarDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'avatar', Sort.desc);
+    });
+  }
+
+  QueryBuilder<SharedSpace, SharedSpace, QAfterSortBy> thenByAwayTimeIndex() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'awayTimeIndex', Sort.asc);
+    });
+  }
+
+  QueryBuilder<SharedSpace, SharedSpace, QAfterSortBy>
+      thenByAwayTimeIndexDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'awayTimeIndex', Sort.desc);
     });
   }
 
@@ -1145,6 +1488,32 @@ extension SharedSpaceQuerySortThenBy
     });
   }
 
+  QueryBuilder<SharedSpace, SharedSpace, QAfterSortBy> thenByDisplayName() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'displayName', Sort.asc);
+    });
+  }
+
+  QueryBuilder<SharedSpace, SharedSpace, QAfterSortBy> thenByDisplayNameDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'displayName', Sort.desc);
+    });
+  }
+
+  QueryBuilder<SharedSpace, SharedSpace, QAfterSortBy>
+      thenByForbidBiometrics() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'forbidBiometrics', Sort.asc);
+    });
+  }
+
+  QueryBuilder<SharedSpace, SharedSpace, QAfterSortBy>
+      thenByForbidBiometricsDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'forbidBiometrics', Sort.desc);
+    });
+  }
+
   QueryBuilder<SharedSpace, SharedSpace, QAfterSortBy> thenById() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'id', Sort.asc);
@@ -1157,6 +1526,19 @@ extension SharedSpaceQuerySortThenBy
     });
   }
 
+  QueryBuilder<SharedSpace, SharedSpace, QAfterSortBy> thenByIsPendingSync() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isPendingSync', Sort.asc);
+    });
+  }
+
+  QueryBuilder<SharedSpace, SharedSpace, QAfterSortBy>
+      thenByIsPendingSyncDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isPendingSync', Sort.desc);
+    });
+  }
+
   QueryBuilder<SharedSpace, SharedSpace, QAfterSortBy> thenByName() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'name', Sort.asc);
@@ -1166,6 +1548,18 @@ extension SharedSpaceQuerySortThenBy
   QueryBuilder<SharedSpace, SharedSpace, QAfterSortBy> thenByNameDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'name', Sort.desc);
+    });
+  }
+
+  QueryBuilder<SharedSpace, SharedSpace, QAfterSortBy> thenByRequirePin() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'requirePin', Sort.asc);
+    });
+  }
+
+  QueryBuilder<SharedSpace, SharedSpace, QAfterSortBy> thenByRequirePinDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'requirePin', Sort.desc);
     });
   }
 
@@ -1188,6 +1582,12 @@ extension SharedSpaceQueryWhereDistinct
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'avatar', caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<SharedSpace, SharedSpace, QDistinct> distinctByAwayTimeIndex() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'awayTimeIndex');
     });
   }
 
@@ -1216,10 +1616,36 @@ extension SharedSpaceQueryWhereDistinct
     });
   }
 
+  QueryBuilder<SharedSpace, SharedSpace, QDistinct> distinctByDisplayName(
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'displayName', caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<SharedSpace, SharedSpace, QDistinct>
+      distinctByForbidBiometrics() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'forbidBiometrics');
+    });
+  }
+
+  QueryBuilder<SharedSpace, SharedSpace, QDistinct> distinctByIsPendingSync() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'isPendingSync');
+    });
+  }
+
   QueryBuilder<SharedSpace, SharedSpace, QDistinct> distinctByName(
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'name', caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<SharedSpace, SharedSpace, QDistinct> distinctByRequirePin() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'requirePin');
     });
   }
 
@@ -1242,6 +1668,12 @@ extension SharedSpaceQueryProperty
   QueryBuilder<SharedSpace, String, QQueryOperations> avatarProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'avatar');
+    });
+  }
+
+  QueryBuilder<SharedSpace, int, QQueryOperations> awayTimeIndexProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'awayTimeIndex');
     });
   }
 
@@ -1271,9 +1703,33 @@ extension SharedSpaceQueryProperty
     });
   }
 
+  QueryBuilder<SharedSpace, String, QQueryOperations> displayNameProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'displayName');
+    });
+  }
+
+  QueryBuilder<SharedSpace, bool, QQueryOperations> forbidBiometricsProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'forbidBiometrics');
+    });
+  }
+
+  QueryBuilder<SharedSpace, bool, QQueryOperations> isPendingSyncProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'isPendingSync');
+    });
+  }
+
   QueryBuilder<SharedSpace, String, QQueryOperations> nameProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'name');
+    });
+  }
+
+  QueryBuilder<SharedSpace, bool, QQueryOperations> requirePinProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'requirePin');
     });
   }
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/models/shared_space.dart';
 import '../../../core/providers/active_profile_provider.dart';
@@ -185,13 +186,17 @@ class SpaceSwitcher extends ConsumerWidget {
             ? '👤 ${profile.name}'
             : 'No profile';
 
+    final contextLabel = activeSpace != null ? 'Shared Space' : 'Personal';
+
     return Material(
       color: Theme.of(context).colorScheme.surfaceContainerLow,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
         child: Row(
           children: [
+            // Profile name (clickable, opens profile management)
             Expanded(
+              flex: 2,
               child: ContextSwitcherMenu(
                 key: const Key('spaceSwitcher'),
                 child: Row(
@@ -204,12 +209,28 @@ class SpaceSwitcher extends ConsumerWidget {
                         style: Theme.of(context).textTheme.titleSmall,
                       ),
                     ),
-                    if (activeSpace != null && activeSpace.avatar.isNotEmpty)
-                      const SizedBox(width: 8),
                     const Icon(Icons.arrow_drop_down, size: 20),
                   ],
                 ),
               ),
+            ),
+            // Middle: context type label (big)
+            Expanded(
+              flex: 2,
+              child: Center(
+                child: Text(
+                  contextLabel,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+              ),
+            ),
+            // Gear icon
+            IconButton(
+              icon: const Icon(Icons.settings_outlined),
+              tooltip: 'Settings',
+              onPressed: () => context.push('/settings'),
             ),
           ],
         ),
