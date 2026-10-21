@@ -24,14 +24,16 @@ void main() {
   }
 
   group('T080: the OS cannot back up or transfer the secrets', () {
-    test('the manifest disables backup and points at both rule files', () async {
+    test('the manifest disables backup and points at both rule files',
+        () async {
       final manifest = await File(
         '$root/android/app/src/main/AndroidManifest.xml',
       ).readAsString();
 
       expect(manifest, contains('android:allowBackup="false"'),
           reason: 'cloud backup must be off for a lock feature');
-      expect(manifest, contains('android:fullBackupContent="@xml/backup_rules"'),
+      expect(
+          manifest, contains('android:fullBackupContent="@xml/backup_rules"'),
           reason: 'Android 11 and lower read this file');
       expect(
         manifest,
@@ -52,8 +54,8 @@ void main() {
       // flutter_secure_storage persists through shared preferences, so that is
       // the domain that carries the verifier and the lockout record.
       expect(
-        RegExp(r'<exclude\s+domain="sharedpref"\s+path="\."\s*/>')
-            .hasMatch(rules.replaceAll('\n', ' ').replaceAll(RegExp(r'\s+'), ' ')),
+        RegExp(r'<exclude\s+domain="sharedpref"\s+path="\."\s*/>').hasMatch(
+            rules.replaceAll('\n', ' ').replaceAll(RegExp(r'\s+'), ' ')),
         isTrue,
         reason: 'the secure-storage prefs must be excluded from every transfer',
       );
@@ -67,8 +69,8 @@ void main() {
 
       expect(rules, contains('<full-backup-content>'));
       expect(
-        RegExp(r'<exclude\s+domain="sharedpref"\s+path="\."\s*/>')
-            .hasMatch(rules.replaceAll('\n', ' ').replaceAll(RegExp(r'\s+'), ' ')),
+        RegExp(r'<exclude\s+domain="sharedpref"\s+path="\."\s*/>').hasMatch(
+            rules.replaceAll('\n', ' ').replaceAll(RegExp(r'\s+'), ' ')),
         isTrue,
         reason: 'the older backup format needs the same exclusion',
       );

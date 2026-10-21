@@ -20,7 +20,9 @@ void main() {
     final files = <String>[];
     if (!dir.existsSync()) return files;
     await for (final entity in dir.list(recursive: true)) {
-      if (entity is File && entity.path.endsWith('.dart')) files.add(entity.path);
+      if (entity is File && entity.path.endsWith('.dart')) {
+        files.add(entity.path);
+      }
     }
     return files;
   }

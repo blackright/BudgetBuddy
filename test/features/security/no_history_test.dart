@@ -207,4 +207,3 @@ SimpleKeyPair _keyPair() => SimpleKeyPairData(
           SimplePublicKey(List<int>.filled(32, 9), type: KeyPairType.ed25519),
       type: KeyPairType.ed25519,
     );
-
