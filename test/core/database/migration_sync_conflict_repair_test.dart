@@ -58,7 +58,7 @@ void main() {
       expect(after.updatedAt.millisecondsSinceEpoch,
           DateTime.utc(2026, 3, 5, 10).millisecondsSinceEpoch);
       expect(await readSchemaVersion(harness.isar), schemaVersion);
-      expect(schemaVersion, 18);
+      expect(schemaVersion, 19);
     });
 
     test('a conflict recorded after the repair still counts', () async {

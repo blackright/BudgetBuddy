@@ -17,6 +17,8 @@ import '../../../shared/presentation/money_format.dart';
 import '../../../shared/presentation/widgets/money_field.dart';
 import '../../expenses/models/reimbursement.dart';
 import '../../medical/repositories/medical_repository.dart';
+import '../../security/domain/lock_subject.dart';
+import '../../security/repositories/lock_setting_janitor.dart';
 import '../../spaces/presentation/delete_space_sheet.dart';
 import '../../vault/models/savings_vault.dart';
 
@@ -81,9 +83,14 @@ class ProfileDeletionResult {
 /// The single write path for profile lifecycle: creating a profile and touching
 /// its `lastActiveAt` on every selection (US1, FR-001, context-router §3).
 class ProfileSwitcherController {
-  ProfileSwitcherController(this._isar);
+  ProfileSwitcherController(this._isar, {LockSettingJanitor? lockJanitor})
+      : _lockJanitor = lockJanitor;
 
   final Isar _isar;
+
+  /// Removes a deleted profile's security setting with it (FR-034). Optional and
+  /// inert when not attached, so 011's behaviour and its tests are unchanged.
+  final LockSettingJanitor? _lockJanitor;
 
   /// Puts a brand-new profile with sensible defaults and seeds its medical
   /// service types (FR-039), mirroring what onboarding seeds for id 1.
@@ -157,9 +164,9 @@ class ProfileSwitcherController {
   Future<ProfileDeletionResult> deleteProfile(
     int profileId, {
     required int? activeProfileId,
-  }) {
+  }) async {
     final wasActive = profileId == activeProfileId;
-    return _isar.writeTxn(() async {
+    final result = await _isar.writeTxn(() async {
       final profile = await _isar.userProfiles.get(profileId);
       if (profile == null) {
         return ProfileDeletionResult(
@@ -218,11 +225,20 @@ class ProfileSwitcherController {
           .deleteAll();
       await _isar.userProfiles.delete(profileId);
 
+      // FR-034: the profile's security setting is removed with the profile. The
+      // row goes inside this transaction; its verifier and lockout records live
+      // in secure storage (not Isar), so they are erased just below, once the
+      // removal is committed.
+      await _lockJanitor?.deleteRowInTxn(LockSubject.profileKey(profileId));
+
       return ProfileDeletionResult(
         wasActive: wasActive,
         fallbackProfileId: await _lowestProfileId(),
       );
     });
+
+    await _lockJanitor?.forgetSecrets(LockSubject.profileKey(profileId));
+    return result;
   }
 
   /// Names of the spaces where [profileId] is the **only** Owner — deleting the
@@ -264,7 +280,10 @@ class ProfileSwitcherController {
 }
 
 final profileSwitcherControllerProvider = Provider<ProfileSwitcherController>(
-  (ref) => ProfileSwitcherController(IsarHelper.instance),
+  (ref) => ProfileSwitcherController(
+    IsarHelper.instance,
+    lockJanitor: LockSettingJanitor.forApp(IsarHelper.instance),
+  ),
 );
 
 /// US1: the list of personal profiles with add/switch controls.

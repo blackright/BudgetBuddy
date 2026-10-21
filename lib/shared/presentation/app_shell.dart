@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/models/medical_bill.dart';
+import '../../core/providers/clock_provider.dart';
 import '../../features/medical/providers/medical_providers.dart';
 import '../../features/spaces/presentation/space_switcher.dart';
-import '../../core/providers/clock_provider.dart';
-import '../../core/models/medical_bill.dart';
 
 class AppShell extends ConsumerWidget {
   const AppShell({
@@ -86,9 +86,9 @@ class AppShell extends ConsumerWidget {
             label: 'Analytics',
           ),
           const NavigationDestination(
-            icon: Icon(Icons.settings_outlined),
-            selectedIcon: Icon(Icons.settings),
-            label: 'Settings',
+            icon: Icon(Icons.space_dashboard_outlined),
+            selectedIcon: Icon(Icons.space_dashboard),
+            label: 'Spaces',
           ),
         ],
       ),

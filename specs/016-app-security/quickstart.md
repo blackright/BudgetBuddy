@@ -27,9 +27,13 @@ flutter analyze
 flutter test
 ```
 
-The suite must stay at its current level (756 passing, 1 skipped, before this feature's tests are added).
-The six existing cases in `test/features/identity/app_lock_gate_test.dart` must keep passing unchanged -
-they pin the cold-start behaviour when no PIN exists.
+Baseline recorded 2026-10-19, before any file of this feature was added: `flutter test` =
+**759 passing, 1 skipped** ("All tests passed!"), and `flutter analyze` = no issues. (The `756`
+quoted in `plan.md` predates the 015 Phase 7 polish; 759 is the real number on this tree.)
+
+The suite must stay at or above that level once this feature's tests are added. The six existing
+cases in `test/features/identity/app_lock_gate_test.dart` must keep passing unchanged - they pin the
+cold-start behaviour when no PIN exists.
 
 ---
 
@@ -105,6 +109,52 @@ Follow `test/features/identity/app_lock_gate_test.dart:75-102`:
     whose model is recorded with the result. Run at least 20 unlocks with the real KDF in the loop and
     report the 95th percentile, not a single sample.
 
+### Recording sheet (T075) - fill in on a real device
+
+Walk every item above and record what you actually saw. Leave a row blank rather than guessing: a
+blank row is an honest "not run", a filled-in guess is not.
+
+| Item | What to record | Reference device | Observed | Pass? |
+|---|---|---|---|---|
+| 1 | Cold-start PIN + single system prompt, 10× | | | |
+| 2 | Away-time 30 s: 20 s open, 40 s locked | | | |
+| 3 | Phone lock past away-time asks for PIN | | | |
+| 4 | App switcher return does not lock | | | |
+| 5 | Biometric cancel counts no failure | | | |
+| 6 | Cold start: fingerprint cannot open it | | | |
+| 7 | 5 failures = 30 s wait; force-quit 10× never shortens; clock change never shortens | | | |
+| 8 | Subject switch locks the left subject | | | |
+| 9 | Airplane mode: unlock, fail, set PIN - no network wait | | | |
+| 10 | SC-008: enrol-and-use under a minute | | | |
+| 11 | `adb logcat` shows no PIN/salt/verifier/iterations | | | |
+| 12 | SC-004 timings (see the sheet below) | | | |
+
+**Reference device (oldest supported Android phone on hand):** ______________________
+(model and Android version)
+
+### SC-004 timing sheet (T077) - at least 20 unlocks, real KDF
+
+| # | Unlock time from last prompt (ms) | # | Unlock time from last prompt (ms) |
+|---|---|---|---|
+| 1 | | 11 | |
+| 2 | | 12 | |
+| 3 | | 13 | |
+| 4 | | 14 | |
+| 5 | | 15 | |
+| 6 | | 16 | |
+| 7 | | 17 | |
+| 8 | | 18 | |
+| 9 | | 19 | |
+| 10 | | 20 | |
+
+**95th percentile:** ____________ ms   **Budget (SC-004):** under 300 ms   **Result:** pass / fail
+
+> **Note on the two budgets.** SC-004's 300 ms is the **unlock** budget measured here. The KDF's own
+> `targetMs` in `lib/features/security/repositories/pin_verifier_store.dart` is a separate, stricter
+> **150 ms** set-side calibration budget; the two are different jobs and both are intentional. If this
+> benchmark fails, re-read that file before changing either number - the fix may be the calibration, not
+> the budget.
+
 ---
 
 ## 6. Two-phone check (Owner requirement)
@@ -116,6 +166,16 @@ Follow `test/features/identity/app_lock_gate_test.dart:75-102`:
 4. Confirm the member's device received **only** the three fields - no PIN, verifier or key material - by
    inspecting the exchanged payload in the app's own diagnostic trace (FR-030).
 5. Confirm a **non-Owner** cannot change the requirement (the Guard refuses the write).
+
+### Recording sheet (T076) - fill in with two phones
+
+| Item | What to record | Phone A (Owner) | Phone B (Member) | Pass? |
+|---|---|---|---|---|
+| 1 | Owner sets "require a PIN" + away-time | | | |
+| 2 | Member is asked for a PIN; the requirement cannot be switched off | | | |
+| 3 | Owner forbids biometrics; member's device accepts PIN only | | | |
+| 4 | Payload carries only the three fields - paste the trace here | | | |
+| 5 | A non-Owner cannot change the requirement | | | |
 
 ---
 

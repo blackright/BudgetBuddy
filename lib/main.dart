@@ -16,6 +16,8 @@ import 'core/routing/router_providers.dart';
 import 'features/engine/providers/sweep_provider.dart';
 import 'features/engine/seal_coordinator.dart';
 import 'features/identity/presentation/app_lock_gate.dart';
+import 'features/security/providers/lock_lifecycle_observer.dart';
+import 'features/security/repositories/monotonic_clock_impl.dart';
 import 'features/settings/providers/settings_provider.dart';
 import 'features/sync/providers/sync_coordinator_provider.dart';
 import 'features/sync/repositories/sync_coordinator.dart';
@@ -25,6 +27,10 @@ import 'core/services/reminder_notification_service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await IsarHelper.init();
+  // Read the boot-relative monotonic base before the first frame, so the lock's
+  // away-time and lockout wait use `SystemClock.elapsedRealtime()` rather than
+  // the clamped wall-clock fallback (FR-015, research R3).
+  await appMonotonicClock.warmUp();
 
   final container = ProviderContainer();
   // Execute end of month sweep check on startup
@@ -45,6 +51,11 @@ void main() async {
   // an unlocked session exists, and stops the moment either goes away (FR-009).
   final syncObserver = _SyncLifecycleObserver(container);
   WidgetsBinding.instance.addObserver(syncObserver);
+  // The lock follows the app lifecycle too: it starts the away window when the
+  // app backgrounds and re-locks on resume when the away-time has passed, or
+  // immediately when the phone's own lock engaged (FR-022).
+  final lockObserver = LockLifecycleObserver(container);
+  WidgetsBinding.instance.addObserver(lockObserver);
   WidgetsBinding.instance.addPostFrameCallback((_) {
     sealObserver.run();
     syncObserver.run();
