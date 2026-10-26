@@ -7,6 +7,7 @@ import 'package:budget_buddy/features/dashboard/presentation/dashboard_screen.da
 import 'package:budget_buddy/features/dashboard/presentation/widgets/month_summary_card.dart';
 import 'package:budget_buddy/features/dashboard/presentation/widgets/month_summary_details.dart';
 import 'package:budget_buddy/features/engine/month_summary.dart';
+import 'package:budget_buddy/features/dashboard/providers/dashboard_providers.dart';
 import 'package:budget_buddy/features/engine/providers/month_summary_provider.dart';
 import 'package:budget_buddy/features/engine/providers/rate_registry_provider.dart';
 import 'package:budget_buddy/features/medical/presentation/medical_theme.dart';
@@ -75,6 +76,9 @@ void main() {
   Widget wrap(Widget child, {MonthSummary? value}) {
     return ProviderScope(
       overrides: [
+        dashboardBorrowingTotalsProvider
+            .overrideWithValue((borrowed: 0, deficit: 0)),
+        dashboardProfilesProvider.overrideWithValue([]),
         activeProfileProvider.overrideWith((ref) => Stream.value(null)),
         budgetContextProvider.overrideWithValue(
           ContextRef.personal(profileId: 1, yearMonth: '2026-01'),

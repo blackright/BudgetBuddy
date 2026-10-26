@@ -1,3 +1,4 @@
+import 'package:budget_buddy/features/dashboard/providers/dashboard_providers.dart';
 import 'dart:async';
 
 import 'package:budget_buddy/core/models/change_record.dart';
@@ -462,6 +463,7 @@ void main() {
           ),
           rateRegistryProvider.overrideWithValue(RateTableRegistry()),
           mainCurrencyProvider.overrideWithValue(CurrencyCode.huf),
+          dashboardProfilesProvider.overrideWithValue(const []),
           monthlyExpensesProvider.overrideWith((ref) => Stream.value([])),
           monthlyReimbursementsProvider.overrideWith((ref) => Stream.value([])),
           monthlyOriginReimbursementsProvider

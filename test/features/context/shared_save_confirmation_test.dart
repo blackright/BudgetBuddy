@@ -9,6 +9,10 @@ import 'package:budget_buddy/features/expenses/presentation/add_expense_screen.d
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+import 'package:budget_buddy/core/models/category.dart';
+import 'package:budget_buddy/features/expenses/providers/category_provider.dart';
+import 'package:budget_buddy/features/expenses/providers/expense_search_provider.dart';
 
 /// US6 (T051/T055): a save into a shared space is confirmed first, naming the
 /// space. The dialog is dismissed here (barrier tap) so the test never reaches
@@ -48,10 +52,29 @@ void main() {
     await tester.enterText(find.byType(TextFormField).first, 'Groceries');
     await tester.enterText(amountField(), '100');
     await tester.pump();
+    await tester.ensureVisible(find.text('Planned'));
+    await tester.tap(find.text('Planned'));
+    await tester.pumpAndSettle();
+    final merchant = find.byWidgetPredicate(
+        (w) => w is TextField && w.decoration?.labelText == 'Merchant *');
+    await tester.ensureVisible(merchant);
+    await tester.enterText(merchant, 'Corner shop');
+    final payment = find.byWidgetPredicate((w) =>
+        w is DropdownButtonFormField<String> &&
+        (w.decoration.labelText?.startsWith('Payment method') ?? false));
+    await tester.ensureVisible(payment);
+    await tester.tap(payment);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cash').last);
+    await tester.pumpAndSettle();
   }
 
   testWidgets('shared save shows the confirmation naming the space',
       (tester) async {
+    final router = GoRouter(routes: [
+      GoRoute(path: '/', builder: (_, __) => const AddExpenseScreen())
+    ]);
+    addTearDown(router.dispose);
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
@@ -60,13 +83,23 @@ void main() {
           activeSpaceIdProvider.overrideWith((ref) => 7),
           activeSpaceProvider.overrideWith((ref) => Stream.value(space())),
           rateRegistryProvider.overrideWithValue(RateTableRegistry()),
+          categoriesProvider.overrideWith((ref) async => [
+                Category(
+                    categoryId: 'general',
+                    name: 'General',
+                    emoji: '',
+                    colorValue: 0xff000000)
+              ]),
+          expenseSearchMerchantsProvider
+              .overrideWith((ref) => Stream.value([])),
         ],
-        child: const MaterialApp(home: AddExpenseScreen()),
+        child: MaterialApp.router(routerConfig: router),
       ),
     );
     await tester.pumpAndSettle();
 
     await fillForm(tester);
+    await tester.ensureVisible(find.text('Save Expense'));
     await tester.tap(find.text('Save Expense'));
     await tester.pumpAndSettle();
 

@@ -1,3 +1,4 @@
+import '../../finance/repositories/audit_repository.dart';
 import 'package:isar/isar.dart';
 
 import '../../../core/models/currency_code.dart';
@@ -344,7 +345,9 @@ class MedicalRepository {
       ..paidAt = paid ? (stored.paidAt ?? DateTime.now()) : null;
 
     await _isar.writeTxn(() async {
-      await _isar.expenses.put(stored);
+      await AuditRepository(_isar,
+              recorder: _syncRecorder, actorId: _actingProfileId)
+          .put(_isar.expenses, stored, id: stored.id, type: 'Expense');
     });
     return ExpenseDelta.between(
       before: before,
@@ -559,7 +562,10 @@ class MedicalRepository {
               bill.yearMonth.isNotEmpty ? bill.yearMonth : expense.yearMonth),
           date: date ?? DateTime.now(),
         );
-        created.id = await _isar.reimbursements.put(created);
+        created.id = await AuditRepository(_isar,
+                recorder: _syncRecorder, actorId: _actingProfileId)
+            .put(_isar.reimbursements, created,
+                id: created.id, type: 'Reimbursement');
         reimbursement = created;
       } else {
         // Collapse to a single row so the engine never sees a doubled payout.
@@ -569,7 +575,10 @@ class MedicalRepository {
           ..originYearMonth = nextMonth(
               bill.yearMonth.isNotEmpty ? bill.yearMonth : expense.yearMonth)
           ..date = date ?? existing.first.date;
-        await _isar.reimbursements.put(existing.first);
+        await AuditRepository(_isar,
+                recorder: _syncRecorder, actorId: _actingProfileId)
+            .put(_isar.reimbursements, existing.first,
+                id: existing.first.id, type: 'Reimbursement');
         final extras = existing.skip(1).map((r) => r.id).toList();
         if (extras.isNotEmpty) {
           await _isar.reimbursements.deleteAll(extras);
@@ -648,12 +657,16 @@ class MedicalRepository {
       final expenseId = bill.linkedExpenseId;
       if (expenseId != null) {
         final expense = await _isar.expenses.get(expenseId);
-        await _isar.expenses.delete(expenseId);
+        await AuditRepository(_isar,
+                recorder: _syncRecorder, actorId: _actingProfileId)
+            .remove(_isar.expenses, expenseId, type: 'Expense');
         if (expense != null) {
           await _syncRecorder?.recordExpenseRemoved(expense);
         }
       }
-      await _isar.medicalBills.delete(billId);
+      await AuditRepository(_isar,
+              recorder: _syncRecorder, actorId: _actingProfileId)
+          .remove(_isar.medicalBills, billId, type: 'MedicalBill');
       await _syncRecorder?.recordMedicalBillRemoved(bill);
     });
 
@@ -1080,7 +1093,9 @@ class MedicalRepository {
   /// Persists a bill and appends its signed change if the context is shared
   /// (FR-006). Every bill write funnels through here so nothing is missed.
   Future<void> _putBillRecorded(MedicalBill bill) async {
-    await _isar.medicalBills.put(bill);
+    await AuditRepository(_isar,
+            recorder: _syncRecorder, actorId: _actingProfileId)
+        .put(_isar.medicalBills, bill, id: bill.id, type: 'MedicalBill');
     await _syncRecorder?.recordMedicalBill(bill);
   }
 
@@ -1155,7 +1170,9 @@ class MedicalRepository {
       expense.paidAt = null;
     }
 
-    await _isar.expenses.put(expense);
+    await AuditRepository(_isar,
+            recorder: _syncRecorder, actorId: _actingProfileId)
+        .put(_isar.expenses, expense, id: expense.id, type: 'Expense');
     await _syncRecorder?.recordExpense(expense);
     return expense;
   }

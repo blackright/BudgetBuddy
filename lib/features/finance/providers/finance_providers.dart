@@ -2,11 +2,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/models/currency_code.dart';
 import '../../../core/models/monthly_budget.dart';
-import '../../../core/models/shared_space.dart';
 import '../../../core/providers/active_profile_provider.dart';
 import '../../../core/providers/active_space_provider.dart';
 import '../../../core/providers/budget_context_provider.dart';
+import '../../../core/services/income_aggregation_service.dart';
 import '../repositories/month_finance_repository.dart';
+import '../providers/income_source_providers.dart';
 
 /// Provisions the selected month on every selection change.
 ///
@@ -52,29 +53,58 @@ final defaultNetSalaryProvider = Provider<double>((ref) {
 final resolvedIncomeProvider = Provider<ResolvedIncome>((ref) {
   final context = ref.watch(budgetContextProvider);
   final month = ref.watch(monthFinanceProvider).value;
+  final aggregatedMajor = ref.watch(incomeSourcesTotalProvider);
   if (context.isShared) {
     final space = ref.watch(activeSpaceProvider).value;
     final override = month?.sharedIncomeOverride;
-    return ResolvedIncome(
-      amount: _sharedMajorOf(space, override),
-      usesOverride: override != null,
+    if (override != null) {
+      final minor = override;
+      final major = minor /
+          (space?.currency.code.minorUnitsPerMajor ??
+              CurrencyCode.huf.minorUnitsPerMajor);
+      return ResolvedIncome(amount: major, usesOverride: true);
+    }
+    if (aggregatedMajor > 0) {
+      return ResolvedIncome(amount: aggregatedMajor, usesOverride: false);
+    }
+    final minor = space?.defaultIncome ?? 0;
+    final major = minor /
+        (space?.currency.code.minorUnitsPerMajor ??
+            CurrencyCode.huf.minorUnitsPerMajor);
+    return ResolvedIncome(amount: major, usesOverride: false);
+  }
+  if (month?.netSalaryOverride != null) {
+    return ResolvedIncome.resolve(
+      override: month?.netSalaryOverride,
+      profileDefault: ref.watch(defaultNetSalaryProvider),
     );
   }
+  if (aggregatedMajor > 0) {
+    return ResolvedIncome(amount: aggregatedMajor, usesOverride: false);
+  }
   return ResolvedIncome.resolve(
-    override: month?.netSalaryOverride,
+    override: null,
     profileDefault: ref.watch(defaultNetSalaryProvider),
   );
 });
 
-/// Minor units → major units for a space's income pot, once (FR-009 §2).
-double _sharedMajorOf(SharedSpace? space, int? override) {
-  final minor = override ?? space?.defaultIncome ?? 0;
-  // HUF has no minor-unit division (exponent 0 → per-major ratio 1); other
-  // currencies divide by 100. While no space row is resolved yet the raw major
-  // figure is returned, so nothing is invented.
-  final perMajor = space?.currency.code.minorUnitsPerMajor ?? 1;
-  return minor / perMajor;
-}
+final incomeSourcesTotalProvider = Provider<double>((ref) {
+  final context = ref.watch(budgetContextProvider);
+  final sources = ref.watch(incomeSourcesProvider).value ?? const [];
+  CurrencyCode currency = CurrencyCode.huf;
+  if (context.isShared) {
+    currency =
+        ref.watch(activeSpaceProvider).value?.currency.code ?? CurrencyCode.huf;
+  } else {
+    currency = ref.watch(activeProfileProvider).value?.primaryCurrency.code ??
+        CurrencyCode.huf;
+  }
+  // Select the accounting currency before summing minor units. Without this,
+  // mixed sources became zero and foreign-only cents were relabelled as HUF.
+  final totalMinor = const IncomeAggregationService()
+      .monthlyTotal(sources, context.yearMonth, currency: currency);
+  return totalMinor / currency.minorUnitsPerMajor;
+});
 
 /// Whether the selected month has enough recorded to present a real verdict
 /// (FR-025).

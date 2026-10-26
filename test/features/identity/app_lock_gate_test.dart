@@ -6,6 +6,7 @@ import 'package:budget_buddy/core/providers/identity_provider.dart';
 import 'package:budget_buddy/features/identity/presentation/app_lock_gate.dart';
 import 'package:budget_buddy/features/identity/providers/device_key_session.dart';
 import 'package:budget_buddy/features/identity/repositories/device_authenticator.dart';
+import 'package:budget_buddy/features/identity/repositories/local_auth_outcome.dart';
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -33,9 +34,19 @@ class _ScriptedAuthenticator implements DeviceAuthenticator {
   Future<bool> isAvailable() async => true;
 
   @override
+  Future<bool> isEnrolled() async => true;
+
+  @override
   Future<bool> authenticate({required String reason}) async {
     prompts++;
     return _answers.isEmpty ? false : _answers.removeAt(0);
+  }
+
+  @override
+  Future<BiometricOutcome> classify({required String reason}) async {
+    prompts++;
+    final answer = _answers.isEmpty ? false : _answers.removeAt(0);
+    return answer ? BiometricOutcome.unlocked : BiometricOutcome.cancelled;
   }
 }
 

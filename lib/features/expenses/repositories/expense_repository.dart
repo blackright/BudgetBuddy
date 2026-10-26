@@ -1,3 +1,6 @@
+import 'merchant_repository.dart';
+import 'expense_evidence_repository.dart';
+import '../../finance/repositories/audit_repository.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:isar/isar.dart';
 
@@ -50,7 +53,15 @@ class ExpenseRepository {
   Future<void> addExpense(Expense expense) async {
     await _guardWrite(expense.sharedSpaceId, expense.yearMonth);
     await _isar.writeTxn(() async {
-      await _isar.expenses.put(expense);
+      await MerchantRepository(_isar,
+              recorder: _syncRecorder, actorId: _actingProfileId)
+          .bindExpenseInTxn(expense);
+      await ExpenseEvidenceRepository(_isar,
+              recorder: _syncRecorder, actorId: _actingProfileId)
+          .saveInTxn(expense);
+      await AuditRepository(_isar,
+              recorder: _syncRecorder, actorId: _actingProfileId)
+          .put(_isar.expenses, expense, id: expense.id, type: 'Expense');
       await _syncRecorder?.recordExpense(expense);
     });
   }
@@ -58,7 +69,20 @@ class ExpenseRepository {
   Future<void> updateExpense(Expense expense) async {
     await _guardWrite(expense.sharedSpaceId, expense.yearMonth);
     await _isar.writeTxn(() async {
-      await _isar.expenses.put(expense);
+      final previous = await _isar.expenses.get(expense.id);
+      if (previous == null) throw StateError('Expense no longer exists.');
+      if (expense.merchantName != previous.merchantName ||
+          expense.merchantSyncGuid != previous.merchantSyncGuid) {
+        await MerchantRepository(_isar,
+                recorder: _syncRecorder, actorId: _actingProfileId)
+            .bindExpenseInTxn(expense);
+      }
+      await ExpenseEvidenceRepository(_isar,
+              recorder: _syncRecorder, actorId: _actingProfileId)
+          .saveInTxn(expense, previous: previous);
+      await AuditRepository(_isar,
+              recorder: _syncRecorder, actorId: _actingProfileId)
+          .put(_isar.expenses, expense, id: expense.id, type: 'Expense');
       await _syncRecorder?.recordExpense(expense);
     });
   }
@@ -74,7 +98,13 @@ class ExpenseRepository {
       await _guardWrite(existing.sharedSpaceId, existing.yearMonth);
     }
     await _isar.writeTxn(() async {
-      await _isar.expenses.delete(id);
+      final current = await _isar.expenses.get(id);
+      if (current?.purchaseSyncGuid != null) {
+        throw StateError('Open the purchase to remove all its items together.');
+      }
+      await AuditRepository(_isar,
+              recorder: _syncRecorder, actorId: _actingProfileId)
+          .remove(_isar.expenses, id, type: 'Expense');
       if (existing != null) {
         await _syncRecorder?.recordExpenseRemoved(existing);
       }
@@ -205,7 +235,10 @@ class ExpenseRepository {
           }
         }
       }
-      await _isar.reimbursements.put(reimbursement);
+      await AuditRepository(_isar,
+              recorder: _syncRecorder, actorId: _actingProfileId)
+          .put(_isar.reimbursements, reimbursement,
+              id: reimbursement.id, type: 'Reimbursement');
       await _syncRecorder?.recordReimbursement(reimbursement);
     });
   }
@@ -261,10 +294,24 @@ class ExpenseRepository {
         ..expenseId = expenseId
         ..orphaned = false
         ..originYearMonth = expense?.yearMonth ?? reimbursement.originYearMonth;
-      await _isar.reimbursements.put(reimbursement);
+      await AuditRepository(_isar,
+              recorder: _syncRecorder, actorId: _actingProfileId)
+          .put(_isar.reimbursements, reimbursement,
+              id: reimbursement.id, type: 'Reimbursement');
       await _syncRecorder?.recordReimbursement(reimbursement);
     });
   }
+
+  Stream<List<Reimbursement>> watchReimbursementsForOwner(ContextRef context) =>
+      _isar.reimbursements
+          .filter()
+          .group((q) => context.isShared
+              ? q.sharedSpaceIdEqualTo(context.spaceId)
+              : q
+                  .profileIdEqualTo(context.profileKey)
+                  .and()
+                  .sharedSpaceIdIsNull())
+          .watch(fireImmediately: true);
 
   Stream<List<Reimbursement>> watchReimbursementsForExpense(int expenseId) {
     return _isar.reimbursements

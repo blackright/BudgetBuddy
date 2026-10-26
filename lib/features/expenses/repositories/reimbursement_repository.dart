@@ -1,3 +1,5 @@
+import '../../finance/repositories/audit_repository.dart';
+import '../../sync/repositories/sync_recorder.dart';
 import 'package:isar/isar.dart';
 
 import '../../../core/providers/budget_context_provider.dart';
@@ -6,11 +8,13 @@ import '../models/reimbursement.dart';
 
 class ReimbursementRepository {
   final Isar _isar;
+  final SyncRecorder? recorder;
   final SpaceWriteGuard? _writeGuard;
   final int? _actingProfileId;
 
   ReimbursementRepository(
     this._isar, {
+    this.recorder,
     SpaceWriteGuard? guard,
     int? actingProfileId,
   })  : _writeGuard = guard,
@@ -30,7 +34,11 @@ class ReimbursementRepository {
     await _guardWrite(
         reimbursement.sharedSpaceId, reimbursement.originYearMonth);
     await _isar.writeTxn(() async {
-      await _isar.reimbursements.put(reimbursement);
+      await AuditRepository(_isar,
+              recorder: recorder, actorId: _actingProfileId)
+          .put(_isar.reimbursements, reimbursement,
+              id: reimbursement.id, type: 'Reimbursement');
+      await recorder?.recordReimbursement(reimbursement);
     });
   }
 
@@ -39,7 +47,11 @@ class ReimbursementRepository {
     await _guardWrite(
         reimbursement.sharedSpaceId, reimbursement.originYearMonth);
     await _isar.writeTxn(() async {
-      await _isar.reimbursements.put(reimbursement);
+      await AuditRepository(_isar,
+              recorder: recorder, actorId: _actingProfileId)
+          .put(_isar.reimbursements, reimbursement,
+              id: reimbursement.id, type: 'Reimbursement');
+      await recorder?.recordReimbursement(reimbursement);
     });
   }
 
@@ -50,7 +62,9 @@ class ReimbursementRepository {
       await _guardWrite(existing.sharedSpaceId, existing.originYearMonth);
     }
     await _isar.writeTxn(() async {
-      await _isar.reimbursements.delete(id);
+      await AuditRepository(_isar,
+              recorder: recorder, actorId: _actingProfileId)
+          .remove(_isar.reimbursements, id, type: 'Reimbursement');
     });
   }
 

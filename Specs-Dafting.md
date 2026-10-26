@@ -31,155 +31,218 @@ Halt immediately. Present your full analysis and the draft spec preview. Do not 
 [RAW INPUT SPECIFICATION START]
 {{
 
-Feature Specification: Multi‑User Profiles & Shared Financial Spaces (Unified)
+Feature Specification: Onboarding & First-Time Setup (Unified)
 
 ## Purpose
-Provide a complete multi‑user system that supports:
-- Multiple personal profiles on one device
-- Shared financial spaces where multiple users collaborate
-- Shared income + shared expenses
-- Personal income + personal expenses
-- Full data isolation between personal and shared contexts
-- Instant switching between profiles and shared spaces
+Provide a guided first-time experience that helps users configure the application correctly before they begin tracking finances.
 
-This module enables couples, families, roommates, or business partners to manage finances together while still keeping personal finances separate.
+The onboarding process should be friendly, simple, modern, and focused on quickly bringing users to a functional dashboard while collecting only the information required for the initial setup.
 
-## Sub‑Features Included
-1. Create Personal Profile
-2. Create Shared Financial Space
-3. Switch Between Personal Profile and Shared Space
-4. User‑Scoped Data Isolation
-5. Shared Data Synchronization
+## Sub-Features Included
+1. Onboarding Flow
+2. First-Time Setup
+
+## Objectives
+- Introduce the application
+- Explain the app's core concepts
+- Create the first profile
+- Configure the first monthly budget
+- Configure the first currency
+- Configure security settings
+- Guide users into the dashboard
 
 ## Entities Involved
-- UserProfile (personal)
-- SharedSpace (group)
-- SharedMember (link table)
-- Expense
-- MedicalBill
-- Reimbursement
-- CurrencyRate
-- Settings
+- UserProfile
+- SecurityConfig
+- MonthlyBudget
+- SharedSpace (optional later)
+- AppSettings
 
-## Personal Profile Fields
-- id (string)
-- name (string)
-- avatar (string or emoji)
-- primaryCurrency (enum)
-- monthlyAvailableAmount (decimal)
-- createdAt (datetime)
-- lastActiveAt (datetime)
+## First Launch Detection
 
-## SharedSpace Fields
-- id (string)
-- name (string)
-- avatar (emoji or icon)
-- primaryCurrency (enum)
-- sharedMonthlyIncome (decimal)
-- createdAt (datetime)
+Rules:
+- Detect whether application is launched for the first time.
+- If no profile exists:
+  - Launch onboarding immediately.
+- If at least one profile exists:
+  - Skip onboarding.
+  - Navigate directly to authentication/dashboard.
 
-## SharedMember Fields
-- id (string)
-- sharedSpaceId (string)
-- userProfileId (string)
-- role (enum: owner, member)
-- joinedAt (datetime)
+## Onboarding Flow
 
-## Core Rules
+### Step 1: Welcome Screen
 
-### Personal Profiles
-- Fully isolated data
-- Personal expenses, medical bills, reimbursements belong only to that user
-- Personal monthlyAvailableAmount is independent
+Purpose:
+- Introduce the application.
 
-### Shared Spaces
-- All members see the same shared expenses, shared medical bills, shared reimbursements
-- Shared monthly income is used to compute shared availableAmount
-- Shared expenses reduce shared availableAmount
-- Shared reimbursements increase shared availableAmount
-- Shared currency settings apply to all members
+Content:
+- App overview
+- Main benefits
+- Personal finance assistant explanation
 
-### Switching Context
-- User can switch between:
-  - Personal Profile
-  - Any Shared Space they belong to
-- Switching context reloads:
-  - expenses
-  - medical bills
-  - reimbursements
-  - dashboard values
-  - analytics
-  - currency settings
+Actions:
+- Continue
+- Skip (optional)
 
-### Data Isolation Rules
-- Personal data is visible only in personal profile
-- Shared data is visible only inside shared space
-- No cross‑contamination
-- All queries must filter by:
-  - userId (personal)
-  - sharedSpaceId (shared)
+### Step 2: How Budgeting Works
 
-### Shared Expense Logic
-- Shared expenses behave exactly like personal expenses
-- But they belong to sharedSpaceId instead of userId
-- Status flow identical:
-  - planned → paid → reimbursed → cancelled
-- Reimbursements increase shared availableAmount
+Purpose:
+Explain:
+- Monthly budget
+- Available amount
+- Planned expenses
+- Paid expenses
+- Medical reimbursements
 
-### Shared Medical Bill Logic
-- Same as personal medical bills
-- Insurance logic applies normally
-- Reimbursements increase shared availableAmount
+Visuals:
+- Simple illustrations
+- Example budget scenario
+
+### Step 3: Create First Personal Profile
+
+Inputs:
+- Name
+- Avatar
+- Preferred currency
+
+Rules:
+- Name required
+- Currency required
+
+Output:
+- UserProfile created
+
+### Step 4: Configure Monthly Budget
+
+Inputs:
+- Monthly available amount
+- Currency confirmation
+
+Rules:
+- Amount > 0
+
+Output:
+- Budget initialized
+
+### Step 5: Security Setup
+
+Options:
+- Create PIN
+- Enable biometrics
+- Skip (optional)
+
+Rules:
+- PIN must meet security requirements
+
+Output:
+- Security configuration saved
+
+### Step 6: App Overview
+
+Explain:
+- Dashboard
+- Expenses
+- Medical bills
+- Analytics
+- Shared spaces
+
+### Step 7: Finish Setup
+
+Actions:
+- Complete onboarding
+- Navigate to Dashboard
+
+Output:
+- Onboarding completion flag saved
+
+## First-Time Setup Logic
+
+After onboarding:
+
+System automatically:
+- Creates initial month context
+- Calculates initial available amount
+- Creates default categories
+- Activates selected profile
+- Loads dashboard
+
+## Default Categories
+
+Pre-created:
+
+- Housing
+- Utilities
+- Food
+- Transportation
+- Health
+- Insurance
+- Subscriptions
+- Entertainment
+- Savings
+- Miscellaneous
+
+Users may modify these later.
+
+## Dashboard Handoff
+
+Upon completion:
+
+Dashboard displays:
+- Monthly budget
+- Available amount
+- Quick actions
+- Empty-state guidance
+
+Example:
+"Add your first expense"
+"Create your first medical bill"
+
+## Returning User Flow
+
+If onboarding previously completed:
+
+Launch sequence:
+- Authentication
+- Profile load
+- Dashboard
+
+Onboarding is not shown again.
 
 ## UI Requirements
 
-### Profile & Shared Space Switcher
-User can:
-- View personal profile
-- View all shared spaces they belong to
-- Switch between them instantly
-- Create new shared space
-- Invite members (local-only for now)
-- Edit shared space name/avatar
-- Leave shared space (unless owner)
+Screens:
+1. Welcome
+2. Budgeting Overview
+3. Profile Creation
+4. Budget Setup
+5. Security Setup
+6. App Overview
+7. Completion Screen
 
-### Shared Space Dashboard
-Shows:
-- shared availableAmount
-- shared expenses
-- shared medical bills
-- shared reimbursements
-- shared analytics
-
-### Personal Dashboard
-Shows:
-- personal availableAmount
-- personal expenses
-- personal medical bills
-- personal reimbursements
-- personal analytics
-
-### Shared Expense Screens
-- identical to personal expense screens
-- but scoped to sharedSpaceId
-
-### Shared Medical Bill Screens
-- identical to personal medical bill screens
-- but scoped to sharedSpaceId
+Requirements:
+- Modern animations
+- Progress indicator
+- Ability to go back
+- Offline-first operation
 
 ## Navigation
-Accessible from:
-- Settings → Profiles & Shared Spaces
-- Dashboard (profile/shared avatar button)
-- Onboarding (first profile creation)
 
-## Non‑Functional Requirements
-- Offline‑first
-- Instant context switching
-- Deterministic data isolation
-- Local persistence (Drift)
-- Shared data consistency
+Start:
+- App launch
 
+End:
+- Dashboard Shell
+
+Optional Access:
+- Settings → Restart Onboarding
+
+## Non-Functional Requirements
+
+- Offline-first
+- Fast onboarding (<3 minutes)
+- Accessible design
+- Responsive layouts
+- Supports future onboarding steps
 
 }}
 [RAW INPUT SPECIFICATION END]

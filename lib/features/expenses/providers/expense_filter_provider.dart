@@ -19,7 +19,7 @@ final filteredExpensesProvider = Provider<AsyncValue<List<Expense>>>((ref) {
   final activeGuilt = ref.watch(activeGuiltLevelFilterProvider);
 
   return expenses.whenData((list) {
-    return list.where((e) {
+    final filtered = list.where((e) {
       if (searchQuery.isNotEmpty &&
           !e.title.toLowerCase().contains(searchQuery)) {
         return false;
@@ -36,5 +36,15 @@ final filteredExpensesProvider = Provider<AsyncValue<List<Expense>>>((ref) {
       }
       return true;
     }).toList();
+    // Sort a copy for presentation; never reorder the engine's source list.
+    // Expense has no createdAt field. Local IDs break same-date ties in the
+    // order rows were added on this device, including imported records.
+    filtered.sort((a, b) {
+      final date = b.date.compareTo(a.date);
+      if (date != 0) return date;
+      final added = b.id.compareTo(a.id);
+      return added != 0 ? added : b.syncGuid.compareTo(a.syncGuid);
+    });
+    return filtered;
   });
 });

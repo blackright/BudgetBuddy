@@ -9,8 +9,15 @@ import 'sync_codec.dart';
 /// engine can spot a sealed-month write without decoding every row.
 String? monthKeyOf(String entityType, String payload) {
   final field = switch (entityType) {
-    'MonthlyBudget' || 'Expense' || 'MedicalBill' => 'yearMonth',
+    'MonthlyBudget' ||
+    'Expense' ||
+    'ExpensePurchase' ||
+    'ExpenseEvidenceChunk' ||
+    'MedicalBill' ||
+    'BudgetProfile' =>
+      'yearMonth',
     'Reimbursement' => 'originYearMonth',
+    'MonthEndRun' => 'destinationMonth',
     _ => null,
   };
   if (field == null || payload.isEmpty) return null;

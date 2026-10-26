@@ -25,11 +25,13 @@ void main() {
   });
 
   group('migration steps 14/15 - cross-device sync collections (SC-003)', () {
-    test('a fresh install lands at v18 with empty sync collections', () async {
+    test(
+        'a fresh install lands at the current version with empty sync '
+        'collections', () async {
       harness = await MedicalTestHarness.create();
 
       expect(await readSchemaVersion(harness.isar), schemaVersion);
-      expect(schemaVersion, 18);
+      expect(schemaVersion, 31);
       expect(await harness.schemaStamps(), hasLength(1));
 
       // The seven new collections exist and start empty.

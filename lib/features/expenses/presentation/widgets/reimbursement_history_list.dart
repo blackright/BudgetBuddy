@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import '../../../../core/models/currency_code.dart';
-import '../../../../core/models/money.dart';
-import '../../../../shared/presentation/money_format.dart';
+import '../../../../core/providers/active_budget_provider.dart';
+import '../../../../core/providers/selected_month_provider.dart';
+import '../../../../shared/presentation/money_conversion.dart';
+import '../../../engine/currency_resolution.dart';
+import '../../../engine/providers/rate_registry_provider.dart';
+import '../../../settings/providers/settings_provider.dart';
 import '../../providers/reimbursement_provider.dart';
 
 class ReimbursementHistoryList extends ConsumerWidget {
@@ -12,12 +15,20 @@ class ReimbursementHistoryList extends ConsumerWidget {
   const ReimbursementHistoryList({
     super.key,
     required this.expenseId,
+    this.title = 'Reimbursement History',
   });
+  final String title;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final reimbursementsAsync =
         ref.watch(reimbursementsByExpenseProvider(expenseId));
+    final main = ref.watch(mainCurrencyProvider);
+    final budget = ref.watch(activeBudgetProvider).value;
+    final display = resolveContextDisplayCurrency(budget, main);
+    final table = ref
+        .watch(rateRegistryProvider)
+        .tableFor(ref.watch(selectedYearMonthProvider));
 
     return reimbursementsAsync.when(
       data: (reimbursements) {
@@ -28,11 +39,11 @@ class ReimbursementHistoryList extends ConsumerWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 16.0),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16.0),
               child: Text(
-                'Reimbursement History',
-                style: TextStyle(
+                title,
+                style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
                 ),
@@ -45,6 +56,13 @@ class ReimbursementHistoryList extends ConsumerWidget {
               separatorBuilder: (context, index) => const Divider(),
               itemBuilder: (context, index) {
                 final reimb = reimbursements[index];
+                // T159: the history is read-only, so it reads in the display
+                // currency; long-press reveals the amount as recorded. The
+                // entry sheet keeps saving in the expense currency.
+                final from = reimb.currencyCode;
+                final formatted = from == null
+                    ? null
+                    : formatRefundConversion(reimb, display, table);
                 return ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: CircleAvatar(
@@ -52,15 +70,16 @@ class ReimbursementHistoryList extends ConsumerWidget {
                     child:
                         const Icon(Icons.currency_exchange, color: Colors.blue),
                   ),
-                  title: Text(
-                    formatMoney(
-                      Money(
-                        reimb.amount,
-                        reimb.currencyCode ?? CurrencyCode.huf,
-                      ),
-                    ),
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
+                  title: formatted == null
+                      ? Text(
+                          '${reimb.amount} ${reimb.currency} · Rate unavailable',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        )
+                      : ConvertedAmountText(
+                          text: formatted.text,
+                          originalText: formatted.originalText,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [

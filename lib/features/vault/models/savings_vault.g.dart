@@ -17,20 +17,60 @@ const SavingsVaultSchema = CollectionSchema(
   name: r'SavingsVault',
   id: 3318943159278872210,
   properties: {
-    r'lastSweepYearMonth': PropertySchema(
+    r'currency': PropertySchema(
       id: 0,
+      name: r'currency',
+      type: IsarType.string,
+    ),
+    r'goalName': PropertySchema(
+      id: 1,
+      name: r'goalName',
+      type: IsarType.string,
+    ),
+    r'goalTargetMinor': PropertySchema(
+      id: 2,
+      name: r'goalTargetMinor',
+      type: IsarType.long,
+    ),
+    r'goalTargetYearMonth': PropertySchema(
+      id: 3,
+      name: r'goalTargetYearMonth',
+      type: IsarType.string,
+    ),
+    r'lastSweepYearMonth': PropertySchema(
+      id: 4,
       name: r'lastSweepYearMonth',
       type: IsarType.string,
     ),
+    r'pauseReason': PropertySchema(
+      id: 5,
+      name: r'pauseReason',
+      type: IsarType.string,
+    ),
     r'profileId': PropertySchema(
-      id: 1,
+      id: 6,
       name: r'profileId',
       type: IsarType.long,
     ),
+    r'sweepPaused': PropertySchema(
+      id: 7,
+      name: r'sweepPaused',
+      type: IsarType.bool,
+    ),
     r'totalAmount': PropertySchema(
-      id: 2,
+      id: 8,
       name: r'totalAmount',
       type: IsarType.double,
+    ),
+    r'totalMinor': PropertySchema(
+      id: 9,
+      name: r'totalMinor',
+      type: IsarType.long,
+    ),
+    r'updatedAt': PropertySchema(
+      id: 10,
+      name: r'updatedAt',
+      type: IsarType.dateTime,
     )
   },
   estimateSize: _savingsVaultEstimateSize,
@@ -67,7 +107,26 @@ int _savingsVaultEstimateSize(
   Map<Type, List<int>> allOffsets,
 ) {
   var bytesCount = offsets.last;
+  bytesCount += 3 + object.currency.length * 3;
+  {
+    final value = object.goalName;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
+  {
+    final value = object.goalTargetYearMonth;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
   bytesCount += 3 + object.lastSweepYearMonth.length * 3;
+  {
+    final value = object.pauseReason;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
   return bytesCount;
 }
 
@@ -77,9 +136,17 @@ void _savingsVaultSerialize(
   List<int> offsets,
   Map<Type, List<int>> allOffsets,
 ) {
-  writer.writeString(offsets[0], object.lastSweepYearMonth);
-  writer.writeLong(offsets[1], object.profileId);
-  writer.writeDouble(offsets[2], object.totalAmount);
+  writer.writeString(offsets[0], object.currency);
+  writer.writeString(offsets[1], object.goalName);
+  writer.writeLong(offsets[2], object.goalTargetMinor);
+  writer.writeString(offsets[3], object.goalTargetYearMonth);
+  writer.writeString(offsets[4], object.lastSweepYearMonth);
+  writer.writeString(offsets[5], object.pauseReason);
+  writer.writeLong(offsets[6], object.profileId);
+  writer.writeBool(offsets[7], object.sweepPaused);
+  writer.writeDouble(offsets[8], object.totalAmount);
+  writer.writeLong(offsets[9], object.totalMinor);
+  writer.writeDateTime(offsets[10], object.updatedAt);
 }
 
 SavingsVault _savingsVaultDeserialize(
@@ -89,10 +156,18 @@ SavingsVault _savingsVaultDeserialize(
   Map<Type, List<int>> allOffsets,
 ) {
   final object = SavingsVault();
+  object.currency = reader.readString(offsets[0]);
+  object.goalName = reader.readStringOrNull(offsets[1]);
+  object.goalTargetMinor = reader.readLongOrNull(offsets[2]);
+  object.goalTargetYearMonth = reader.readStringOrNull(offsets[3]);
   object.id = id;
-  object.lastSweepYearMonth = reader.readString(offsets[0]);
-  object.profileId = reader.readLong(offsets[1]);
-  object.totalAmount = reader.readDouble(offsets[2]);
+  object.lastSweepYearMonth = reader.readString(offsets[4]);
+  object.pauseReason = reader.readStringOrNull(offsets[5]);
+  object.profileId = reader.readLong(offsets[6]);
+  object.sweepPaused = reader.readBool(offsets[7]);
+  object.totalAmount = reader.readDouble(offsets[8]);
+  object.totalMinor = reader.readLong(offsets[9]);
+  object.updatedAt = reader.readDateTime(offsets[10]);
   return object;
 }
 
@@ -106,9 +181,25 @@ P _savingsVaultDeserializeProp<P>(
     case 0:
       return (reader.readString(offset)) as P;
     case 1:
-      return (reader.readLong(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 2:
+      return (reader.readLongOrNull(offset)) as P;
+    case 3:
+      return (reader.readStringOrNull(offset)) as P;
+    case 4:
+      return (reader.readString(offset)) as P;
+    case 5:
+      return (reader.readStringOrNull(offset)) as P;
+    case 6:
+      return (reader.readLong(offset)) as P;
+    case 7:
+      return (reader.readBool(offset)) as P;
+    case 8:
       return (reader.readDouble(offset)) as P;
+    case 9:
+      return (reader.readLong(offset)) as P;
+    case 10:
+      return (reader.readDateTime(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
   }
@@ -362,6 +453,524 @@ extension SavingsVaultQueryWhere
 
 extension SavingsVaultQueryFilter
     on QueryBuilder<SavingsVault, SavingsVault, QFilterCondition> {
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      currencyEqualTo(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'currency',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      currencyGreaterThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'currency',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      currencyLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'currency',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      currencyBetween(
+    String lower,
+    String upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'currency',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      currencyStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'currency',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      currencyEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'currency',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      currencyContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'currency',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      currencyMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'currency',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      currencyIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'currency',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      currencyIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'currency',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      goalNameIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'goalName',
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      goalNameIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'goalName',
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      goalNameEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'goalName',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      goalNameGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'goalName',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      goalNameLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'goalName',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      goalNameBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'goalName',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      goalNameStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'goalName',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      goalNameEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'goalName',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      goalNameContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'goalName',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      goalNameMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'goalName',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      goalNameIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'goalName',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      goalNameIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'goalName',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      goalTargetMinorIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'goalTargetMinor',
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      goalTargetMinorIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'goalTargetMinor',
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      goalTargetMinorEqualTo(int? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'goalTargetMinor',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      goalTargetMinorGreaterThan(
+    int? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'goalTargetMinor',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      goalTargetMinorLessThan(
+    int? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'goalTargetMinor',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      goalTargetMinorBetween(
+    int? lower,
+    int? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'goalTargetMinor',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      goalTargetYearMonthIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'goalTargetYearMonth',
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      goalTargetYearMonthIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'goalTargetYearMonth',
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      goalTargetYearMonthEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'goalTargetYearMonth',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      goalTargetYearMonthGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'goalTargetYearMonth',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      goalTargetYearMonthLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'goalTargetYearMonth',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      goalTargetYearMonthBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'goalTargetYearMonth',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      goalTargetYearMonthStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'goalTargetYearMonth',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      goalTargetYearMonthEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'goalTargetYearMonth',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      goalTargetYearMonthContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'goalTargetYearMonth',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      goalTargetYearMonthMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'goalTargetYearMonth',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      goalTargetYearMonthIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'goalTargetYearMonth',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      goalTargetYearMonthIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'goalTargetYearMonth',
+        value: '',
+      ));
+    });
+  }
+
   QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition> idEqualTo(
       Id value) {
     return QueryBuilder.apply(this, (query) {
@@ -552,6 +1161,160 @@ extension SavingsVaultQueryFilter
   }
 
   QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      pauseReasonIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'pauseReason',
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      pauseReasonIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'pauseReason',
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      pauseReasonEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'pauseReason',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      pauseReasonGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'pauseReason',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      pauseReasonLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'pauseReason',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      pauseReasonBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'pauseReason',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      pauseReasonStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'pauseReason',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      pauseReasonEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'pauseReason',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      pauseReasonContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'pauseReason',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      pauseReasonMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'pauseReason',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      pauseReasonIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'pauseReason',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      pauseReasonIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'pauseReason',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
       profileIdEqualTo(int value) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
@@ -603,6 +1366,16 @@ extension SavingsVaultQueryFilter
         includeLower: includeLower,
         upper: upper,
         includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      sweepPausedEqualTo(bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'sweepPaused',
+        value: value,
       ));
     });
   }
@@ -672,6 +1445,118 @@ extension SavingsVaultQueryFilter
       ));
     });
   }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      totalMinorEqualTo(int value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'totalMinor',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      totalMinorGreaterThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'totalMinor',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      totalMinorLessThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'totalMinor',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      totalMinorBetween(
+    int lower,
+    int upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'totalMinor',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      updatedAtEqualTo(DateTime value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'updatedAt',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      updatedAtGreaterThan(
+    DateTime value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'updatedAt',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      updatedAtLessThan(
+    DateTime value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'updatedAt',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterFilterCondition>
+      updatedAtBetween(
+    DateTime lower,
+    DateTime upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'updatedAt',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
 }
 
 extension SavingsVaultQueryObject
@@ -682,6 +1567,58 @@ extension SavingsVaultQueryLinks
 
 extension SavingsVaultQuerySortBy
     on QueryBuilder<SavingsVault, SavingsVault, QSortBy> {
+  QueryBuilder<SavingsVault, SavingsVault, QAfterSortBy> sortByCurrency() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'currency', Sort.asc);
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterSortBy> sortByCurrencyDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'currency', Sort.desc);
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterSortBy> sortByGoalName() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'goalName', Sort.asc);
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterSortBy> sortByGoalNameDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'goalName', Sort.desc);
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterSortBy>
+      sortByGoalTargetMinor() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'goalTargetMinor', Sort.asc);
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterSortBy>
+      sortByGoalTargetMinorDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'goalTargetMinor', Sort.desc);
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterSortBy>
+      sortByGoalTargetYearMonth() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'goalTargetYearMonth', Sort.asc);
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterSortBy>
+      sortByGoalTargetYearMonthDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'goalTargetYearMonth', Sort.desc);
+    });
+  }
+
   QueryBuilder<SavingsVault, SavingsVault, QAfterSortBy>
       sortByLastSweepYearMonth() {
     return QueryBuilder.apply(this, (query) {
@@ -693,6 +1630,19 @@ extension SavingsVaultQuerySortBy
       sortByLastSweepYearMonthDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'lastSweepYearMonth', Sort.desc);
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterSortBy> sortByPauseReason() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pauseReason', Sort.asc);
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterSortBy>
+      sortByPauseReasonDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pauseReason', Sort.desc);
     });
   }
 
@@ -708,6 +1658,19 @@ extension SavingsVaultQuerySortBy
     });
   }
 
+  QueryBuilder<SavingsVault, SavingsVault, QAfterSortBy> sortBySweepPaused() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sweepPaused', Sort.asc);
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterSortBy>
+      sortBySweepPausedDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sweepPaused', Sort.desc);
+    });
+  }
+
   QueryBuilder<SavingsVault, SavingsVault, QAfterSortBy> sortByTotalAmount() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'totalAmount', Sort.asc);
@@ -720,10 +1683,87 @@ extension SavingsVaultQuerySortBy
       return query.addSortBy(r'totalAmount', Sort.desc);
     });
   }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterSortBy> sortByTotalMinor() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'totalMinor', Sort.asc);
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterSortBy>
+      sortByTotalMinorDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'totalMinor', Sort.desc);
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterSortBy> sortByUpdatedAt() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'updatedAt', Sort.asc);
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterSortBy> sortByUpdatedAtDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'updatedAt', Sort.desc);
+    });
+  }
 }
 
 extension SavingsVaultQuerySortThenBy
     on QueryBuilder<SavingsVault, SavingsVault, QSortThenBy> {
+  QueryBuilder<SavingsVault, SavingsVault, QAfterSortBy> thenByCurrency() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'currency', Sort.asc);
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterSortBy> thenByCurrencyDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'currency', Sort.desc);
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterSortBy> thenByGoalName() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'goalName', Sort.asc);
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterSortBy> thenByGoalNameDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'goalName', Sort.desc);
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterSortBy>
+      thenByGoalTargetMinor() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'goalTargetMinor', Sort.asc);
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterSortBy>
+      thenByGoalTargetMinorDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'goalTargetMinor', Sort.desc);
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterSortBy>
+      thenByGoalTargetYearMonth() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'goalTargetYearMonth', Sort.asc);
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterSortBy>
+      thenByGoalTargetYearMonthDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'goalTargetYearMonth', Sort.desc);
+    });
+  }
+
   QueryBuilder<SavingsVault, SavingsVault, QAfterSortBy> thenById() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'id', Sort.asc);
@@ -750,6 +1790,19 @@ extension SavingsVaultQuerySortThenBy
     });
   }
 
+  QueryBuilder<SavingsVault, SavingsVault, QAfterSortBy> thenByPauseReason() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pauseReason', Sort.asc);
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterSortBy>
+      thenByPauseReasonDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'pauseReason', Sort.desc);
+    });
+  }
+
   QueryBuilder<SavingsVault, SavingsVault, QAfterSortBy> thenByProfileId() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'profileId', Sort.asc);
@@ -759,6 +1812,19 @@ extension SavingsVaultQuerySortThenBy
   QueryBuilder<SavingsVault, SavingsVault, QAfterSortBy> thenByProfileIdDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'profileId', Sort.desc);
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterSortBy> thenBySweepPaused() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sweepPaused', Sort.asc);
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterSortBy>
+      thenBySweepPausedDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sweepPaused', Sort.desc);
     });
   }
 
@@ -774,15 +1840,76 @@ extension SavingsVaultQuerySortThenBy
       return query.addSortBy(r'totalAmount', Sort.desc);
     });
   }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterSortBy> thenByTotalMinor() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'totalMinor', Sort.asc);
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterSortBy>
+      thenByTotalMinorDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'totalMinor', Sort.desc);
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterSortBy> thenByUpdatedAt() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'updatedAt', Sort.asc);
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QAfterSortBy> thenByUpdatedAtDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'updatedAt', Sort.desc);
+    });
+  }
 }
 
 extension SavingsVaultQueryWhereDistinct
     on QueryBuilder<SavingsVault, SavingsVault, QDistinct> {
+  QueryBuilder<SavingsVault, SavingsVault, QDistinct> distinctByCurrency(
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'currency', caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QDistinct> distinctByGoalName(
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'goalName', caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QDistinct>
+      distinctByGoalTargetMinor() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'goalTargetMinor');
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QDistinct>
+      distinctByGoalTargetYearMonth({bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'goalTargetYearMonth',
+          caseSensitive: caseSensitive);
+    });
+  }
+
   QueryBuilder<SavingsVault, SavingsVault, QDistinct>
       distinctByLastSweepYearMonth({bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'lastSweepYearMonth',
           caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QDistinct> distinctByPauseReason(
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'pauseReason', caseSensitive: caseSensitive);
     });
   }
 
@@ -792,9 +1919,27 @@ extension SavingsVaultQueryWhereDistinct
     });
   }
 
+  QueryBuilder<SavingsVault, SavingsVault, QDistinct> distinctBySweepPaused() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'sweepPaused');
+    });
+  }
+
   QueryBuilder<SavingsVault, SavingsVault, QDistinct> distinctByTotalAmount() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'totalAmount');
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QDistinct> distinctByTotalMinor() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'totalMinor');
+    });
+  }
+
+  QueryBuilder<SavingsVault, SavingsVault, QDistinct> distinctByUpdatedAt() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'updatedAt');
     });
   }
 }
@@ -807,10 +1952,41 @@ extension SavingsVaultQueryProperty
     });
   }
 
+  QueryBuilder<SavingsVault, String, QQueryOperations> currencyProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'currency');
+    });
+  }
+
+  QueryBuilder<SavingsVault, String?, QQueryOperations> goalNameProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'goalName');
+    });
+  }
+
+  QueryBuilder<SavingsVault, int?, QQueryOperations> goalTargetMinorProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'goalTargetMinor');
+    });
+  }
+
+  QueryBuilder<SavingsVault, String?, QQueryOperations>
+      goalTargetYearMonthProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'goalTargetYearMonth');
+    });
+  }
+
   QueryBuilder<SavingsVault, String, QQueryOperations>
       lastSweepYearMonthProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'lastSweepYearMonth');
+    });
+  }
+
+  QueryBuilder<SavingsVault, String?, QQueryOperations> pauseReasonProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'pauseReason');
     });
   }
 
@@ -820,9 +1996,27 @@ extension SavingsVaultQueryProperty
     });
   }
 
+  QueryBuilder<SavingsVault, bool, QQueryOperations> sweepPausedProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'sweepPaused');
+    });
+  }
+
   QueryBuilder<SavingsVault, double, QQueryOperations> totalAmountProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'totalAmount');
+    });
+  }
+
+  QueryBuilder<SavingsVault, int, QQueryOperations> totalMinorProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'totalMinor');
+    });
+  }
+
+  QueryBuilder<SavingsVault, DateTime, QQueryOperations> updatedAtProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'updatedAt');
     });
   }
 }

@@ -19,6 +19,12 @@ class SharedSpaceCodec extends SyncCodec<SharedSpace> {
         'defaultIncome': value.defaultIncome,
         'createdByProfileId': value.createdByProfileId,
         'createdAt': encodeDate(value.createdAt),
+        // Owner's security requirement (FR-027, FR-030). Carried so every
+        // member learns the Owner's choice; the member's own stricter choice
+        // is never sent (FR-028).
+        'requirePin': value.requirePin,
+        'forbidBiometrics': value.forbidBiometrics,
+        'awayTimeIndex': value.awayTimeIndex,
       };
 
   @override
@@ -29,5 +35,8 @@ class SharedSpaceCodec extends SyncCodec<SharedSpace> {
     ..currency = decodeEnum(PrimaryCurrency.values, json['currency'])
     ..defaultIncome = decodeInt(json['defaultIncome'])
     ..createdByProfileId = decodeInt(json['createdByProfileId'])
-    ..createdAt = decodeDateRequired(json['createdAt']);
+    ..createdAt = decodeDateRequired(json['createdAt'])
+    ..requirePin = (json['requirePin'] as bool?) ?? false
+    ..forbidBiometrics = (json['forbidBiometrics'] as bool?) ?? false
+    ..awayTimeIndex = (json['awayTimeIndex'] as int?) ?? -1;
 }

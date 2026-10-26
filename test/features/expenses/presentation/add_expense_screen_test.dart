@@ -1,3 +1,11 @@
+import 'package:budget_buddy/core/models/currency_code.dart';
+import 'package:budget_buddy/features/expenses/providers/category_provider.dart';
+import 'package:budget_buddy/features/expenses/providers/expense_search_provider.dart';
+import 'package:budget_buddy/core/models/category.dart';
+import 'package:budget_buddy/features/settings/providers/settings_provider.dart';
+import 'package:go_router/go_router.dart';
+import 'package:budget_buddy/core/database/isar_helper.dart';
+import '../../medical/repositories/medical_test_harness.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,6 +17,12 @@ import 'package:budget_buddy/core/models/monthly_budget.dart';
 import 'package:budget_buddy/features/engine/providers/rate_registry_provider.dart';
 
 void main() {
+  late MedicalTestHarness h;
+  setUp(() async {
+    h = await MedicalTestHarness.create();
+    IsarHelper.instance = h.isar;
+  });
+  tearDown(() => h.close());
   UserProfile makeProfile(PrimaryCurrency currency) => UserProfile()
     ..id = 1
     ..name = 'Test Profile'
@@ -27,15 +41,20 @@ void main() {
     required UserProfile profile,
     required MonthlyBudget budget,
   }) {
+    final router = GoRouter(routes: [
+      GoRoute(path: '/', builder: (_, __) => const AddExpenseScreen())
+    ]);
+    addTearDown(router.dispose);
     return ProviderScope(
       overrides: [
         activeProfileProvider.overrideWith((ref) => Stream.value(profile)),
         activeBudgetProvider.overrideWith((ref) => Stream.value(budget)),
         rateRegistryProvider.overrideWithValue(RateTableRegistry()),
+        categoriesProvider.overrideWith((ref) async => const <Category>[]),
+        expenseSearchMerchantsProvider.overrideWith((ref) => Stream.value([])),
+        mainCurrencyProvider.overrideWithValue(profile.primaryCurrency.code),
       ],
-      child: const MaterialApp(
-        home: AddExpenseScreen(),
-      ),
+      child: MaterialApp.router(routerConfig: router),
     );
   }
 
@@ -122,5 +141,19 @@ void main() {
 
     expect(
         tester.widget<TextField>(amountField()).controller!.text, '1,000,000');
+  });
+  testWidgets(
+      'an oversized amount cannot produce a wrapped negative conversion hint',
+      (tester) async {
+    await tester.pumpWidget(pump(tester,
+        profile: makeProfile(PrimaryCurrency.huf), budget: makeBudget()));
+    await tester.pumpAndSettle();
+    await tester.enterText(amountField(), '1000000000000000000000000');
+    await tester.pump();
+    expect(find.textContaining('at 1 \$'), findsNothing);
+    expect(tester.state<FormState>(find.byType(Form)).validate(), isFalse);
+    await tester.pump();
+    expect(find.text('Amount is too large.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }

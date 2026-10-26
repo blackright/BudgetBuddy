@@ -10,6 +10,7 @@ import '../../expenses/models/reimbursement.dart';
 import '../../settings/providers/settings_provider.dart';
 import '../currency_resolution.dart';
 import 'rate_registry_provider.dart';
+import '../../vault/providers/vault_providers.dart';
 
 final monthlyExpensesProvider = StreamProvider<List<Expense>>((ref) {
   final context = ref.watch(budgetContextProvider);
@@ -58,13 +59,19 @@ final trueAvailableProvider = Provider<double>((ref) {
     if (exp.status == ExpenseStatus.paid ||
         exp.status == ExpenseStatus.reimbursed ||
         exp.status == ExpenseStatus.partiallyReimbursed) {
-      total = total - expenseToDisplay(exp, display, table);
+      total = total -
+          expenseToDisplay(exp, display, table, accountingCurrency: source);
     }
   }
 
   for (final reimb in reimbursements) {
-    total = total + reimbursementToDisplay(reimb, display, table);
+    total = total +
+        reimbursementToDisplay(reimb, display, table,
+            accountingCurrency: source);
   }
 
+  total = total +
+      toDisplay(
+          Money(ref.watch(monthlyVaultCreditProvider), source), display, table);
   return total.majorValue;
 });

@@ -78,6 +78,7 @@ void main() {
     test('repository saveConvertTo clears when null and persists when set',
         () async {
       final repo = MonthFinanceRepository(harness.isar);
+      await seedProfile(PrimaryCurrency.huf);
       await seedMonth('2026-04');
       await repo.saveConvertTo('2026-04', CurrencyCode.usd);
       final afterUsd = await harness.isar.monthlyBudgets

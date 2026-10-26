@@ -1,3 +1,14 @@
+import '../../../core/models/merchant.dart';
+import '../../../core/services/profile_name.dart';
+import '../../../core/models/expense_evidence_chunk.dart';
+import '../../../core/models/expense_purchase.dart';
+import '../../../core/models/income_source.dart';
+import '../../../core/models/budget_profile.dart';
+import '../../../core/models/direct_expense_profile.dart';
+import '../../../core/models/allocation.dart';
+import '../../../core/models/transfer.dart';
+import '../../../core/models/audit_event.dart';
+import '../../../core/database/schema_migrations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:isar/isar.dart';
@@ -8,6 +19,7 @@ import '../../../core/models/insurance_profile.dart';
 import '../../../core/models/medical_bill.dart';
 import '../../../core/models/medical_service_type.dart';
 import '../../../core/models/monthly_budget.dart';
+import '../../../core/models/month_end_run.dart';
 import '../../../core/models/shared_member.dart';
 import '../../../core/models/shared_space.dart';
 import '../../../core/models/user_profile.dart';
@@ -17,8 +29,11 @@ import '../../../shared/presentation/money_format.dart';
 import '../../../shared/presentation/widgets/money_field.dart';
 import '../../expenses/models/reimbursement.dart';
 import '../../medical/repositories/medical_repository.dart';
+import '../../security/domain/lock_subject.dart';
+import '../../security/repositories/lock_setting_janitor.dart';
 import '../../spaces/presentation/delete_space_sheet.dart';
 import '../../vault/models/savings_vault.dart';
+import '../../vault/models/vault_entry.dart';
 
 /// Thrown when a profile cannot be deleted because doing so would leave the app
 /// in an invalid state: no profiles left, or a shared space with no Owner
@@ -81,9 +96,14 @@ class ProfileDeletionResult {
 /// The single write path for profile lifecycle: creating a profile and touching
 /// its `lastActiveAt` on every selection (US1, FR-001, context-router §3).
 class ProfileSwitcherController {
-  ProfileSwitcherController(this._isar);
+  ProfileSwitcherController(this._isar, {LockSettingJanitor? lockJanitor})
+      : _lockJanitor = lockJanitor;
 
   final Isar _isar;
+
+  /// Removes a deleted profile's security setting with it (FR-034). Optional and
+  /// inert when not attached, so 011's behaviour and its tests are unchanged.
+  final LockSettingJanitor? _lockJanitor;
 
   /// Puts a brand-new profile with sensible defaults and seeds its medical
   /// service types (FR-039), mirroring what onboarding seeds for id 1.
@@ -97,9 +117,10 @@ class ProfileSwitcherController {
   /// Isar forbids nested transactions, so putting them inside one txn would
   /// blow up on-device.
   Future<int> createProfile(String name, {double startingSalary = 0}) async {
+    final validatedName = checkedProfileName(name);
     final now = DateTime.now();
     final profile = UserProfile()
-      ..name = name.trim()
+      ..name = validatedName
       ..avatar = '👤'
       ..primaryCurrency = PrimaryCurrency.huf
       ..monthlyAvailableAmount = 0
@@ -157,9 +178,9 @@ class ProfileSwitcherController {
   Future<ProfileDeletionResult> deleteProfile(
     int profileId, {
     required int? activeProfileId,
-  }) {
+  }) async {
     final wasActive = profileId == activeProfileId;
-    return _isar.writeTxn(() async {
+    final result = await _isar.writeTxn(() async {
       final profile = await _isar.userProfiles.get(profileId);
       if (profile == null) {
         return ProfileDeletionResult(
@@ -186,6 +207,12 @@ class ProfileSwitcherController {
           .filter()
           .profileIdEqualTo(profileId)
           .deleteAll();
+      await _isar.expenseEvidenceChunks
+          .filter()
+          .profileIdEqualTo(profileId)
+          .and()
+          .sharedSpaceIdIsNull()
+          .deleteAll();
       await _isar.expenses.filter().profileIdEqualTo(profileId).deleteAll();
       await _isar.reimbursements
           .filter()
@@ -195,6 +222,7 @@ class ProfileSwitcherController {
           .filter()
           .profileIdEqualTo(profileId)
           .deleteAll();
+      await _isar.vaultEntrys.filter().profileIdEqualTo(profileId).deleteAll();
       await _isar.medicalBills.filter().profileIdEqualTo(profileId).deleteAll();
       await _isar.insuranceProfiles
           .filter()
@@ -216,13 +244,75 @@ class ProfileSwitcherController {
           .filter()
           .profileIdEqualTo(profileId)
           .deleteAll();
+      await _isar.expensePurchases
+          .filter()
+          .profileIdEqualTo(profileId)
+          .sharedSpaceIdIsNull()
+          .deleteAll();
+      await _isar.monthEndRuns
+          .filter()
+          .profileIdEqualTo(profileId)
+          .sharedSpaceIdIsNull()
+          .deleteAll();
+      await _isar.incomeSources
+          .filter()
+          .sharedSpaceIdIsNull()
+          .profileIdEqualTo(profileId)
+          .deleteAll();
+      await _isar.budgetProfiles
+          .filter()
+          .sharedSpaceIdIsNull()
+          .profileIdEqualTo(profileId)
+          .deleteAll();
+      await _isar.directExpenseProfiles
+          .filter()
+          .sharedSpaceIdIsNull()
+          .profileIdEqualTo(profileId)
+          .deleteAll();
+      await _isar.allocations
+          .filter()
+          .sharedSpaceIdIsNull()
+          .profileIdEqualTo(profileId)
+          .deleteAll();
+      await _isar.transfers
+          .filter()
+          .sharedSpaceIdIsNull()
+          .profileIdEqualTo(profileId)
+          .deleteAll();
+      await _isar.merchants
+          .filter()
+          .sharedSpaceIdIsNull()
+          .profileIdEqualTo(profileId)
+          .deleteAll();
+      await _isar.auditEvents
+          .filter()
+          .sharedSpaceIdIsNull()
+          .profileIdEqualTo(profileId)
+          .deleteAll();
+      for (final stamp in await _isar.schemaMigrationStamps
+          .filter()
+          .keyStartsWith('audit:head:')
+          .findAll()) {
+        if (stamp.key.startsWith('audit:head:[false,"personal:$profileId",')) {
+          await _isar.schemaMigrationStamps.delete(stamp.id);
+        }
+      }
       await _isar.userProfiles.delete(profileId);
+
+      // FR-034: the profile's security setting is removed with the profile. The
+      // row goes inside this transaction; its verifier and lockout records live
+      // in secure storage (not Isar), so they are erased just below, once the
+      // removal is committed.
+      await _lockJanitor?.deleteRowInTxn(LockSubject.profileKey(profileId));
 
       return ProfileDeletionResult(
         wasActive: wasActive,
         fallbackProfileId: await _lowestProfileId(),
       );
     });
+
+    await _lockJanitor?.forgetSecrets(LockSubject.profileKey(profileId));
+    return result;
   }
 
   /// Names of the spaces where [profileId] is the **only** Owner — deleting the
@@ -264,7 +354,10 @@ class ProfileSwitcherController {
 }
 
 final profileSwitcherControllerProvider = Provider<ProfileSwitcherController>(
-  (ref) => ProfileSwitcherController(IsarHelper.instance),
+  (ref) => ProfileSwitcherController(
+    IsarHelper.instance,
+    lockJanitor: LockSettingJanitor.forApp(IsarHelper.instance),
+  ),
 );
 
 /// US1: the list of personal profiles with add/switch controls.
@@ -274,7 +367,8 @@ final profileSwitcherControllerProvider = Provider<ProfileSwitcherController>(
 /// (key `addProfileButton`) that opens the "New profile" dialog containing a
 /// `profileNameField` and a `saveProfileButton`.
 class ProfileSwitcherSection extends ConsumerWidget {
-  const ProfileSwitcherSection({super.key});
+  const ProfileSwitcherSection({super.key, this.onSelected});
+  final VoidCallback? onSelected;
 
   void _switchTo(WidgetRef ref, UserProfile profile) {
     // Marker writes are synchronous; every dependent provider re-derives within
@@ -286,6 +380,7 @@ class ProfileSwitcherSection extends ConsumerWidget {
         .read(profileSwitcherControllerProvider)
         .touchLastActiveAt(profile.id)
         .ignore();
+    onSelected?.call();
   }
 
   // The dialog owns the text controllers and disposes them only when its own
@@ -306,6 +401,7 @@ class ProfileSwitcherSection extends ConsumerWidget {
         );
     ref.read(activeProfileIdProvider.notifier).state = id;
     ref.read(activeSpaceIdProvider.notifier).state = null;
+    onSelected?.call();
   }
 
   /// US1/FR-019: delete a personal profile after a counted, typed-name
@@ -343,6 +439,7 @@ class ProfileSwitcherSection extends ConsumerWidget {
         ref.read(activeProfileIdProvider.notifier).state =
             result.fallbackProfileId;
         ref.read(activeSpaceIdProvider.notifier).state = null;
+        onSelected?.call();
       }
       messenger.showSnackBar(
         SnackBar(content: Text('Profile "${profile.name}" deleted.')),
@@ -538,6 +635,7 @@ class _NewProfileDialog extends StatefulWidget {
 }
 
 class _NewProfileDialogState extends State<_NewProfileDialog> {
+  String? error;
   final _name = TextEditingController();
   final _salary = TextEditingController();
 
@@ -549,6 +647,11 @@ class _NewProfileDialogState extends State<_NewProfileDialog> {
   }
 
   void _save() {
+    final problem = profileNameProblem(_name.text);
+    if (problem != null) {
+      setState(() => error = problem);
+      return;
+    }
     // Blank salary means "start at 0" (FR-006) — not an error.
     final salary = parseMoneyInput(_salary.text) ?? 0.0;
     Navigator.of(context).pop(
@@ -567,7 +670,8 @@ class _NewProfileDialogState extends State<_NewProfileDialog> {
             key: const Key('profileNameField'),
             controller: _name,
             autofocus: true,
-            decoration: const InputDecoration(labelText: 'Profile name'),
+            decoration:
+                InputDecoration(labelText: 'Profile name', errorText: error),
             onSubmitted: (_) => _save(),
           ),
           const SizedBox(height: 16),

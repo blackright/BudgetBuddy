@@ -1,3 +1,4 @@
+import '../../support/audit_test_support.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -6,11 +7,18 @@ import 'package:budget_buddy/core/models/context_kind.dart';
 import 'package:budget_buddy/core/models/expense.dart';
 import 'package:budget_buddy/core/models/paired_context.dart';
 import 'package:budget_buddy/core/models/paired_peer.dart';
+import 'package:budget_buddy/core/models/user_profile.dart';
+import 'package:budget_buddy/features/spaces/repositories/space_role_guard.dart';
+import 'package:budget_buddy/features/spaces/repositories/spaces_repository.dart';
 import 'package:budget_buddy/features/sync/domain/codecs/expense_codec.dart';
+import 'package:budget_buddy/features/sync/domain/entity_applier.dart';
 import 'package:budget_buddy/features/sync/domain/hlc.dart';
+import 'package:budget_buddy/features/sync/domain/sync_codec_registry.dart';
 import 'package:budget_buddy/features/sync/domain/sync_guid.dart';
+import 'package:budget_buddy/features/sync/repositories/change_signer.dart';
 import 'package:budget_buddy/features/sync/repositories/sync_coordinator.dart';
 import 'package:budget_buddy/features/sync/repositories/sync_engine.dart';
+import 'package:budget_buddy/features/sync/repositories/sync_recorder.dart';
 import 'package:budget_buddy/features/sync/transport/transport.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:isar/isar.dart';
@@ -305,5 +313,86 @@ void main() {
         reason: "A's inactive context is never dialed");
     expect(await a.expenseByGuid(guidB), isNull,
         reason: "A never accepts B's change for the deactivated context");
+  });
+
+  // T057 / FR-013: delivery must not weaken the 011/012 guarantees. These three
+  // assertions pin the boundaries the sync layer is most likely to erode — the
+  // personal/shared split, the vault's total absence from the wire, and the
+  // invariant that a space always keeps at least one Owner.
+  group('FR-013: delivery preserves the 011/012 guarantees', () {
+    test('the savings vault has no wire presence at all', () {
+      // A vault row is personal-only (data-model §3.3): it has no `syncGuid`,
+      // no codec and no applier, so it cannot be serialized or applied. If any
+      // of these ever becomes non-null, the vault has leaked into the wire.
+      expect(codecForEntityType('SavingsVault'), isNull);
+      expect(applierForEntityType('SavingsVault'), isNull);
+      expect(
+        syncCodecs.map((codec) => codec.entityType),
+        isNot(contains('SavingsVault')),
+      );
+      expect(
+        entityAppliers.map((applier) => applier.entityType),
+        isNot(contains('SavingsVault')),
+      );
+    });
+
+    test('a personal row (sharedSpaceId == null) is never recorded', () async {
+      final recorder = SyncRecorder(
+        a.isar,
+        signer: Ed25519ChangeSigner(
+          authorIdentityId: 'A',
+          keyPair: keysA.keyPair,
+        ),
+        clock: HlcClock(deviceId: 'A'),
+      );
+      // No `sharedSpaceId`: this row belongs to the personal ledger, not a space.
+      final personal = Expense(
+        profileId: 1,
+        yearMonth: '2026-03',
+        title: 'Personal only',
+        amount: 20,
+        currency: 'usd',
+        categoryId: 'general',
+        date: DateTime.utc(2026, 3, 5),
+        budgetId: 0,
+      )..syncGuid = newSyncGuid();
+
+      final record =
+          await a.isar.writeTxn(() => recorder.recordExpense(personal));
+
+      expect(record, isNull,
+          reason: 'a personal expense is never put on the wire');
+      expect(await a.changeRecords(), isEmpty,
+          reason: 'nothing was journaled for a personal row');
+    });
+
+    test('the last-Owner rule holds: the only Owner cannot leave', () async {
+      final profileId = await a.isar.writeTxn(() {
+        final now = DateTime(2026);
+        return a.isar.userProfiles.put(UserProfile()
+          ..name = 'Solo Owner'
+          ..avatar = '👤'
+          ..primaryCurrency = PrimaryCurrency.usd
+          ..monthlyAvailableAmount = 0
+          ..defaultNetSalary = 0
+          ..createdAt = now
+          ..updatedAt = now);
+      });
+      final repo = SpacesRepository(a.isar,
+          syncRecorder: await auditTestRecorder(a.isar));
+      final space = await repo.createSpace(
+        createdByProfileId: profileId,
+        name: 'Solo',
+        currency: PrimaryCurrency.usd,
+      );
+
+      await expectLater(
+        () => repo.leaveSpace(profileId: profileId, spaceId: space.id),
+        throwsA(isA<UnauthorizedSpaceAction>()),
+        reason: 'a space must always keep at least one Owner',
+      );
+      expect(await a.memberFor(space.id, profileId), isNotNull,
+          reason: 'the refused leave changed nothing');
+    });
   });
 }

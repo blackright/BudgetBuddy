@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/models/shared_space.dart';
 import '../../../core/providers/active_profile_provider.dart';
@@ -9,6 +10,8 @@ import '../../settings/presentation/profile_switcher_section.dart';
 import '../providers/spaces_providers.dart';
 import '../repositories/spaces_repository.dart';
 import 'create_space_sheet.dart';
+import '../../../shared/presentation/providers/context_navigation_provider.dart';
+import '../../../shared/presentation/financial_feedback.dart';
 
 /// Sentinel popup values: reserved, never a real space id (ids start at 1).
 const _kBackToProfile = -1;
@@ -89,9 +92,39 @@ class ContextSwitcherMenu extends ConsumerWidget {
 
     return PopupMenuButton<int>(
       tooltip: 'Switch context',
-      onSelected: (value) {
+      onSelected: (value) async {
+        final router = GoRouter.maybeOf(context);
+        final primary = router != null &&
+            const {
+              '/dashboard',
+              '/expenses',
+              '/medical',
+              '/analytics',
+              '/spaces'
+            }.contains(router.routeInformationProvider.value.uri.path);
+        if (primary && value != _kNewSpace) {
+          final target = value == _kBackToProfile ? null : value;
+          if (ref.read(activeSpaceIdProvider) == target) return;
+          try {
+            final selected =
+                await ref.read(selectNavigationContextProvider)(target);
+            if (context.mounted) {
+              router.go('/dashboard');
+              showFinancialFeedback(context,
+                  'Switched to ${target == null ? 'Personal' : selected.name}.');
+            }
+          } catch (_) {
+            if (context.mounted) {
+              showFinancialFeedback(context,
+                  'Could not switch. Reopen Spaces to check your access.',
+                  kind: FinancialFeedbackKind.error);
+            }
+          }
+          return;
+        }
         if (value == _kNewSpace) {
-          _createSpace(context, ref);
+          await _createSpace(context, ref);
+          if (primary && context.mounted) router.go('/dashboard');
         } else if (value == _kBackToProfile) {
           ref.read(activeSpaceIdProvider.notifier).state = null;
           if (profile != null) {
@@ -185,13 +218,17 @@ class SpaceSwitcher extends ConsumerWidget {
             ? '👤 ${profile.name}'
             : 'No profile';
 
+    final contextLabel = activeSpace != null ? 'Shared Space' : 'Personal';
+
     return Material(
       color: Theme.of(context).colorScheme.surfaceContainerLow,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
         child: Row(
           children: [
+            // Profile name (clickable, opens profile management)
             Expanded(
+              flex: 2,
               child: ContextSwitcherMenu(
                 key: const Key('spaceSwitcher'),
                 child: Row(
@@ -204,12 +241,28 @@ class SpaceSwitcher extends ConsumerWidget {
                         style: Theme.of(context).textTheme.titleSmall,
                       ),
                     ),
-                    if (activeSpace != null && activeSpace.avatar.isNotEmpty)
-                      const SizedBox(width: 8),
                     const Icon(Icons.arrow_drop_down, size: 20),
                   ],
                 ),
               ),
+            ),
+            // Middle: context type label (big)
+            Expanded(
+              flex: 2,
+              child: Center(
+                child: Text(
+                  contextLabel,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+              ),
+            ),
+            // Gear icon
+            IconButton(
+              icon: const Icon(Icons.settings_outlined),
+              tooltip: 'Settings',
+              onPressed: () => context.push('/settings'),
             ),
           ],
         ),

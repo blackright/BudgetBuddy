@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../../../../shared/presentation/widgets/spaces_dropdown.dart';
+import '../../../../shared/presentation/providers/context_navigation_provider.dart';
+import '../../../../shared/presentation/financial_feedback.dart';
 
 import '../../providers/chart_lens_provider.dart';
 
@@ -38,7 +42,29 @@ class LensSwitch extends ConsumerWidget {
 
   /// Moves the active context to [lens], or says so nicely when there is no
   /// space to move into (contract chart-ui.md §3).
-  void _select(BuildContext context, WidgetRef ref, ChartLens lens) {
+  void _select(BuildContext context, WidgetRef ref, ChartLens lens) async {
+    final router = GoRouter.maybeOf(context);
+    if (router != null &&
+        router.routeInformationProvider.value.uri.path == '/analytics') {
+      if (lens == ref.read(chartLensProvider)) return;
+      if (lens == ChartLens.shared) {
+        await showContextChooser(context, ref);
+        return;
+      }
+      try {
+        await ref.read(selectNavigationContextProvider)(null);
+        if (context.mounted) {
+          router.go('/dashboard');
+          showFinancialFeedback(context, 'Switched to Personal.');
+        }
+      } catch (_) {
+        if (context.mounted) {
+          showFinancialFeedback(context, 'Could not switch. Reopen Spaces.',
+              kind: FinancialFeedbackKind.error);
+        }
+      }
+      return;
+    }
     final result = ref.read(chartLensSwitcherProvider)(lens);
     if (result == ChartLensSwitchResult.noSpace) {
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(

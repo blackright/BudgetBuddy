@@ -1,3 +1,16 @@
+import 'package:budget_buddy/core/models/merchant.dart';
+import 'package:budget_buddy/core/models/expense_evidence_chunk.dart';
+import 'package:budget_buddy/core/services/expense_evidence.dart';
+import 'package:budget_buddy/features/expenses/repositories/expense_evidence_repository.dart';
+import 'package:budget_buddy/core/models/month_end_run.dart';
+import 'package:budget_buddy/core/models/audit_event.dart';
+import 'package:budget_buddy/core/models/income_source.dart';
+import 'package:budget_buddy/core/models/budget_profile.dart';
+import 'package:budget_buddy/core/models/direct_expense_profile.dart';
+import 'package:budget_buddy/core/models/allocation.dart';
+import 'package:budget_buddy/core/models/transfer.dart';
+import 'package:budget_buddy/core/database/schema_migrations.dart';
+import 'package:budget_buddy/features/finance/repositories/audit_repository.dart';
 import 'package:budget_buddy/core/models/expense.dart';
 import 'package:budget_buddy/core/models/insurance_profile.dart';
 import 'package:budget_buddy/core/models/medical_bill.dart';
@@ -9,6 +22,7 @@ import 'package:budget_buddy/core/models/user_profile.dart';
 import 'package:budget_buddy/features/expenses/models/reimbursement.dart';
 import 'package:budget_buddy/features/settings/presentation/profile_switcher_section.dart';
 import 'package:budget_buddy/features/vault/models/savings_vault.dart';
+import 'package:budget_buddy/features/vault/models/vault_entry.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:isar/isar.dart';
 
@@ -43,6 +57,180 @@ void main() {
     });
     return id;
   }
+
+  test(
+      'whole-profile deletion removes retained payment files only for that personal owner',
+      () async {
+    final target = await seedProfile('Target'),
+        keep = await seedProfile('Keep');
+    final file = await prepareEvidence(
+        bytes: [37, 80, 68, 70, 45, 49], name: 'Receipt.pdf', role: 'receipt');
+    final expense = Expense(
+        profileId: target,
+        yearMonth: '2026-10',
+        title: 'Deleted purchase',
+        amount: 100,
+        currency: 'HUF',
+        categoryId: 'food',
+        date: DateTime(2026, 10, 24),
+        budgetId: 1);
+    final retained = ExpenseEvidenceRepository.chunks(expense, file).single;
+    await h.isar.writeTxn(() => h.isar.expenseEvidenceChunks.put(retained));
+    await controller.deleteProfile(target, activeProfileId: keep);
+    expect(await h.isar.expenseEvidenceChunks.count(), 0);
+    expect(await h.isar.userProfiles.get(keep), isNotNull);
+  });
+
+  test(
+      'deletion removes private audit evidence, heads and financial rows without touching other contexts',
+      () async {
+    final first = await seedProfile('First'),
+        second = await seedProfile('Second');
+    await h.isar.writeTxn(() async {
+      for (final id in [first, second]) {
+        await h.isar.merchants.put(Merchant()
+          ..profileId = id
+          ..canonicalName = 'Private merchant $id'
+          ..createdAt = DateTime(2026)
+          ..updatedAt = DateTime(2026));
+        final source = IncomeSource()
+          ..profileId = id
+          ..name = 'Salary'
+          ..amount = 1000
+          ..currency = 'usd'
+          ..startDate = DateTime(2026)
+          ..createdAt = DateTime(2026)
+          ..updatedAt = DateTime(2026);
+        await h.isar.incomeSources.put(source);
+        await h.isar.budgetProfiles.put(BudgetProfile()
+          ..profileId = id
+          ..name = 'Budget'
+          ..yearMonth = '2026-10'
+          ..createdAt = DateTime(2026)
+          ..updatedAt = DateTime(2026));
+        await h.isar.directExpenseProfiles.put(DirectExpenseProfile()
+          ..profileId = id
+          ..name = 'Direct'
+          ..yearMonth = '2026-10'
+          ..createdAt = DateTime(2026)
+          ..updatedAt = DateTime(2026));
+        await h.isar.allocations.put(Allocation()
+          ..profileId = id
+          ..yearMonth = '2026-10'
+          ..budgetProfileId = 1
+          ..amount = 100
+          ..currency = 'usd'
+          ..date = DateTime(2026)
+          ..createdAt = DateTime(2026));
+        await h.isar.transfers.put(Transfer()
+          ..profileId = id
+          ..yearMonth = '2026-10'
+          ..sourceProfileId = 1
+          ..destinationProfileId = 2
+          ..amount = 10
+          ..currency = 'usd'
+          ..date = DateTime(2026)
+          ..createdAt = DateTime(2026));
+        await AuditRepository(h.isar).append(
+            profileId: id,
+            action: 'income.create',
+            objectType: 'IncomeSource',
+            objectGuid: source.syncGuid,
+            after: {'amount': 1000});
+      }
+      await h.isar.auditEvents.put(AuditEvent()
+        ..sharedSpaceId = 99
+        ..profileId = first
+        ..action = 'legacy.shared'
+        ..objectType = 'Expense'
+        ..userIdentity = 'legacy'
+        ..hash = ''
+        ..previousHash = ''
+        ..timestamp = DateTime(2020)
+        ..createdAt = DateTime(2020));
+    });
+    await controller.deleteProfile(first, activeProfileId: first);
+    expect(await h.isar.merchants.filter().profileIdEqualTo(first).count(), 0);
+    expect(await h.isar.merchants.filter().profileIdEqualTo(second).count(), 1);
+    expect(
+        await h.isar.auditEvents
+            .filter()
+            .profileIdEqualTo(first)
+            .sharedSpaceIdIsNull()
+            .count(),
+        0);
+    expect(
+        await h.isar.auditEvents.filter().profileIdEqualTo(second).count(), 1);
+    expect(
+        await h.isar.auditEvents.filter().sharedSpaceIdEqualTo(99).count(), 1);
+    final heads = await h.isar.schemaMigrationStamps
+        .filter()
+        .keyStartsWith('audit:head:')
+        .findAll();
+    expect(heads.length, 1);
+    expect(heads.single.key, contains('personal:$second'));
+    expect(
+        await h.isar.incomeSources.filter().profileIdEqualTo(first).count(), 0);
+    expect(await h.isar.budgetProfiles.filter().profileIdEqualTo(first).count(),
+        0);
+    expect(
+        await h.isar.directExpenseProfiles
+            .filter()
+            .profileIdEqualTo(first)
+            .count(),
+        0);
+    expect(
+        await h.isar.allocations.filter().profileIdEqualTo(first).count(), 0);
+    expect(await h.isar.transfers.filter().profileIdEqualTo(first).count(), 0);
+    expect(await h.isar.incomeSources.filter().profileIdEqualTo(second).count(),
+        1);
+    expect(
+        await h.isar.budgetProfiles.filter().profileIdEqualTo(second).count(),
+        1);
+    expect(
+        await h.isar.directExpenseProfiles
+            .filter()
+            .profileIdEqualTo(second)
+            .count(),
+        1);
+    expect(
+        await h.isar.allocations.filter().profileIdEqualTo(second).count(), 1);
+    expect(await h.isar.transfers.filter().profileIdEqualTo(second).count(), 1);
+  });
+
+  test('deletion removes only the selected profile vault goal and history',
+      () async {
+    final first = await seedProfile('First');
+    final second = await seedProfile('Second');
+    await h.isar.writeTxn(() async {
+      for (final id in [first, second]) {
+        final vault = SavingsVault()
+          ..profileId = id
+          ..totalMinor = 1000
+          ..currency = 'usd'
+          ..goalName = 'Goal'
+          ..goalTargetMinor = 5000
+          ..lastSweepYearMonth = '2026-10'
+          ..updatedAt = DateTime(2026);
+        await h.isar.savingsVaults.put(vault);
+        await seedVaultOpeningInTxn(h.isar, vault, DateTime(2026));
+      }
+    });
+    await controller.deleteProfile(first, activeProfileId: first);
+    expect(
+        await h.isar.vaultEntrys.filter().profileIdEqualTo(first).count(), 0);
+    expect(
+        await h.isar.savingsVaults.filter().profileIdEqualTo(first).count(), 0);
+    expect(
+        (await h.isar.savingsVaults
+                .filter()
+                .profileIdEqualTo(second)
+                .findFirst())!
+            .goalName,
+        'Goal');
+    expect(
+        await h.isar.vaultEntrys.filter().profileIdEqualTo(second).count(), 1);
+  });
 
   Future<int> seedSpace(int ownerId) async {
     final space = SharedSpace()
@@ -109,7 +297,8 @@ void main() {
         SavingsVault()
           ..profileId = profileId
           ..totalAmount = 42
-          ..lastSweepYearMonth = '2026-03',
+          ..lastSweepYearMonth = '2026-03'
+          ..updatedAt = DateTime(2026),
       );
       await h.isar.medicalBills.put(
         MedicalBill()
@@ -363,5 +552,28 @@ void main() {
     expect(summary.hasVault, isTrue);
     expect(summary.describe(), contains('1 expense'));
     expect(summary.describe(), contains('a savings vault'));
+  });
+  test('deleting a profile removes only its own month-end settlements',
+      () async {
+    final first = await seedProfile('First'),
+        second = await seedProfile('Second');
+    await h.isar.writeTxn(() async {
+      for (final id in [first, second]) {
+        await h.isar.monthEndRuns.put(MonthEndRun()
+          ..syncGuid = 'run-$id'
+          ..profileId = id
+          ..contextGuid = 'personal:$id'
+          ..yearMonth = '2026-09'
+          ..destinationMonth = '2026-10'
+          ..currency = 'usd'
+          ..reportJson = '{"lines":[]}'
+          ..fingerprint = 'f$id'
+          ..actor = 'profile:$id'
+          ..createdAt = DateTime(2026));
+      }
+    });
+    await controller.deleteProfile(first, activeProfileId: first);
+    expect(
+        (await h.isar.monthEndRuns.where().findAll()).single.profileId, second);
   });
 }

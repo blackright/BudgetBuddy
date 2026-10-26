@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/providers/active_profile_provider.dart';
 
-import '../../features/medical/providers/medical_providers.dart';
-import '../../features/spaces/presentation/space_switcher.dart';
-import '../../core/providers/clock_provider.dart';
 import '../../core/models/medical_bill.dart';
+import '../../core/providers/clock_provider.dart';
+import '../../features/medical/providers/medical_providers.dart';
+import 'widgets/spaces_dropdown.dart';
+import '../../core/providers/budget_context_provider.dart';
 
-class AppShell extends ConsumerWidget {
+class AppShell extends ConsumerStatefulWidget {
   const AppShell({
     super.key,
     required this.navigationShell,
@@ -15,15 +17,43 @@ class AppShell extends ConsumerWidget {
 
   final StatefulNavigationShell navigationShell;
 
+  @override
+  ConsumerState<AppShell> createState() => _AppShellState();
+}
+
+class _AppShellState extends ConsumerState<AppShell> {
+  String? visitedOwner;
+  final visitedBranches = <int>{};
+  String get ownerKey {
+    final owner = ref.read(budgetContextProvider);
+    return '${ref.read(actingProfileIdProvider)}:${owner.profileId}:${owner.spaceId}';
+  }
+
   void _goBranch(int index) {
-    navigationShell.goBranch(
+    if (visitedOwner != ownerKey) {
+      visitedOwner = ownerKey;
+      visitedBranches.clear();
+    }
+    widget.navigationShell.goBranch(
       index,
-      initialLocation: index == navigationShell.currentIndex,
+      initialLocation: index == widget.navigationShell.currentIndex ||
+          !visitedBranches.contains(index),
     );
+    visitedBranches.add(index);
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
+    final currentOwner = ownerKey;
+    if (visitedOwner != currentOwner) {
+      if (visitedOwner == null) {
+        visitedBranches.addAll([0, 1, 2, 3, 4]);
+      } else {
+        visitedBranches.clear();
+      }
+      visitedOwner = currentOwner;
+      visitedBranches.add(widget.navigationShell.currentIndex);
+    }
     // Check due or overdue bills
     final medicalBillsAsync = ref.watch(medicalBillsProvider);
     final now = ref.watch(clockProvider);
@@ -48,13 +78,17 @@ class AppShell extends ConsumerWidget {
           // screen below in the same frame.
           const SafeArea(
             bottom: false,
-            child: SpaceSwitcher(),
+            child: SpacesDropdown(),
           ),
-          Expanded(child: navigationShell),
+          Expanded(
+              child: KeyedSubtree(
+                  key: ValueKey(
+                      '${ref.watch(budgetContextProvider).profileId}:${ref.watch(budgetContextProvider).spaceId}'),
+                  child: widget.navigationShell)),
         ],
       ),
       bottomNavigationBar: NavigationBar(
-        selectedIndex: navigationShell.currentIndex,
+        selectedIndex: widget.navigationShell.currentIndex,
         onDestinationSelected: _goBranch,
         destinations: [
           const NavigationDestination(
@@ -86,9 +120,9 @@ class AppShell extends ConsumerWidget {
             label: 'Analytics',
           ),
           const NavigationDestination(
-            icon: Icon(Icons.settings_outlined),
-            selectedIcon: Icon(Icons.settings),
-            label: 'Settings',
+            icon: Icon(Icons.space_dashboard_outlined),
+            selectedIcon: Icon(Icons.space_dashboard),
+            label: 'Spaces',
           ),
         ],
       ),

@@ -1,5 +1,6 @@
 import '../../core/models/currency_code.dart';
 import '../../core/models/expense.dart';
+import '../../core/services/fx_booking_service.dart';
 
 /// Minimal, immutable view of the fields that affect the engine. Lets the UI
 /// compute deltas for unsaved form state without mutating the Isar object.
@@ -19,8 +20,11 @@ class ExpenseSnapshot {
   });
 
   factory ExpenseSnapshot.of(Expense e) => ExpenseSnapshot(
-        amount: e.amount,
-        currency: e.currencyCode,
+        amount: e.currencyCode == null
+            ? e.amount
+            : expenseAccountingMoney(e).minorUnits,
+        currency:
+            e.currencyCode == null ? null : expenseAccountingMoney(e).currency,
         status: e.status,
       );
 

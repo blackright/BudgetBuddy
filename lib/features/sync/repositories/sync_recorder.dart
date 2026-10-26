@@ -1,8 +1,22 @@
+import '../../../core/models/merchant.dart';
+import '../../../core/models/expense_purchase.dart';
+import '../domain/codecs/expense_purchase_codec.dart';
+import '../../../core/models/expense_evidence_chunk.dart';
+import '../domain/codecs/expense_evidence_chunk_codec.dart';
+import '../domain/codecs/merchant_codec.dart';
+import '../../../core/models/audit_event.dart';
+import '../domain/codecs/audit_event_codec.dart';
 import 'package:isar/isar.dart';
 
 import '../../../core/models/change_record.dart';
 import '../../../core/models/context_kind.dart';
 import '../../../core/models/expense.dart';
+import '../../../core/models/budget_profile.dart';
+import '../../../core/models/month_end_run.dart';
+import '../domain/codecs/budget_profile_codec.dart';
+import '../domain/codecs/month_end_run_codec.dart';
+import '../../../core/models/direct_expense_profile.dart';
+import '../../../core/services/expense_profile_identity.dart';
 import '../../../core/models/insurance_profile.dart';
 import '../../../core/models/medical_bill.dart';
 import '../../../core/models/medical_service_type.dart';
@@ -215,6 +229,56 @@ class SyncRecorder {
     );
   }
 
+  Future<ChangeRecord?> recordBudgetProfile(BudgetProfile profile) async {
+    if (profile.sharedSpaceId == null) return null;
+    final json = const BudgetProfileCodec().toJson(profile);
+    json['sharedSpaceSyncGuid'] = await _spaceGuid(profile.sharedSpaceId!);
+    return record(
+        contextKind: ContextKind.shared,
+        contextLocalId: profile.sharedSpaceId!,
+        entityType: 'BudgetProfile',
+        entityLocalId: profile.id,
+        entitySyncGuid: profile.syncGuid,
+        payload: canonicalJsonEncode(json));
+  }
+
+  Future<ChangeRecord?> recordMonthEnd(MonthEndRun run) {
+    if (run.sharedSpaceId == null) return Future.value(null);
+    return record(
+        contextKind: ContextKind.shared,
+        contextLocalId: run.sharedSpaceId!,
+        entityType: 'MonthEndRun',
+        entityLocalId: run.id,
+        entitySyncGuid: run.syncGuid,
+        payload: const MonthEndRunCodec().toPayload(run));
+  }
+
+  Future<ChangeRecord?> recordEvidenceChunk(ExpenseEvidenceChunk chunk) async {
+    if (chunk.sharedSpaceId == null) return null;
+    final json = const ExpenseEvidenceChunkCodec().toJson(chunk);
+    json['sharedSpaceSyncGuid'] = await _spaceGuid(chunk.sharedSpaceId!);
+    return record(
+        contextKind: ContextKind.shared,
+        contextLocalId: chunk.sharedSpaceId!,
+        entityType: 'ExpenseEvidenceChunk',
+        entityLocalId: chunk.id,
+        entitySyncGuid: chunk.syncGuid,
+        payload: canonicalJsonEncode(json));
+  }
+
+  Future<ChangeRecord?> recordMerchant(Merchant merchant) async {
+    if (merchant.sharedSpaceId == null) return null;
+    final json = const MerchantCodec().toJson(merchant);
+    json['sharedSpaceSyncGuid'] = await _spaceGuid(merchant.sharedSpaceId!);
+    return record(
+        contextKind: ContextKind.shared,
+        contextLocalId: merchant.sharedSpaceId!,
+        entityType: 'Merchant',
+        entityLocalId: merchant.id,
+        entitySyncGuid: merchant.syncGuid,
+        payload: canonicalJsonEncode(json));
+  }
+
   /// Records an [Expense] upsert (a shared-space expense).
   Future<ChangeRecord?> recordExpense(
     Expense expense, {
@@ -222,6 +286,53 @@ class SyncRecorder {
   }) async {
     final spaceId = expense.sharedSpaceId;
     if (spaceId == null) return null;
+    if (expense.purchaseSyncGuid != null) {
+      final purchase = await _isar.expensePurchases
+          .filter()
+          .syncGuidEqualTo(expense.purchaseSyncGuid!)
+          .findFirst();
+      if (purchase == null) throw StateError('Purchase is missing.');
+      final items = <Map<String, Object?>>[];
+      for (final guid in purchase.itemGuids) {
+        final row =
+            await _isar.expenses.filter().syncGuidEqualTo(guid).findFirst();
+        if (row == null) throw StateError('Purchase items are incomplete.');
+        final item = const ExpenseCodec().toJson(row);
+        _putRef(item, 'sharedSpaceSyncGuid', await _spaceGuid(spaceId));
+        _putRef(item, 'budgetSyncGuid', await _budgetGuid(row.budgetId));
+        items.add(item);
+      }
+      final json = const ExpensePurchaseCodec().toJson(purchase)
+        ..['items'] = items;
+      _putRef(json, 'sharedSpaceSyncGuid', await _spaceGuid(spaceId));
+      _putRef(json, 'budgetSyncGuid', await _budgetGuid(purchase.budgetId));
+      return record(
+          contextKind: ContextKind.shared,
+          contextLocalId: spaceId,
+          entityType: 'ExpensePurchase',
+          entityLocalId: purchase.id,
+          entitySyncGuid: purchase.syncGuid,
+          payload: canonicalJsonEncode(json),
+          now: now);
+    }
+    if (expense.budgetProfileId != null &&
+        expense.financialProfileSyncGuid == null) {
+      if (!resolveExpenseProfileIdentity(
+          expense,
+          await _isar.budgetProfiles.where().findAll(),
+          await _isar.directExpenseProfiles.where().findAll())) {
+        throw StateError('Resolve the expense profile before syncing.');
+      }
+    }
+    if (expense.merchantSyncGuid != null) {
+      final merchant = await _isar.merchants
+          .filter()
+          .syncGuidEqualTo(expense.merchantSyncGuid!)
+          .findFirst();
+      if (merchant != null && merchant.sharedSpaceId == spaceId) {
+        await recordMerchant(merchant);
+      }
+    }
     final json = const ExpenseCodec().toJson(expense);
     _putRef(json, 'sharedSpaceSyncGuid', await _spaceGuid(spaceId));
     _putRef(json, 'budgetSyncGuid', await _budgetGuid(expense.budgetId));
@@ -246,9 +357,10 @@ class SyncRecorder {
     return recordDelete(
       contextKind: ContextKind.shared,
       contextLocalId: spaceId,
-      entityType: 'Expense',
+      entityType:
+          expense.purchaseSyncGuid == null ? 'Expense' : 'ExpensePurchase',
       entityLocalId: expense.id,
-      entitySyncGuid: expense.syncGuid,
+      entitySyncGuid: expense.purchaseSyncGuid ?? expense.syncGuid,
       now: now,
     );
   }
@@ -516,9 +628,20 @@ class SyncRecorder {
       for (final record in await _isar.changeRecords
           .filter()
           .contextLocalIdEqualTo(spaceId)
+          .and()
+          .not()
+          .entityTypeEqualTo('ExpenseEvidenceChunk')
           .findAll())
         '${record.entityType}:${record.entitySyncGuid}',
     };
+    for (final guid in await _isar.changeRecords
+        .filter()
+        .contextLocalIdEqualTo(spaceId)
+        .entityTypeEqualTo('ExpenseEvidenceChunk')
+        .entitySyncGuidProperty()
+        .findAll()) {
+      known.add('ExpenseEvidenceChunk:$guid');
+    }
 
     final pending = <Future<ChangeRecord?> Function()>[];
     void ifMissing(
@@ -531,6 +654,44 @@ class SyncRecorder {
       pending.add(write);
     }
 
+    for (final event in await _isar.auditEvents
+        .filter()
+        .sharedSpaceIdEqualTo(spaceId)
+        .findAll()) {
+      if (event.evidenceJson == null ||
+          event.userIdentity != _signer?.authorIdentityId) {
+        continue;
+      }
+      ifMissing(
+          'AuditEvent',
+          event.syncGuid,
+          () => record(
+              contextKind: ContextKind.shared,
+              contextLocalId: spaceId,
+              entityType: 'AuditEvent',
+              entitySyncGuid: event.syncGuid,
+              entityLocalId: event.id,
+              payload: const AuditEventCodec().toPayload(event)));
+    }
+    for (final merchant in await _isar.merchants
+        .filter()
+        .sharedSpaceIdEqualTo(spaceId)
+        .findAll()) {
+      ifMissing('Merchant', merchant.syncGuid, () => recordMerchant(merchant));
+    }
+    for (final guid in await _isar.expenseEvidenceChunks
+        .filter()
+        .sharedSpaceIdEqualTo(spaceId)
+        .syncGuidProperty()
+        .findAll()) {
+      ifMissing('ExpenseEvidenceChunk', guid, () async {
+        final chunk = await _isar.expenseEvidenceChunks
+            .filter()
+            .syncGuidEqualTo(guid)
+            .findFirst();
+        return chunk == null ? null : recordEvidenceChunk(chunk);
+      });
+    }
     ifMissing('SharedSpace', space.syncGuid, () => recordSpace(space));
     for (final member in await _isar.sharedMembers
         .filter()
@@ -572,11 +733,27 @@ class SyncRecorder {
       ifMissing('InsuranceProfile', plan.syncGuid,
           () => recordInsuranceProfile(plan));
     }
+    for (final profile in await _isar.budgetProfiles
+        .filter()
+        .sharedSpaceIdEqualTo(spaceId)
+        .findAll()) {
+      ifMissing('BudgetProfile', profile.syncGuid,
+          () => recordBudgetProfile(profile));
+    }
+    for (final run in await _isar.monthEndRuns
+        .filter()
+        .sharedSpaceIdEqualTo(spaceId)
+        .findAll()) {
+      ifMissing('MonthEndRun', run.syncGuid, () => recordMonthEnd(run));
+    }
     for (final expense in await _isar.expenses
         .filter()
         .sharedSpaceIdEqualTo(spaceId)
         .findAll()) {
-      ifMissing('Expense', expense.syncGuid, () => recordExpense(expense));
+      ifMissing(
+          expense.purchaseSyncGuid == null ? 'Expense' : 'ExpensePurchase',
+          expense.purchaseSyncGuid ?? expense.syncGuid,
+          () => recordExpense(expense));
     }
     for (final reimbursement in await _isar.reimbursements
         .filter()

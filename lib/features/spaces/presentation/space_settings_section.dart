@@ -7,6 +7,7 @@ import '../../../core/models/currency_code.dart';
 import '../../../core/models/user_profile.dart';
 import '../../../core/providers/active_profile_provider.dart';
 import '../../../core/providers/active_space_provider.dart';
+import '../../spaces/presentation/owner_security_card.dart';
 import '../../../shared/presentation/money_format.dart';
 import '../../../shared/presentation/widgets/money_field.dart';
 import '../../../shared/presentation/widgets/sync_status_chip.dart';
@@ -519,6 +520,16 @@ class SpaceSettingsSection extends ConsumerWidget {
         ),
         const SizedBox(height: 8),
         membersCard,
+        if (isOwner) ...[
+          const SizedBox(height: 8),
+          ExpansionTile(
+            title: const Text('Privacy & security'),
+            initiallyExpanded: false,
+            children: [
+              OwnerSecurityCard(space: space),
+            ],
+          ),
+        ],
         manageCard,
       ],
     );

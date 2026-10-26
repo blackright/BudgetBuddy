@@ -1,3 +1,7 @@
+import '../../../core/models/merchant.dart';
+import '../../../core/services/evidence_privacy.dart';
+import '../../finance/repositories/audit_repository.dart';
+import '../../../core/models/month_end_run.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:isar/isar.dart';
 
@@ -15,6 +19,8 @@ import '../../../core/models/user_profile.dart';
 import '../../../core/providers/budget_context_provider.dart';
 import '../../engine/providers/rate_registry_provider.dart';
 import '../../expenses/models/reimbursement.dart';
+import '../../security/domain/lock_subject.dart';
+import '../../security/repositories/lock_setting_janitor.dart';
 import '../../sync/domain/change_signing.dart';
 import '../../sync/domain/hlc.dart';
 import '../../sync/providers/sync_recorder_provider.dart';
@@ -44,12 +50,19 @@ class SpacesRepository {
     SpaceAccessGuard guard = const SpaceAccessGuard(),
     MonthMoveOperations? monthMoves,
     SyncRecorder? syncRecorder,
+    LockSettingJanitor? lockJanitor,
   })  : _guard = guard,
         _monthMoves = monthMoves,
-        _syncRecorder = syncRecorder;
+        _syncRecorder = syncRecorder,
+        _lockJanitor = lockJanitor;
 
   final Isar _isar;
   final SpaceAccessGuard _guard;
+
+  /// Removes a deleted space's security setting, and a left space's, with it
+  /// (FR-034). Optional and inert when not attached, so 011's behaviour and its
+  /// tests are unchanged.
+  final LockSettingJanitor? _lockJanitor;
 
   /// Appends a signed change for a paired shared context on every write
   /// (FR-006). Optional and inert when no signer/identity is attached, so 011's
@@ -99,7 +112,8 @@ class SpacesRepository {
         ..defaultIncome = defaultIncome
         ..createdByProfileId = createdByProfileId
         ..createdAt = clock;
-      space.id = await _isar.sharedSpaces.put(space);
+      space.id = await AuditRepository(_isar, recorder: _syncRecorder)
+          .put(_isar.sharedSpaces, space, id: space.id, type: 'SharedSpace');
 
       final creator = SharedMember()
         ..sharedSpaceId = space.id
@@ -111,7 +125,9 @@ class SpacesRepository {
         ..joinedAt = clock
         ..updatedAt = clock;
       await _authorMembership(creator, clock);
-      await _isar.sharedMembers.put(creator);
+      await AuditRepository(_isar, recorder: _syncRecorder).put(
+          _isar.sharedMembers, creator,
+          id: creator.id, type: 'SharedMember');
 
       await _syncRecorder?.recordSpace(space, now: clock);
       await _syncRecorder?.recordMember(creator, now: clock);
@@ -216,7 +232,8 @@ class SpacesRepository {
         }
         space.defaultIncome = defaultIncome;
       }
-      await _isar.sharedSpaces.put(space);
+      await AuditRepository(_isar, recorder: _syncRecorder)
+          .put(_isar.sharedSpaces, space, id: space.id, type: 'SharedSpace');
       await _syncRecorder?.recordSpace(space);
     });
   }
@@ -229,12 +246,18 @@ class SpacesRepository {
   Future<void> deleteSpace({
     required int actingProfileId,
     required int spaceId,
-  }) {
-    return _isar.writeTxn(() async {
+  }) async {
+    final subjectKey = await _isar.writeTxn(() async {
       _guard.assertManage(await _member(spaceId, actingProfileId));
       final space = await _requireSpace(spaceId);
 
-      final hasMoney = await _isar.monthlyBudgets
+      final hasMoney = await _isar.monthEndRuns
+                  .filter()
+                  .sharedSpaceIdEqualTo(spaceId)
+                  .count() >
+              0 ||
+          await _isar
+                  .monthlyBudgets
                   .filter()
                   .sharedSpaceIdEqualTo(spaceId)
                   .count() >
@@ -272,6 +295,8 @@ class SpacesRepository {
           .filter()
           .sharedSpaceIdEqualTo(spaceId)
           .deleteAll();
+      await _isar.merchants.filter().sharedSpaceIdEqualTo(spaceId).deleteAll();
+      await purgeSpaceEvidenceInTxn(_isar, spaceId);
       await _isar.familyMembers
           .filter()
           .sharedSpaceIdEqualTo(spaceId)
@@ -286,11 +311,20 @@ class SpacesRepository {
           .deleteAll();
       await _isar.sharedSpaces.delete(spaceId);
 
+      // FR-034: the space's own security setting is removed with the space.
+      final key = LockSubject.spaceKey(space.syncGuid);
+      await _lockJanitor?.deleteRowInTxn(key);
+
       for (final member in members) {
         await _syncRecorder?.recordMemberRemoved(member);
       }
       await _syncRecorder?.recordSpaceRemoved(space);
+      return key;
     });
+    // Secure storage is not Isar, so the verifier and lockout records are erased
+    // once the row is committed. The subject is gone either way, so this is a
+    // clean-up, not a window.
+    await _lockJanitor?.forgetSecrets(subjectKey);
   }
 
   // ---------------------------------------------------------------------------
@@ -326,7 +360,9 @@ class SpacesRepository {
         ..joinedAt = clock
         ..updatedAt = clock;
       await _authorMembership(member, clock);
-      await _isar.sharedMembers.put(member);
+      await AuditRepository(_isar, recorder: _syncRecorder).put(
+          _isar.sharedMembers, member,
+          id: member.id, type: 'SharedMember');
       await _syncRecorder?.recordMember(member, now: clock);
     });
   }
@@ -358,7 +394,9 @@ class SpacesRepository {
       final clock = DateTime.now();
       member.updatedAt = clock;
       await _authorMembership(member, clock);
-      await _isar.sharedMembers.put(member);
+      await AuditRepository(_isar, recorder: _syncRecorder).put(
+          _isar.sharedMembers, member,
+          id: member.id, type: 'SharedMember');
       await _syncRecorder?.recordMember(member, now: clock);
     });
   }
@@ -392,7 +430,8 @@ class SpacesRepository {
       } else {
         await _syncRecorder?.recordMemberRemoved(member);
       }
-      await _isar.sharedMembers.delete(member.id);
+      await AuditRepository(_isar, recorder: _syncRecorder)
+          .remove(_isar.sharedMembers, member.id, type: 'SharedMember');
     });
   }
 
@@ -417,13 +456,17 @@ class SpacesRepository {
       final clock = DateTime.now();
       newOwner.updatedAt = clock;
       await _authorMembership(newOwner, clock);
-      await _isar.sharedMembers.put(newOwner);
+      await AuditRepository(_isar, recorder: _syncRecorder).put(
+          _isar.sharedMembers, newOwner,
+          id: newOwner.id, type: 'SharedMember');
       await _syncRecorder?.recordMember(newOwner, now: clock);
       if (former != null && former.id != newOwner.id) {
         former.role = SharedMemberRole.editor;
         former.updatedAt = clock;
         await _authorMembership(former, clock);
-        await _isar.sharedMembers.put(former);
+        await AuditRepository(_isar, recorder: _syncRecorder).put(
+            _isar.sharedMembers, former,
+            id: former.id, type: 'SharedMember');
         await _syncRecorder?.recordMember(former, now: clock);
       }
     });
@@ -434,10 +477,10 @@ class SpacesRepository {
   Future<void> leaveSpace({
     required int profileId,
     required int spaceId,
-  }) {
-    return _isar.writeTxn(() async {
+  }) async {
+    final subjectKey = await _isar.writeTxn(() async {
       final member = await _member(spaceId, profileId);
-      if (member == null) return;
+      if (member == null) return null;
       if (member.role == SharedMemberRole.owner &&
           await _ownerCount(spaceId) <= 1) {
         throw const UnauthorizedSpaceAction(
@@ -454,7 +497,13 @@ class SpacesRepository {
       } else {
         await _syncRecorder?.recordMemberRemoved(member);
       }
-      await _isar.sharedMembers.delete(member.id);
+      await AuditRepository(_isar, recorder: _syncRecorder)
+          .remove(_isar.sharedMembers, member.id, type: 'SharedMember');
+      // FR-034: leaving takes this phone's security setting for the space with
+      // it — the member is no longer admitted to the space at all.
+      final space = await _isar.sharedSpaces.get(spaceId);
+      final key = space == null ? null : LockSubject.spaceKey(space.syncGuid);
+      if (key != null) await _lockJanitor?.deleteRowInTxn(key);
       // FR-010 (stop-delivery): leaving stops future delivery for this space.
       // Deactivate every paired context for it so the coordinator neither dials
       // nor accepts that space with any peer again.
@@ -467,7 +516,9 @@ class SpacesRepository {
         context.active = false;
         await _isar.pairedContexts.put(context);
       }
+      return key;
     });
+    if (subjectKey != null) await _lockJanitor?.forgetSecrets(subjectKey);
   }
 
   // ---------------------------------------------------------------------------
@@ -542,10 +593,12 @@ final spacesRepositoryProvider = Provider<SpacesRepository>(
       isar,
       monthMoves: MonthMoveOperations(
         isar,
+        recorder: ref.watch(syncRecorderProvider),
         rateRegistry: ref.watch(rateRegistryProvider),
         guard: ref.watch(spaceRoleGuardProvider),
       ),
       syncRecorder: ref.watch(syncRecorderProvider),
+      lockJanitor: LockSettingJanitor.forApp(isar),
     );
   },
 );

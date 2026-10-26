@@ -1,3 +1,4 @@
+import '../../support/audit_test_support.dart';
 import 'package:budget_buddy/core/models/currency_code.dart';
 import 'package:budget_buddy/core/models/expense.dart';
 import 'package:budget_buddy/core/models/insurance_profile.dart';
@@ -28,7 +29,9 @@ void main() {
 
   setUp(() async {
     h = await MedicalTestHarness.create();
-    ops = MonthMoveOperations(h.isar, rateRegistry: MedicalTestHarness.rates);
+    ops = MonthMoveOperations(h.isar,
+        recorder: await auditTestRecorder(h.isar),
+        rateRegistry: MedicalTestHarness.rates);
   });
 
   tearDown(() => h.close());
@@ -298,6 +301,7 @@ void main() {
     );
     final sealedOps = MonthMoveOperations(
       h.isar,
+      recorder: await auditTestRecorder(h.isar),
       rateRegistry: RateTableRegistry(sealedTables: {'2025-12': sealed}),
     );
 

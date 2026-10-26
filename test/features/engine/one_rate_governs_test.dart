@@ -15,6 +15,7 @@ import 'package:budget_buddy/features/engine/providers/safe_to_spend_provider.da
 import 'package:budget_buddy/features/engine/providers/true_available_provider.dart';
 import 'package:budget_buddy/features/expenses/models/reimbursement.dart';
 import 'package:budget_buddy/features/finance/providers/finance_providers.dart';
+import 'package:budget_buddy/features/finance/providers/profile_providers.dart';
 import 'package:budget_buddy/features/finance/repositories/month_finance_repository.dart';
 import 'package:budget_buddy/features/medical/providers/medical_providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -112,6 +113,8 @@ void main() {
   Future<ProviderContainer> build() async {
     final container = ProviderContainer(
       overrides: [
+        budgetProfilesProvider.overrideWith((ref) => Stream.value([])),
+        directExpenseProfilesProvider.overrideWith((ref) => Stream.value([])),
         selectedYearMonthProvider.overrideWith((ref) => yearMonth),
         activeProfileProvider.overrideWith((ref) => Stream.value(user())),
         activeBudgetProvider.overrideWith((ref) => Stream.value(month())),
@@ -144,6 +147,8 @@ void main() {
     // Let every overridden StreamProvider deliver its single event before the
     // synchronous provider reads below, exactly like `await provider.future`.
     await container.read(activeProfileProvider.future);
+    await container.read(budgetProfilesProvider.future);
+    await container.read(directExpenseProfilesProvider.future);
     await container.read(activeBudgetProvider.future);
     await container.read(monthFinanceProvider.future);
     await container.read(monthlyExpensesProvider.future);

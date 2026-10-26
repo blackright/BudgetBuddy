@@ -1,3 +1,4 @@
+import '../../support/audit_test_support.dart';
 import 'package:budget_buddy/core/models/identity.dart';
 import 'package:budget_buddy/core/models/monthly_budget.dart';
 import 'package:budget_buddy/core/models/shared_member.dart';
@@ -68,8 +69,10 @@ void main() {
 
     final repo = SpacesRepository(
       h.isar,
-      monthMoves:
-          MonthMoveOperations(h.isar, rateRegistry: MedicalTestHarness.rates),
+      syncRecorder: await auditTestRecorder(h.isar),
+      monthMoves: MonthMoveOperations(h.isar,
+          recorder: await auditTestRecorder(h.isar),
+          rateRegistry: MedicalTestHarness.rates),
     );
 
     // Before the fix this threw UnauthorizedSpaceAction inside the write txn, so
@@ -119,7 +122,8 @@ void main() {
     const fingerprint = 'FINGERPRINT_OWNER';
     final peerKey = remoteProfileIdFor('PEER_FINGERPRINT');
 
-    final repo = SpacesRepository(h.isar);
+    final repo =
+        SpacesRepository(h.isar, syncRecorder: await auditTestRecorder(h.isar));
 
     // The space and its Owner row were written while this profile had no
     // Identity, so the row keeps the raw profile id. The profile gains an

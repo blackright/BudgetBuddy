@@ -1,3 +1,10 @@
+import '../../../core/services/filter_service.dart';
+import '../../../core/providers/budget_context_provider.dart';
+import '../providers/expense_search_provider.dart';
+import 'widgets/expense_search_controls.dart';
+import '../providers/daily_cards_provider.dart';
+import 'widgets/daily_expense_card.dart';
+import '../../../shared/presentation/financial_feedback.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
@@ -9,187 +16,192 @@ import '../../../core/models/money.dart';
 import '../../../core/providers/active_budget_provider.dart';
 import '../../../core/providers/active_profile_provider.dart';
 import '../../../core/providers/selected_month_provider.dart';
+import '../../../shared/presentation/money_conversion.dart';
 import '../../../shared/presentation/money_format.dart';
 import '../../../shared/presentation/widgets/conversion_footnote.dart';
 import '../../dashboard/presentation/widgets/month_convert_to_menu.dart';
-import '../../engine/currency_conversion.dart';
 import '../../engine/currency_resolution.dart';
 import '../../engine/providers/rate_registry_provider.dart';
 import '../../settings/providers/settings_provider.dart';
 import '../../spaces/providers/spaces_providers.dart';
 import '../models/reimbursement.dart';
 import '../providers/expenses_provider.dart';
-import '../providers/expense_filter_provider.dart';
-import '../providers/category_provider.dart';
 import '../repositories/expense_repository.dart';
 
-class ExpensesScreen extends ConsumerWidget {
+class ExpensesScreen extends ConsumerStatefulWidget {
   const ExpensesScreen({super.key, this.filterCategoryId, this.filterStatus});
 
   final String? filterCategoryId;
   final ExpenseStatus? filterStatus;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    if (filterCategoryId != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        ref.read(activeCategoryIdFilterProvider.notifier).state =
-            filterCategoryId;
-        ref.read(activeCategoryFilterProvider.notifier).state = null;
-      });
+  ConsumerState<ExpensesScreen> createState() => _ExpensesScreenState();
+}
+
+class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
+  bool seeded = false;
+  final scroll = ScrollController();
+  @override
+  void dispose() {
+    scroll.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!seeded) {
+      seeded = true;
+      if (widget.filterCategoryId != null || widget.filterStatus != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            ref.read(expenseSearchStateProvider.notifier).apply(ExpenseFilters(
+                category: widget.filterCategoryId,
+                status: widget.filterStatus));
+          }
+        });
+      }
     }
-    if (filterStatus != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        ref.read(activeStatusFilterProvider.notifier).state = filterStatus;
-      });
-    }
-    final expensesAsync = ref.watch(filteredExpensesProvider);
-    final categoriesAsync = ref.watch(categoriesProvider);
+    final state = ref.watch(expenseSearchStateProvider);
+    final ownerKey = ref
+        .watch(budgetContextProvider.select((c) => (c.profileId, c.spaceId)));
+    ref.listen(expenseSearchStateProvider, (_, next) {
+      if (scroll.hasClients) scroll.jumpTo(0);
+    });
+    final expensesAsync = ref.watch(dailyCardsProvider);
     final canEdit = ref.watch(activeContextCanEditProvider);
 
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false, toolbarHeight: 48,
         title: const Text('Expenses'),
         // FR-035: money really did come back, so the return is kept. The user
         // decides whether to move it to another expense or drop it, rather than
         // having the app silently discard it with the target.
         actions: [
+          if (canEdit)
+            PopupMenuButton<String>(
+                tooltip: 'Expense actions',
+                onSelected: (_) => context.push('/bulk_entry'),
+                itemBuilder: (_) => const [
+                      PopupMenuItem(value: 'bulk', child: Text('Bulk entry')),
+                    ]),
           if (canEdit) const MonthConvertToMenu(),
           if (canEdit) const _OrphanBannerButton(),
         ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(110),
-          child: Column(
-            children: [
-              Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                child: TextField(
-                  decoration: InputDecoration(
-                    hintText: 'Search expenses...',
-                    prefixIcon: const Icon(Icons.search),
-                    border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(30)),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 0),
-                  ),
-                  onChanged: (value) =>
-                      ref.read(searchQueryProvider.notifier).state = value,
-                ),
-              ),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
-                child: Row(
-                  children: [
-                    // Status Filter
-                    DropdownButton<ExpenseStatus?>(
-                      value: ref.watch(activeStatusFilterProvider),
-                      hint: const Text('Status'),
-                      items: [
-                        const DropdownMenuItem(
-                            value: null, child: Text('All Statuses')),
-                        ...ExpenseStatus.values.map((s) =>
-                            DropdownMenuItem(value: s, child: Text(s.name))),
-                      ],
-                      onChanged: (val) => ref
-                          .read(activeStatusFilterProvider.notifier)
-                          .state = val,
-                    ),
-                    const SizedBox(width: 16),
-                    // Category Filter
-                    categoriesAsync.when(
-                      data: (cats) => DropdownButton<String?>(
-                        value: ref
-                                .watch(activeCategoryFilterProvider)
-                                ?.categoryId ??
-                            ref.watch(activeCategoryIdFilterProvider),
-                        hint: const Text('Category'),
-                        items: [
-                          const DropdownMenuItem(
-                              value: null, child: Text('All Categories')),
-                          ...cats.map((c) => DropdownMenuItem(
-                              value: c.categoryId,
-                              child: Text('${c.emoji} ${c.name}'))),
-                        ],
-                        onChanged: (val) {
-                          if (val == null) {
-                            ref
-                                .read(activeCategoryFilterProvider.notifier)
-                                .state = null;
-                            ref
-                                .read(activeCategoryIdFilterProvider.notifier)
-                                .state = null;
-                          } else {
-                            ref
-                                    .read(activeCategoryFilterProvider.notifier)
-                                    .state =
-                                cats.firstWhere((c) => c.categoryId == val);
-                            ref
-                                .read(activeCategoryIdFilterProvider.notifier)
-                                .state = val;
-                          }
-                        },
-                      ),
-                      loading: () => const SizedBox.shrink(),
-                      error: (_, __) => const SizedBox.shrink(),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
-      body: GestureDetector(
-        onHorizontalDragEnd: (details) {
-          if (details.primaryVelocity != null) {
-            if (details.primaryVelocity! < -300) {
-              ref
-                  .read(selectedYearMonthProvider.notifier)
-                  .update((state) => nextMonth(state));
-            } else if (details.primaryVelocity! > 300) {
-              ref
-                  .read(selectedYearMonthProvider.notifier)
-                  .update((state) => previousMonth(state));
+      body: Column(children: [
+        ExpenseSearchControls(key: ValueKey(ownerKey)),
+        Expanded(
+            child: GestureDetector(
+          onHorizontalDragEnd: (details) {
+            if (details.primaryVelocity != null) {
+              if (details.primaryVelocity! < -300) {
+                ref
+                    .read(selectedYearMonthProvider.notifier)
+                    .update((state) => nextMonth(state));
+              } else if (details.primaryVelocity! > 300) {
+                ref
+                    .read(selectedYearMonthProvider.notifier)
+                    .update((state) => previousMonth(state));
+              }
             }
-          }
-        },
-        child: expensesAsync.when(
-          data: (expenses) {
-            return RefreshIndicator(
-              onRefresh: () async {
-                await Future.delayed(const Duration(milliseconds: 500));
-              },
-              child: expenses.isEmpty
-                  ? ListView(children: const [
-                      _MonthRateFootnote(),
-                      Center(
-                          child: Padding(
-                              padding: EdgeInsets.all(32),
-                              child: Text('No expenses found.')))
-                    ])
-                  : SlidableAutoCloseBehavior(
-                      child: ListView.builder(
-                        itemCount: expenses.length + 1,
-                        itemBuilder: (context, index) {
-                          if (index == 0) {
-                            return const _MonthRateFootnote();
-                          }
-                          final expense = expenses[index - 1];
-                          return _ExpenseTile(
-                            key: ValueKey(expense.id),
-                            expense: expense,
-                          );
-                        },
-                      ),
-                    ),
-            );
           },
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (err, stack) => Center(child: Text('Error: $err')),
-        ),
-      ),
+          child: expensesAsync.when(
+            data: (expenses) {
+              final pages = (expenses.length + 19) ~/ 20;
+              final page = pages == 0 ? 0 : state.page.clamp(0, pages - 1);
+              if (page != state.page) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted &&
+                      ref.read(expenseSearchStateProvider).page == state.page) {
+                    ref.read(expenseSearchStateProvider.notifier).page(page);
+                  }
+                });
+              }
+              final visible = expenses.skip(page * 20).take(20).toList();
+              return Column(children: [
+                Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 2, 16, 4),
+                    child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                            '${expenses.fold<int>(0, (total, day) => total + day.expenses.length)} results · ${expenses.length} days · Page ${pages == 0 ? 0 : page + 1} of $pages',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant)))),
+                Expanded(
+                    child: RefreshIndicator(
+                        onRefresh: () async {
+                          ref.invalidate(expenseSearchRowsProvider);
+                          ref.invalidate(expenseSearchMerchantsProvider);
+                        },
+                        child: visible.isEmpty
+                            ? ListView(controller: scroll, children: [
+                                const Padding(
+                                    padding: EdgeInsets.all(24),
+                                    child: Text(
+                                        'No expenses match this search and filters. Try another date range or clear the filters.')),
+                                TextButton(
+                                    onPressed: () => ref
+                                        .read(
+                                            expenseSearchStateProvider.notifier)
+                                        .clear(),
+                                    child:
+                                        const Text('Reset search and filters'))
+                              ])
+                            : SlidableAutoCloseBehavior(
+                                child: ListView.builder(
+                                    controller: scroll,
+                                    itemCount: visible.length + 1,
+                                    itemBuilder: (context, index) => index == 0
+                                        ? const Padding(
+                                            padding: EdgeInsets.fromLTRB(
+                                                16, 8, 16, 4),
+                                            child: Text(
+                                                'Day totals use original currencies. Tap a day to explore its expenses.'))
+                                        : DailyExpenseCardTile(
+                                            key: ValueKey(
+                                                visible[index - 1].date),
+                                            day: visible[index - 1],
+                                            detailFootnote:
+                                                const _MonthRateFootnote(),
+                                            expenseBuilder: (expense) =>
+                                                _ExpenseTile(
+                                                    key: ValueKey(expense.id),
+                                                    expense: expense)))))),
+                if (expenses.length > 20)
+                  SafeArea(
+                      top: false,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Wrap(spacing: 16, children: [
+                          TextButton(
+                              onPressed: page > 0
+                                  ? () => ref
+                                      .read(expenseSearchStateProvider.notifier)
+                                      .page(page - 1)
+                                  : null,
+                              child: const Text('Previous')),
+                          TextButton(
+                              onPressed: page + 1 < pages
+                                  ? () => ref
+                                      .read(expenseSearchStateProvider.notifier)
+                                      .page(page + 1)
+                                  : null,
+                              child: const Text('Next'))
+                        ]),
+                      )),
+              ]);
+            },
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (err, stack) => Center(child: Text('Error: $err')),
+          ),
+        )),
+      ]),
       floatingActionButton: canEdit
           ? FloatingActionButton(
               // A unique hero tag: two default-tagged FABs on one route (this
@@ -215,6 +227,13 @@ class _MonthRateFootnote extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (ref.watch(expenseSearchStateProvider).filters.scope !=
+        ExpenseDateScope.month) {
+      return const Padding(
+          padding: EdgeInsets.all(8),
+          child: Text(
+              'Conversions use the owning-month rates for each expense. Amount filters use original currency.'));
+    }
     final display = resolveDisplayCurrency(
       month: ref.watch(activeBudgetProvider).value,
       profile: ref.watch(activeProfileProvider).value,
@@ -318,12 +337,16 @@ class _OrphanBannerButton extends ConsumerWidget {
                                         repository,
                                       );
                                       if (target == null) return;
-                                      await repository
-                                          .restoreOrphanReimbursement(
-                                        orphan.id,
-                                        target,
-                                      );
-                                      if (dialogContext.mounted) {
+                                      if (!dialogContext.mounted) return;
+                                      final saved = await runFinancialAction(
+                                          dialogContext,
+                                          action: () => repository
+                                              .restoreOrphanReimbursement(
+                                                  orphan.id, target),
+                                          success: 'Reimbursement reassigned',
+                                          failure:
+                                              'Reimbursement could not be reassigned. Please retry.');
+                                      if (saved && dialogContext.mounted) {
                                         Navigator.pop(dialogContext);
                                       }
                                     },
@@ -332,9 +355,14 @@ class _OrphanBannerButton extends ConsumerWidget {
                             TextButton(
                               key: ValueKey('orphan-discard-${orphan.id}'),
                               onPressed: () async {
-                                await repository
-                                    .discardOrphanReimbursement(orphan.id);
-                                if (dialogContext.mounted) {
+                                final removed = await runFinancialAction(
+                                    dialogContext,
+                                    action: () => repository
+                                        .discardOrphanReimbursement(orphan.id),
+                                    success: 'Unassigned reimbursement removed',
+                                    failure:
+                                        'Reimbursement could not be removed. Please retry.');
+                                if (removed && dialogContext.mounted) {
                                   Navigator.pop(dialogContext);
                                 }
                               },
@@ -418,21 +446,76 @@ class _ExpenseTile extends ConsumerWidget {
   void _openEdit(BuildContext context) =>
       context.push('/edit_expense', extra: expense);
 
-  void _openDetail(BuildContext context) =>
+  Future<void> _openDetail(BuildContext context, WidgetRef ref) async {
+    final owner = ref.read(budgetContextProvider);
+    bool stillOwns() {
+      final current = ref.read(budgetContextProvider);
+      return owner.profileId == current.profileId &&
+          owner.spaceId == current.spaceId &&
+          (owner.isShared
+              ? expense.sharedSpaceId == owner.spaceId
+              : expense.sharedSpaceId == null &&
+                  expense.profileId == owner.profileId);
+    }
+
+    if (!stillOwns()) return;
+    if (expense.yearMonth != ref.read(selectedYearMonthProvider)) {
+      final accepted = await showDialog<bool>(
+          context: context,
+          builder: (dialog) => AlertDialog(
+                  title: Text('Expense from ${expense.yearMonth}'),
+                  content: Text(
+                      '${expense.title} belongs to ${expense.yearMonth}. Open that month before viewing or changing its financial details.'),
+                  actions: [
+                    TextButton(
+                        onPressed: () => Navigator.pop(dialog, false),
+                        child: const Text('Cancel')),
+                    FilledButton(
+                        onPressed: () => Navigator.pop(dialog, true),
+                        child: const Text('Open owning month'))
+                  ]));
+      if (accepted != true || !context.mounted) return;
+      if (!stillOwns()) return;
+      ref.read(selectedYearMonthProvider.notifier).state = expense.yearMonth;
+      final month = await ref.read(activeBudgetProvider.future);
+      if (!context.mounted) return;
+      if (month == null) {
+        showFinancialFeedback(context, 'The owning month is unavailable.',
+            kind: FinancialFeedbackKind.warning);
+        return;
+      }
+    }
+    try {
+      await ref
+          .read(expenseSearchRepositoryProvider)
+          .authorize(owner, ref.read(actingProfileIdProvider));
+    } catch (_) {
+      if (context.mounted) {
+        showFinancialFeedback(context,
+            'This expense is no longer available in the selected context.',
+            kind: FinancialFeedbackKind.warning);
+      }
+      return;
+    }
+    if (context.mounted && stillOwns()) {
       context.push('/expense_detail', extra: expense);
+    }
+  }
 
   Future<void> _toggle(BuildContext context, WidgetRef ref) async {
-    final messenger = ScaffoldMessenger.of(context);
     final wasPaid = expense.status == ExpenseStatus.paid;
-    await ref.read(expensesProvider.notifier).toggleStatus(expense);
-    messenger
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(
-        content: Text(wasPaid
-            ? '"${expense.title}" moved back to Planned 🗓️'
-            : '"${expense.title}" marked as Paid ✅'),
-        duration: const Duration(seconds: 2),
-      ));
+    if (!wasPaid && expense.type == ExpenseType.standard) {
+      showFinancialFeedback(context,
+          'Choose Paid and complete the payment evidence before saving.');
+      _openEdit(context);
+      return;
+    }
+    await runFinancialAction(context, action: () async {
+      await ref.read(expensesProvider.notifier).toggleStatus(expense);
+    },
+        success:
+            wasPaid ? 'Expense marked as Planned' : 'Expense marked as Paid',
+        failure: 'Expense status could not be updated. Please retry.');
   }
 
   Future<void> _delete(BuildContext context, WidgetRef ref) async {
@@ -452,11 +535,11 @@ class _ExpenseTile extends ConsumerWidget {
       ),
     );
     if (confirmed != true || !context.mounted) return;
-    final messenger = ScaffoldMessenger.of(context);
-    await ref.read(expensesProvider.notifier).deleteExpense(expense.id);
-    messenger
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text('Deleted "${expense.title}" 🗑️')));
+    await runFinancialAction(context, action: () async {
+      await ref.read(expensesProvider.notifier).deleteExpense(expense.id);
+    },
+        success: 'Expense deleted',
+        failure: 'Expense could not be deleted. Please retry.');
   }
 
   @override
@@ -465,27 +548,30 @@ class _ExpenseTile extends ConsumerWidget {
     final isReimbursed = expense.status == ExpenseStatus.reimbursed;
     final isPartiallyReimbursed =
         expense.status == ExpenseStatus.partiallyReimbursed;
-    final canEdit = ref.watch(activeContextCanEditProvider);
+    final canEdit = ref.watch(activeContextCanEditProvider) &&
+        expense.yearMonth == ref.watch(selectedYearMonthProvider);
 
-    // T055: each row converts to the month's display currency so the list
-    // reads in one currency. Hides when the expense already is the display
-    // currency or the pair is degraded (never invents a figure, FR-014).
-    final from = expense.currencyCode;
+    // T157: the row reads in the month's display currency. The converted
+    // amount is the primary figure; long-press reveals what was actually
+    // recorded (FR-020). An unsupported legacy code cannot be converted, so it
+    // is shown as recorded with a degraded label instead of inventing a figure
+    // (FR-014, §4.4).
+    final main = ref.watch(mainCurrencyProvider);
     final budget = ref.watch(activeBudgetProvider).value;
-    final profile = ref.watch(activeProfileProvider).value;
-    final display = resolveDisplayCurrency(month: budget, profile: profile);
-    String? convertedCaption;
-    if (from != null && from != display && expense.amount > 0) {
-      final result = convert(
-        Money(expense.amount, from),
-        display,
-        ref
-            .watch(rateRegistryProvider)
-            .tableFor(ref.watch(selectedYearMonthProvider)),
-      );
-      if (!result.isDegraded) {
-        convertedCaption = '≈ ${formatMoney(result.amount)}';
-      }
+    final display = resolveContextDisplayCurrency(budget, main);
+    final table = ref.watch(rateRegistryProvider).tableFor(expense.yearMonth);
+
+    final from = expense.currencyCode;
+    String primaryText;
+    String? originalText;
+    String? degradedLabel;
+    if (from == null) {
+      primaryText = '${expense.amount} ${expense.currency}';
+      degradedLabel = 'Rate unavailable';
+    } else {
+      final formatted = formatExpenseConversion(expense, display, table);
+      primaryText = formatted.text;
+      originalText = formatted.originalText;
     }
 
     IconData statusIcon;
@@ -504,101 +590,116 @@ class _ExpenseTile extends ConsumerWidget {
       statusColor = Colors.orange;
     }
 
-    return Slidable(
-      key: ValueKey('slidable-${expense.id}'),
-      groupTag: 'expenses',
-      startActionPane: canEdit
-          ? ActionPane(
-              motion: const BehindMotion(),
-              extentRatio: 0.3,
-              dismissible: DismissiblePane(
-                closeOnCancel: true,
-                confirmDismiss: () async {
-                  if (!isReimbursed && !isPartiallyReimbursed) {
-                    await _toggle(context, ref);
-                  }
-                  return false; // keep the row; it just changes status
-                },
-                onDismissed: () {},
+    return Card(
+        key: ValueKey('expense-card-${expense.id}'),
+        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+        ),
+        child: Slidable(
+          key: ValueKey('slidable-${expense.id}'),
+          groupTag: 'expenses',
+          startActionPane: canEdit
+              ? ActionPane(
+                  motion: const BehindMotion(),
+                  extentRatio: 0.3,
+                  dismissible: DismissiblePane(
+                    closeOnCancel: true,
+                    confirmDismiss: () async {
+                      if (!isReimbursed && !isPartiallyReimbursed) {
+                        await _toggle(context, ref);
+                      }
+                      return false; // keep the row; it just changes status
+                    },
+                    onDismissed: () {},
+                  ),
+                  children: [
+                    SlidableAction(
+                      onPressed: (_) {
+                        if (!isReimbursed && !isPartiallyReimbursed) {
+                          _toggle(context, ref);
+                        }
+                      },
+                      backgroundColor: isPaid ? Colors.orange : Colors.green,
+                      foregroundColor: Colors.white,
+                      icon: isPaid ? Icons.schedule : Icons.check_circle,
+                      label: isPaid ? 'Planned' : 'Paid',
+                    ),
+                  ],
+                )
+              : null,
+          // T010: right-to-left → Edit / Delete.
+          endActionPane: canEdit
+              ? ActionPane(
+                  motion: const StretchMotion(),
+                  extentRatio: 0.5,
+                  children: [
+                    SlidableAction(
+                      onPressed: (_) => _openEdit(context),
+                      backgroundColor: Colors.blueAccent,
+                      foregroundColor: Colors.white,
+                      icon: Icons.edit,
+                      label: 'Edit',
+                    ),
+                    SlidableAction(
+                      onPressed: (_) => _delete(context, ref),
+                      backgroundColor: Colors.redAccent,
+                      foregroundColor: Colors.white,
+                      icon: Icons.delete,
+                      label: 'Delete',
+                    ),
+                  ],
+                )
+              : null,
+          child: ListTile(
+            onTap: () => _openDetail(context, ref), // T017
+            leading: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 250),
+              transitionBuilder: (child, anim) =>
+                  ScaleTransition(scale: anim, child: child),
+              child: CircleAvatar(
+                key: ValueKey(expense.status),
+                backgroundColor: statusColor.withValues(alpha: 0.2),
+                child: Icon(
+                  statusIcon,
+                  color: statusColor,
+                ),
               ),
+            ),
+            title: Text(expense.title),
+            subtitle: Text(
+              '${expense.yearMonth} \u2022 ${expense.merchantName ?? 'Merchant not recorded'} \u2022 ${expense.status.name.toUpperCase()} • ${expense.guiltLevel.name}',
+            ),
+            trailing: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                SlidableAction(
-                  onPressed: (_) {
-                    if (!isReimbursed && !isPartiallyReimbursed) {
-                      _toggle(context, ref);
-                    }
-                  },
-                  backgroundColor: isPaid ? Colors.orange : Colors.green,
-                  foregroundColor: Colors.white,
-                  icon: isPaid ? Icons.schedule : Icons.check_circle,
-                  label: isPaid ? 'Planned' : 'Paid',
-                ),
+                if (degradedLabel == null)
+                  ConvertedAmountText(
+                    text: primaryText,
+                    originalText: originalText,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 16),
+                  )
+                else
+                  Text(
+                    primaryText,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                if (degradedLabel != null)
+                  Text(
+                    degradedLabel,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
               ],
-            )
-          : null,
-      // T010: right-to-left → Edit / Delete.
-      endActionPane: canEdit
-          ? ActionPane(
-              motion: const StretchMotion(),
-              extentRatio: 0.5,
-              children: [
-                SlidableAction(
-                  onPressed: (_) => _openEdit(context),
-                  backgroundColor: Colors.blueAccent,
-                  foregroundColor: Colors.white,
-                  icon: Icons.edit,
-                  label: 'Edit',
-                ),
-                SlidableAction(
-                  onPressed: (_) => _delete(context, ref),
-                  backgroundColor: Colors.redAccent,
-                  foregroundColor: Colors.white,
-                  icon: Icons.delete,
-                  label: 'Delete',
-                ),
-              ],
-            )
-          : null,
-      child: ListTile(
-        onTap: () => _openDetail(context), // T017
-        leading: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 250),
-          transitionBuilder: (child, anim) =>
-              ScaleTransition(scale: anim, child: child),
-          child: CircleAvatar(
-            key: ValueKey(expense.status),
-            backgroundColor: statusColor.withValues(alpha: 0.2),
-            child: Icon(
-              statusIcon,
-              color: statusColor,
             ),
           ),
-        ),
-        title: Text(expense.title),
-        subtitle: Text(
-          '${expense.status.name.toUpperCase()} • ${expense.guiltLevel.name}',
-        ),
-        trailing: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text(
-              formatMoney(
-                Money(expense.amount, expense.currencyCode ?? CurrencyCode.huf),
-              ),
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-            ),
-            if (convertedCaption != null)
-              Text(
-                convertedCaption,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
+        ));
   }
 }

@@ -1,3 +1,6 @@
+import 'package:budget_buddy/features/expenses/providers/expense_search_provider.dart';
+import 'package:budget_buddy/features/expenses/providers/daily_cards_provider.dart';
+import 'package:budget_buddy/features/expenses/presentation/widgets/daily_expense_card.dart';
 import 'package:budget_buddy/core/models/category.dart';
 import 'package:budget_buddy/core/models/currency_code.dart';
 import 'package:budget_buddy/core/models/expense.dart';
@@ -64,6 +67,10 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          expenseSearchRowsProvider
+              .overrideWith((ref) => Stream.value(const <Expense>[])),
+          budgetContextProvider.overrideWithValue(
+              ContextRef.personal(profileId: profile.id, yearMonth: '2026-01')),
           activeProfileProvider.overrideWith((ref) => Stream.value(profile)),
           activeBudgetProvider.overrideWith((ref) => Stream.value(budget)),
           selectedYearMonthProvider.overrideWith((ref) => '2026-01'),
@@ -72,6 +79,10 @@ void main() {
           expenseRepositoryProvider
               .overrideWithValue(StaticExpenseRepo(harness.isar)),
           categoriesProvider.overrideWith((ref) async => const <Category>[]),
+          expenseSearchMerchantsProvider
+              .overrideWith((ref) => Stream.value([])),
+          expenseSearchProfileNamesProvider
+              .overrideWith((ref) async => {'main': 'Main'}),
         ],
         child: const MaterialApp(home: ExpensesScreen()),
       ),
@@ -134,6 +145,13 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          expenseSearchRowsProvider
+              .overrideWith((ref) => Stream.value([hufExpense, usdExpense])),
+          expenseSearchMerchantsProvider
+              .overrideWith((ref) => Stream.value([])),
+          dailyCardReturnsProvider.overrideWith((ref) => Stream.value([])),
+          budgetContextProvider.overrideWithValue(
+              ContextRef.personal(profileId: profile.id, yearMonth: '2026-01')),
           activeProfileProvider.overrideWith((ref) => Stream.value(profile)),
           activeBudgetProvider.overrideWith((ref) => Stream.value(budget)),
           selectedYearMonthProvider.overrideWith((ref) => '2026-01'),
@@ -143,18 +161,31 @@ void main() {
             StaticExpenseRepo(harness.isar, expenses: [hufExpense, usdExpense]),
           ),
           categoriesProvider.overrideWith((ref) async => const <Category>[]),
+          expenseSearchMerchantsProvider
+              .overrideWith((ref) => Stream.value([])),
+          expenseSearchProfileNamesProvider
+              .overrideWith((ref) async => {'main': 'Main'}),
         ],
         child: const MaterialApp(home: ExpensesScreen()),
       ),
     );
     await tester.pumpAndSettle();
 
-    // 1000 Ft at the bundled 345 Ft/$ becomes $2.90 — caption under the row.
-    expect(find.text('Ft 1,000'), findsOneWidget);
-    expect(find.text('≈ \$ 2.90'), findsOneWidget);
-    // A row already in the display currency shows no caption.
+    // T157: 1000 Ft at the bundled 345 Ft/$ reads as the primary "$ 2.90";
+    // the recorded Ft amount lives in the long-press tooltip.
+    await tester.tap(find.byWidgetPredicate((widget) =>
+        widget is DailyExpenseCardTile && widget.day.date.day == 10));
+    await tester.pumpAndSettle();
+    expect(find.text('\$ 2.90'), findsOneWidget);
+    expect(find.text('Ft 1,000'), findsNothing);
+    // A row already in the display currency is unchanged.
+    await tester.tap(find.byTooltip('Close day'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byWidgetPredicate((widget) =>
+        widget is DailyExpenseCardTile && widget.day.date.day == 11));
+    await tester.pumpAndSettle();
     expect(find.text('\$ 5.00'), findsOneWidget);
-    expect(find.textContaining('≈'), findsOneWidget);
+    expect(find.textContaining('≈'), findsNothing);
 
     await tester.runAsync(harness.close);
   });

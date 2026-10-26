@@ -1,4 +1,6 @@
 import 'package:budget_buddy/core/models/category.dart';
+import 'package:budget_buddy/features/expenses/providers/daily_cards_provider.dart';
+import 'package:budget_buddy/features/expenses/presentation/widgets/daily_expense_card.dart';
 import 'package:budget_buddy/core/models/currency_code.dart';
 import 'package:budget_buddy/core/models/expense.dart';
 import 'package:budget_buddy/core/models/shared_member.dart';
@@ -12,7 +14,7 @@ import 'package:budget_buddy/features/engine/providers/rate_registry_provider.da
 import 'package:budget_buddy/features/expenses/models/reimbursement.dart';
 import 'package:budget_buddy/features/expenses/presentation/expenses_screen.dart';
 import 'package:budget_buddy/features/expenses/providers/category_provider.dart';
-import 'package:budget_buddy/features/expenses/providers/expense_filter_provider.dart';
+import 'package:budget_buddy/features/expenses/providers/expense_search_provider.dart';
 import 'package:budget_buddy/features/expenses/repositories/expense_repository.dart';
 import 'package:budget_buddy/features/settings/providers/settings_provider.dart';
 import 'package:budget_buddy/features/spaces/providers/spaces_providers.dart';
@@ -108,8 +110,12 @@ void main() {
         mainCurrencyProvider.overrideWithValue(CurrencyCode.usd),
         rateRegistryProvider.overrideWithValue(RateTableRegistry()),
         categoriesProvider.overrideWith((ref) => <Category>[]),
-        filteredExpensesProvider
-            .overrideWithValue(AsyncValue.data(<Expense>[expense])),
+        expenseSearchRowsProvider
+            .overrideWith((ref) => Stream.value(<Expense>[expense])),
+        expenseSearchMerchantsProvider.overrideWith((ref) => Stream.value([])),
+        dailyCardReturnsProvider.overrideWith((ref) => Stream.value([])),
+        expenseSearchProfileNamesProvider
+            .overrideWith((ref) async => {'main': 'Main'}),
         expenseRepositoryProvider
             .overrideWith((ref) => _FakeExpenseRepository(f.harness.isar)),
       ],
@@ -134,6 +140,8 @@ void main() {
     await pump(tester, container);
 
     // The shared expense is visible (US4 AC1: a Viewer may read).
+    await tester.tap(find.byType(DailyExpenseCardTile).first);
+    await tester.pumpAndSettle();
     expect(find.text('Groceries'), findsOneWidget);
 
     // No add control (FAB) and no edit/delete swipe actions are offered.
@@ -157,6 +165,8 @@ void main() {
     await pump(tester, container);
 
     expect(find.byType(FloatingActionButton), findsOneWidget);
+    await tester.tap(find.byType(DailyExpenseCardTile).first);
+    await tester.pumpAndSettle();
     final slidable = tester.widget<Slidable>(find.byType(Slidable));
     expect(slidable.startActionPane, isNotNull);
     expect(slidable.endActionPane, isNotNull,

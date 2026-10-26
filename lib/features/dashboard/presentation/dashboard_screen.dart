@@ -7,7 +7,6 @@ import '../../../core/providers/active_budget_provider.dart';
 import '../../../core/providers/active_profile_provider.dart';
 import '../../../core/providers/active_space_provider.dart';
 import '../../../core/providers/selected_month_provider.dart';
-import '../../../shared/presentation/widgets/context_banner.dart';
 import '../../../shared/presentation/widgets/month_incomplete_banner.dart';
 import '../../../shared/presentation/widgets/sync_status_chip.dart';
 import '../../analytics/presentation/widgets/analytics_mini_charts.dart';
@@ -15,6 +14,9 @@ import '../../engine/currency_resolution.dart';
 import '../../spaces/presentation/move_month_sheet.dart';
 import '../../spaces/providers/spaces_providers.dart';
 import 'month_navigator.dart';
+import 'widgets/allocation_card.dart';
+import 'widgets/savings_vault_card.dart';
+import 'widgets/budget_profile_cards.dart';
 import 'widgets/month_convert_to_menu.dart';
 import 'widgets/month_summary_card.dart';
 import 'widgets/month_summary_details.dart';
@@ -40,6 +42,7 @@ class DashboardScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false, toolbarHeight: 48,
         title: const MonthNavigator(),
         // FR-008/US3 AC6: the space's sync state belongs on the month screen,
         // visible without opening settings. It cannot share the title line — the
@@ -75,7 +78,6 @@ class DashboardScreen extends ConsumerWidget {
       ),
       body: Column(
         children: [
-          const ContextBanner(),
           Expanded(
             child: GestureDetector(
               onHorizontalDragEnd: (details) {
@@ -104,11 +106,17 @@ class DashboardScreen extends ConsumerWidget {
                       // US8: insurance returns came from medical bills; expense
                       // returns came from ordinary expenses.
                       onInsuranceReturnTap: () => context.go('/medical'),
-                      onExpenseReturnTap: () => context.push(
+                      onExpenseReturnTap: () => context.go(
                         '/expenses',
                         extra: {'status': ExpenseStatus.reimbursed.name},
                       ),
                     ),
+                    const SizedBox(height: 12),
+                    const AllocationCard(),
+                    if (activeSpaceId == null) ...[
+                      const SizedBox(height: 12),
+                      const SavingsVaultCard(),
+                    ],
                     const SizedBox(height: 12),
                     MonthSummaryDetails(
                       currency: display,
@@ -117,11 +125,16 @@ class DashboardScreen extends ConsumerWidget {
                       // FR-027).
                       onMedicalTap: () => context.go('/medical'),
                       onInsuranceReturnTap: () => context.go('/medical'),
-                      onExpenseReturnTap: () => context.push(
+                      onExpenseReturnTap: () => context.go(
                         '/expenses',
                         extra: {'status': ExpenseStatus.reimbursed.name},
                       ),
                     ),
+                    const SizedBox(height: 12),
+                    // T142: the profiles section sits between the month details
+                    // and the analytics, so the budget picture is read before
+                    // the charts.
+                    const BudgetProfileCards(),
                     const SizedBox(height: 12),
                     const AnalyticsMiniCharts(),
                     const SizedBox(height: 24),

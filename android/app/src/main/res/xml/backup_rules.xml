@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Backup rules for Android 11 (API 30) and lower — FR-042, FR-043.
+
+  Required alongside data_extraction_rules.xml: the newer format is ignored on
+  older devices, so both must be present. Same reason as the other file — the
+  PIN verifier and the lockout record sit in shared preferences via
+  flutter_secure_storage and must not be backed up or transferred.
+-->
+<full-backup-content>
+    <exclude domain="sharedpref" path="." />
+</full-backup-content>

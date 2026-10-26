@@ -1,3 +1,4 @@
+import '../../support/audit_test_support.dart';
 import 'package:budget_buddy/core/models/context_kind.dart';
 import 'package:budget_buddy/core/models/monthly_budget.dart';
 import 'package:budget_buddy/core/models/paired_context.dart';
@@ -44,7 +45,8 @@ void main() {
 
   setUp(() async {
     harness = await MedicalTestHarness.create();
-    repo = SpacesRepository(harness.isar);
+    repo = SpacesRepository(harness.isar,
+        syncRecorder: await auditTestRecorder(harness.isar));
     ownerId = await addProfile('Owner');
     editorId = await addProfile('Editor');
     viewerId = await addProfile('Viewer');

@@ -1,4 +1,6 @@
 import 'package:budget_buddy/core/models/currency_code.dart';
+import 'package:budget_buddy/core/providers/active_budget_provider.dart';
+import 'package:budget_buddy/features/engine/providers/rate_registry_provider.dart';
 import 'package:budget_buddy/core/models/user_profile.dart';
 import 'package:budget_buddy/core/providers/active_profile_provider.dart';
 import 'package:budget_buddy/core/providers/active_space_provider.dart';
@@ -56,6 +58,8 @@ void main() {
 
     final container = ProviderContainer(
       overrides: [
+        activeBudgetProvider.overrideWith((ref) => Stream.value(null)),
+        rateRegistryProvider.overrideWithValue(RateTableRegistry()),
         monthFinanceRepositoryProvider
             .overrideWithValue(MonthFinanceRepository(harness.isar)),
         profilesProvider.overrideWith((ref) => Stream.value([ava, bea])),

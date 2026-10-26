@@ -49,6 +49,7 @@ class Reimbursement {
   DateTime date;
 
   String? note;
+  String? fxHistoryJson;
 
   Reimbursement({
     this.id = Isar.autoIncrement,
@@ -61,6 +62,7 @@ class Reimbursement {
     required this.currency,
     required this.date,
     this.note,
+    this.fxHistoryJson,
   });
 
   /// The parsed currency, or `null` for a legacy/unsupported code (FR-021).

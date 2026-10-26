@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import '../medical/repositories/medical_test_harness.dart';
+
 import 'package:budget_buddy/core/database/schema_migrations.dart';
 import 'package:budget_buddy/core/models/category.dart';
 import 'package:budget_buddy/core/models/currency_code.dart';
@@ -348,14 +350,7 @@ class _AttributionFixture {
     final directory =
         Directory.systemTemp.createTempSync('budget_buddy_reimb_');
     final isar = await Isar.open(
-      [
-        UserProfileSchema,
-        MonthlyBudgetSchema,
-        ExpenseSchema,
-        ReimbursementSchema,
-        CategorySchema,
-        SchemaMigrationStampSchema,
-      ],
+      MedicalTestHarness.schemas,
       directory: directory.path,
       name: 'reimbursement_${_nextInstance++}',
     );

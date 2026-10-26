@@ -1,4 +1,16 @@
+import 'package:budget_buddy/core/models/merchant.dart';
+import 'package:budget_buddy/core/models/expense_evidence_chunk.dart';
+import 'package:budget_buddy/core/models/expense_purchase.dart';
+import 'package:budget_buddy/core/models/app_settings.dart';
+import 'package:budget_buddy/core/models/allocation.dart';
+import 'package:budget_buddy/core/models/transfer.dart';
+import 'package:budget_buddy/core/models/audit_event.dart';
+import 'package:budget_buddy/features/vault/models/vault_entry.dart';
+import 'package:budget_buddy/core/models/month_end_run.dart';
 import 'dart:io';
+import 'package:budget_buddy/core/models/budget_profile.dart';
+import 'package:budget_buddy/core/models/income_source.dart';
+import 'package:budget_buddy/core/models/direct_expense_profile.dart';
 
 import 'package:budget_buddy/core/database/schema_migrations.dart';
 import 'package:budget_buddy/core/models/category.dart';
@@ -42,6 +54,44 @@ class MedicalTestHarness {
   /// path on the real `toDisplay` code path instead of a raw cast (T-R05).
   static final RateTableRegistry rates = RateTableRegistry();
 
+  static List<CollectionSchema> get schemas => [
+        AppSettingsSchema,
+        MerchantSchema,
+        ExpenseEvidenceChunkSchema,
+        ExpensePurchaseSchema,
+        AllocationSchema,
+        TransferSchema,
+        AuditEventSchema,
+        UserProfileSchema,
+        MonthlyBudgetSchema,
+        ExpenseSchema,
+        BudgetProfileSchema,
+        IncomeSourceSchema,
+        MonthEndRunSchema,
+        DirectExpenseProfileSchema,
+        ReimbursementSchema,
+        SavingsVaultSchema,
+        VaultEntrySchema,
+        CategorySchema,
+        MedicalBillSchema,
+        InsuranceProfileSchema,
+        FamilyMemberSchema,
+        MedicalProviderSchema,
+        MedicalServiceTypeSchema,
+        SharedSpaceSchema,
+        SharedMemberSchema,
+        SchemaMigrationStampSchema,
+        MonthRateSealSchema,
+        LiveRateSetSchema,
+        IdentitySchema,
+        ConsentRecordSchema,
+        PairedPeerSchema,
+        PairedContextSchema,
+        PairingTokenSchema,
+        ChangeRecordSchema,
+        SyncCursorSchema,
+      ];
+
   static bool _coreReady = false;
 
   /// Isar 3 keys open instances by name within a process and refuses to open the
@@ -79,31 +129,7 @@ class MedicalTestHarness {
     final directory =
         Directory.systemTemp.createTempSync('budget_buddy_medical_');
     final isar = await Isar.open(
-      [
-        UserProfileSchema,
-        MonthlyBudgetSchema,
-        ExpenseSchema,
-        ReimbursementSchema,
-        SavingsVaultSchema,
-        CategorySchema,
-        MedicalBillSchema,
-        InsuranceProfileSchema,
-        FamilyMemberSchema,
-        MedicalProviderSchema,
-        MedicalServiceTypeSchema,
-        SharedSpaceSchema,
-        SharedMemberSchema,
-        SchemaMigrationStampSchema,
-        MonthRateSealSchema,
-        LiveRateSetSchema,
-        IdentitySchema,
-        ConsentRecordSchema,
-        PairedPeerSchema,
-        PairedContextSchema,
-        PairingTokenSchema,
-        ChangeRecordSchema,
-        SyncCursorSchema,
-      ],
+      schemas,
       directory: directory.path,
       name: 'medical_${_nextInstance++}',
     );
@@ -259,7 +285,10 @@ class MedicalTestHarness {
       isar.medicalServiceTypes.where().findAll();
 
   Future<List<SchemaMigrationStamp>> schemaStamps() =>
-      isar.schemaMigrationStamps.where().findAll();
+      isar.schemaMigrationStamps
+          .filter()
+          .keyEqualTo(schemaVersionKey)
+          .findAll();
 
   Future<MonthlyBudget?> budgetFor(String yearMonth) =>
       isar.monthlyBudgets.filter().yearMonthEqualTo(yearMonth).findFirst();

@@ -1,3 +1,4 @@
+import '../../support/audit_test_support.dart';
 import 'package:budget_buddy/core/models/monthly_budget.dart';
 import 'package:budget_buddy/core/models/user_profile.dart';
 import 'package:budget_buddy/features/spaces/models/bring_in_past.dart';
@@ -21,8 +22,10 @@ void main() {
     h = await MedicalTestHarness.create();
     repo = SpacesRepository(
       h.isar,
-      monthMoves:
-          MonthMoveOperations(h.isar, rateRegistry: MedicalTestHarness.rates),
+      syncRecorder: await auditTestRecorder(h.isar),
+      monthMoves: MonthMoveOperations(h.isar,
+          recorder: await auditTestRecorder(h.isar),
+          rateRegistry: MedicalTestHarness.rates),
     );
   });
 
