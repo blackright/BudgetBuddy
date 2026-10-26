@@ -1,4 +1,15 @@
+import 'package:budget_buddy/features/vault/models/vault_entry.dart';
+import 'package:budget_buddy/core/models/expense_evidence_chunk.dart';
+import 'package:budget_buddy/core/models/expense_purchase.dart';
 import 'dart:io';
+import 'package:budget_buddy/core/models/allocation.dart';
+import 'package:budget_buddy/core/models/audit_event.dart';
+import 'package:budget_buddy/core/models/budget_profile.dart';
+import 'package:budget_buddy/core/models/direct_expense_profile.dart';
+import 'package:budget_buddy/core/models/income_source.dart';
+import 'package:budget_buddy/core/models/merchant.dart';
+import 'package:budget_buddy/core/models/month_end_run.dart';
+import 'package:budget_buddy/core/models/transfer.dart';
 
 import 'package:budget_buddy/core/database/schema_migrations.dart';
 import 'package:budget_buddy/core/models/category.dart';
@@ -75,11 +86,22 @@ class SecurityTestHarness {
     final isar = await Isar.open(
       [
         UserProfileSchema,
+        AllocationSchema,
+        AuditEventSchema,
+        BudgetProfileSchema,
+        DirectExpenseProfileSchema,
+        IncomeSourceSchema,
+        MerchantSchema,
+        MonthEndRunSchema,
+        TransferSchema,
         MonthlyBudgetSchema,
         ExpenseSchema,
+        ExpenseEvidenceChunkSchema,
+        ExpensePurchaseSchema,
         ExpenseTemplateSchema,
         ReimbursementSchema,
         SavingsVaultSchema,
+        VaultEntrySchema,
         CategorySchema,
         MedicalBillSchema,
         InsuranceProfileSchema,

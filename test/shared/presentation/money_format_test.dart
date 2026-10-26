@@ -15,6 +15,23 @@ import 'package:flutter_test/flutter_test.dart';
 /// Passing a minor int to the major helper inflates it by the currency's minor
 /// factor, so these tests pin both sides of that boundary.
 void main() {
+  test('Isar missing integer is never formatted as money or a double minus',
+      () {
+    const missing = -9223372036854775807 - 1;
+    for (final code in CurrencyCode.values) {
+      expect(formatMinorUnits(missing, code), 'Amount needs review');
+      expect(formatMinorUnitsInput(missing, code), 'Amount needs review');
+    }
+  });
+  test('editable amounts group thousands and preserve exact minor units', () {
+    expect(formatMinorUnitsInput(1000000, CurrencyCode.huf), '1,000,000');
+    for (final code in [CurrencyCode.usd, CurrencyCode.eur, CurrencyCode.cad]) {
+      expect(formatMinorUnitsInput(100000001, code), '1,000,000.01');
+      expect(formatMinorUnitsInput(0, code), '0.00');
+      expect(formatMinorUnitsInput(-123456, code), '-1,234.56');
+    }
+    expect(formatMinorUnitsInput(0, CurrencyCode.huf), '0');
+  });
   group('formatMinorUnits renders minor units exactly', () {
     test('USD renders two decimals from whole cents', () {
       expect(formatMinorUnits(1000, CurrencyCode.usd), r'$ 10.00');

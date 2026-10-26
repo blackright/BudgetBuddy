@@ -8,6 +8,7 @@ import 'package:budget_buddy/features/spaces/repositories/space_role_guard.dart'
 import 'package:budget_buddy/features/spaces/repositories/spaces_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:isar/isar.dart';
+import '../../support/audit_test_support.dart';
 
 import 'support/security_test_harness.dart';
 
@@ -79,6 +80,7 @@ void main() {
 
       final repository = SpacesRepository(
         harness.isar,
+        syncRecorder: await auditTestRecorder(harness.isar),
         lockJanitor: harness.janitor(secrets),
       );
       await repository.deleteSpace(
@@ -111,6 +113,7 @@ void main() {
 
       final repository = SpacesRepository(
         harness.isar,
+        syncRecorder: await auditTestRecorder(harness.isar),
         lockJanitor: harness.janitor(secrets),
       );
       await repository.leaveSpace(profileId: leaver.id, spaceId: space.id);
@@ -144,6 +147,7 @@ void main() {
 
       final repository = SpacesRepository(
         harness.isar,
+        syncRecorder: await auditTestRecorder(harness.isar),
         lockJanitor: harness.janitor(secrets),
       );
 

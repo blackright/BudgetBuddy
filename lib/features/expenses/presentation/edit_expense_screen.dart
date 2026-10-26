@@ -1,4 +1,11 @@
+import 'widgets/expense_metadata_fields.dart';
+import 'purchase_screen.dart';
+import '../../../shared/presentation/financial_feedback.dart';
 import 'package:flutter/material.dart';
+import '../../../core/services/expense_evidence.dart';
+import '../../../core/services/filter_service.dart';
+import '../../../core/services/fx_booking_service.dart';
+import '../../../core/models/fx_revision.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -18,6 +25,8 @@ import '../../engine/providers/safe_to_spend_provider.dart';
 import '../../settings/providers/settings_provider.dart';
 import '../providers/expenses_provider.dart';
 import '../providers/category_provider.dart';
+import '../../finance/providers/profile_providers.dart';
+import 'profile_picker_sheet.dart';
 import 'widgets/amount_conversion_hint.dart';
 import 'widgets/emotion_selector.dart';
 
@@ -35,9 +44,11 @@ class EditExpenseScreen extends ConsumerStatefulWidget {
 class _EditExpenseScreenState extends ConsumerState<EditExpenseScreen> {
   static const _currencies = ['USD', 'EUR', 'HUF', 'CAD'];
 
+  late final ExpenseMetadataDraft _metadata;
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _titleController;
   late final TextEditingController _amountController;
+  late final String _originalAmountText;
 
   late final ExpenseSnapshot _original;
   late String _currency;
@@ -45,6 +56,9 @@ class _EditExpenseScreenState extends ConsumerState<EditExpenseScreen> {
   late bool _isReimbursable;
   late GuiltLevel _guiltLevel;
   late String _categoryId;
+  late DateTime _purchaseDate;
+  int? _budgetProfileId;
+  String? _profileType, _profileGuid;
 
   bool _saving = false;
 
@@ -52,42 +66,65 @@ class _EditExpenseScreenState extends ConsumerState<EditExpenseScreen> {
   void initState() {
     super.initState();
     final e = widget.expense;
+    _metadata = ExpenseMetadataDraft(e);
     _original = ExpenseSnapshot.of(e);
     _titleController = TextEditingController(text: e.title);
-    _amountController = TextEditingController(
-      text: _formatEditable(
-        Money(e.amount, e.currencyCode ?? CurrencyCode.huf).majorValue,
-      ),
-    )..addListener(() => setState(() {}));
-    _currency = _currencies.contains(e.currency) ? e.currency : 'USD';
-    _status =
-        e.status == ExpenseStatus.cancelled ? ExpenseStatus.planned : e.status;
+    _originalAmountText =
+        formatMinorUnitsInput(e.amount, e.currencyCode ?? CurrencyCode.huf);
+    _amountController = TextEditingController(text: _originalAmountText)
+      ..addListener(() => setState(() {
+            _metadata.evidence.cashConfirmed = false;
+          }));
+    _currency = e.currency.toUpperCase();
+    _status = e.status;
     _isReimbursable = e.isReimbursable;
     _guiltLevel = e.guiltLevel;
     _categoryId = e.categoryId;
+    _purchaseDate = e.date;
+    _budgetProfileId = e.budgetProfileId;
+    _profileType = e.financialProfileType;
+    _profileGuid = e.financialProfileSyncGuid;
   }
 
   @override
   void dispose() {
+    _metadata.dispose();
     _titleController.dispose();
     _amountController.dispose();
     super.dispose();
   }
 
-  static String _formatEditable(double v) =>
-      NumberFormat('#,##0.##', 'en_US').format(v);
-
   static double? _parseAmount(String? raw) => parseMoneyInput(raw ?? '');
 
   Future<void> _onCurrencyChanged(String currency) async {
-    setState(() => _currency = currency);
+    setState(() {
+      _currency = currency;
+      _metadata.evidence.cashConfirmed = false;
+    });
   }
 
   // ---- T013: live delta vs. the stored expense --------------------------
   ExpenseDelta _currentDelta(CurrencyCode display, RateTable? table) {
-    final amount = _parseAmount(_amountController.text);
+    final code = CurrencyCode.tryParse(_currency);
+    if (code == null) return ExpenseDelta.zero;
+    int? amount;
+    try {
+      amount = parseSearchAmount(_amountController.text, code);
+    } on FormatException {
+      return ExpenseDelta.zero;
+    }
     if (amount == null || amount <= 0) return ExpenseDelta.zero;
-    final code = CurrencyCode.tryParse(_currency) ?? display;
+    final booked = expenseFx(widget.expense)?.current;
+    var afterAmount = amount;
+    var afterCurrency = code;
+    if (booked != null &&
+        fxPaid(widget.expense.status) &&
+        fxPaid(_status) &&
+        code == widget.expense.currencyCode) {
+      afterCurrency = booked.money.currency;
+      afterAmount = fxConvertMinor(
+          amount, code, afterCurrency, booked.numerator, booked.denominator);
+    }
     double toPrimary(ExpenseSnapshot s) {
       final from = s.currency;
       if (from == null) return 0.0;
@@ -97,8 +134,8 @@ class _EditExpenseScreenState extends ConsumerState<EditExpenseScreen> {
     return ExpenseDelta.between(
       before: _original,
       after: ExpenseSnapshot(
-        amount: Money.fromMajor(amount, code).minorUnits,
-        currency: code,
+        amount: afterAmount,
+        currency: afterCurrency,
         status: _status,
       ),
       toPrimary: toPrimary,
@@ -110,30 +147,49 @@ class _EditExpenseScreenState extends ConsumerState<EditExpenseScreen> {
     if (_saving || !_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
 
-    final code = CurrencyCode.tryParse(_currency) ?? CurrencyCode.huf;
-    final e = widget.expense
+    final code = CurrencyCode.tryParse(_currency);
+    final e = widget.expense.copyForEditing()
+      ..budgetProfileId = _budgetProfileId
+      ..financialProfileType = _profileType
+      ..financialProfileSyncGuid = _profileGuid
       ..title = _titleController.text.trim()
-      ..amount = Money.fromMajor(_parseAmount(_amountController.text)!, code)
-          .minorUnits
-      ..currency = _currency
+      ..paidAt =
+          _status == ExpenseStatus.paid && _purchaseDate != widget.expense.date
+              ? _purchaseDate
+              : widget.expense.paidAt
+      ..date = _purchaseDate
+      ..amount = code == null
+          ? widget.expense.amount
+          : parseSearchAmount(_amountController.text, code)!
+      ..currency = _currency == widget.expense.currency.toUpperCase()
+          ? widget.expense.currency
+          : _currency
       ..categoryId = _categoryId
       ..status = _status
       ..isReimbursable = _isReimbursable
       ..guiltLevel = _guiltLevel;
 
     try {
+      _metadata.apply(e);
+      if (e.status == ExpenseStatus.paid &&
+          widget.expense.status != ExpenseStatus.paid) {
+        e.paidAt ??= e.date;
+      }
+      _metadata.evidence.apply(e,
+          actor: '${ref.read(actingProfileIdProvider) ?? e.profileId}');
       await ref.read(expensesProvider.notifier).updateExpense(e);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Expense updated ✨')),
-      );
+      showFinancialFeedback(context, 'Expense updated');
       context.pop();
     } catch (err) {
       if (!mounted) return;
       setState(() => _saving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not save: $err')),
-      );
+      showFinancialFeedback(
+          context,
+          err is StateError
+              ? err.message.toString()
+              : 'Expense could not be saved. Please retry.',
+          kind: FinancialFeedbackKind.error);
     }
   }
 
@@ -145,37 +201,83 @@ class _EditExpenseScreenState extends ConsumerState<EditExpenseScreen> {
     setState(() => _saving = true);
 
     final src = widget.expense;
-    final now = DateTime.now();
-    final code = CurrencyCode.tryParse(_currency) ?? CurrencyCode.huf;
+    final code = CurrencyCode.tryParse(_currency);
+    if (code == null) {
+      setState(() => _saving = false);
+      showFinancialFeedback(
+          context, 'Choose a supported currency before making a new copy.',
+          kind: FinancialFeedbackKind.error);
+      return;
+    }
     final clone = Expense(
       profileId: src.profileId,
+      sharedSpaceId: src.sharedSpaceId,
       yearMonth: budget.yearMonth,
       type: src.type,
       title: _titleController.text.trim(),
-      amount: Money.fromMajor(_parseAmount(_amountController.text)!, code)
-          .minorUnits,
+      amount: parseSearchAmount(_amountController.text, code)!,
       currency: _currency,
       categoryId: _categoryId,
-      status: _status,
+      status: ExpenseStatus.planned,
       isReimbursable: _isReimbursable,
       guiltLevel: _guiltLevel,
-      date: now,
-      receiptPath: src.receiptPath,
+      date: _purchaseDate,
       notes: src.notes,
       budgetId: budget.id,
-      paidAt: _status == ExpenseStatus.paid ? now : null,
+      budgetProfileId: _budgetProfileId,
+      financialProfileType: _profileType,
+      financialProfileSyncGuid: _profileGuid,
+      paidAt: null,
     );
 
-    await ref.read(expensesProvider.notifier).addExpense(clone);
+    _metadata.apply(clone);
+    clone.paymentEvidenceJson =
+        ExpenseEvidence(profileChosen: _metadata.evidence.profileChosen)
+            .encode();
+    final problems = expenseEvidenceProblems(clone);
+    if (problems.isNotEmpty) {
+      setState(() => _saving = false);
+      showFinancialFeedback(context, problems.join(' '),
+          kind: FinancialFeedbackKind.error);
+      return;
+    }
+    final saved = await runFinancialAction(context,
+        action: () => ref.read(expensesProvider.notifier).addExpense(clone),
+        success: 'Planned copy created without payment evidence',
+        failure: 'Expense could not be duplicated. Please retry.');
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Duplicated "${clone.title}" for today 👯')),
-    );
-    context.pop();
+    if (saved) {
+      context.pop();
+    } else {
+      setState(() => _saving = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (widget.expense.purchaseSyncGuid != null) {
+      return PurchaseScreen(guid: widget.expense.purchaseSyncGuid!);
+    }
+    var profileLabel =
+        _budgetProfileId == null && _profileGuid == null && _profileType == null
+            ? 'Main Profile'
+            : 'Needs profile review';
+    for (final profile
+        in ref.watch(budgetProfilesProvider).asData?.value ?? const []) {
+      if (_profileType == FinancialProfileType.budget &&
+          profile.id == _budgetProfileId &&
+          (_profileGuid == null || profile.syncGuid == _profileGuid)) {
+        profileLabel = profile.name;
+      }
+    }
+    for (final profile
+        in ref.watch(directExpenseProfilesProvider).asData?.value ?? const []) {
+      if (_profileType == FinancialProfileType.direct &&
+          profile.id == _budgetProfileId &&
+          (_profileGuid == null || profile.syncGuid == _profileGuid)) {
+        profileLabel = profile.name;
+      }
+    }
     final budget = ref.watch(activeBudgetProvider).value;
     final profile = ref.watch(activeProfileProvider).value;
     final yearMonth = ref.watch(selectedYearMonthProvider);
@@ -234,9 +336,17 @@ class _EditExpenseScreenState extends ConsumerState<EditExpenseScreen> {
                       label: 'Amount',
                       validator: (value) {
                         if (value == null || value.isEmpty) return 'Required';
-                        final v = _parseAmount(value);
-                        if (v == null) return 'Invalid amount';
-                        if (v <= 0) return 'Must be > 0';
+                        if (CurrencyCode.tryParse(_currency) == null &&
+                            value == _originalAmountText) {
+                          return null;
+                        }
+                        try {
+                          final v = parseSearchAmount(
+                              value, CurrencyCode.tryParse(_currency));
+                          if (v == null || v <= 0) return 'Must be > 0';
+                        } on FormatException catch (error) {
+                          return error.message;
+                        }
                         return null;
                       },
                     ),
@@ -244,15 +354,23 @@ class _EditExpenseScreenState extends ConsumerState<EditExpenseScreen> {
                   const SizedBox(width: 16),
                   Expanded(
                     child: DropdownButtonFormField<String>(
+                      isExpanded: true,
                       initialValue: _currency,
                       decoration: const InputDecoration(
                         labelText: 'Currency',
                         border: OutlineInputBorder(),
                       ),
-                      items: _currencies
-                          .map(
-                              (c) => DropdownMenuItem(value: c, child: Text(c)))
-                          .toList(),
+                      items: [
+                        ..._currencies.map(
+                            (c) => DropdownMenuItem(value: c, child: Text(c))),
+                        if (!_currencies.contains(_currency))
+                          DropdownMenuItem(
+                              value: _currency,
+                              enabled: false,
+                              child: Text(_currency.isEmpty
+                                  ? 'Legacy: not recorded'
+                                  : '$_currency (legacy)'))
+                      ],
                       onChanged: (val) {
                         if (val != null) _onCurrencyChanged(val);
                       },
@@ -268,6 +386,9 @@ class _EditExpenseScreenState extends ConsumerState<EditExpenseScreen> {
                 table: table,
               ),
               const SizedBox(height: 16),
+              if (CurrencyCode.tryParse(_currency) == null)
+                const Text(
+                    'This legacy amount is in recorded minor units. Choose a supported currency before changing its amount.'),
               ref.watch(categoriesProvider).when(
                     data: (categories) => DropdownButtonFormField<String>(
                       initialValue: _categoryId,
@@ -290,26 +411,87 @@ class _EditExpenseScreenState extends ConsumerState<EditExpenseScreen> {
                     error: (_, __) => const Text('Error loading categories'),
                   ),
               const SizedBox(height: 16),
-              SegmentedButton<ExpenseStatus>(
-                segments: const [
-                  ButtonSegment(
-                      value: ExpenseStatus.paid,
-                      label: Text('Paid'),
-                      icon: Icon(Icons.check)),
-                  ButtonSegment(
-                      value: ExpenseStatus.planned,
-                      label: Text('Planned'),
-                      icon: Icon(Icons.schedule)),
-                ],
-                selected: {_status},
-                onSelectionChanged: (s) => setState(() => _status = s.first),
-              ),
+              if (_status == ExpenseStatus.paid ||
+                  _status == ExpenseStatus.planned)
+                SegmentedButton<ExpenseStatus>(
+                  segments: const [
+                    ButtonSegment(
+                        value: ExpenseStatus.paid,
+                        label: Text('Paid'),
+                        icon: Icon(Icons.check)),
+                    ButtonSegment(
+                        value: ExpenseStatus.planned,
+                        label: Text('Planned'),
+                        icon: Icon(Icons.schedule)),
+                  ],
+                  selected: {_status},
+                  onSelectionChanged: (s) => setState(() => _status = s.first),
+                )
+              else
+                Text(
+                    'Status: ${_status == ExpenseStatus.cancelled ? 'Cancelled' : _status == ExpenseStatus.reimbursed ? 'Reimbursed' : 'Partially reimbursed'}'),
               const SizedBox(height: 16),
               SwitchListTile(
                 title: const Text('Is this reimbursable?'),
                 value: _isReimbursable,
                 onChanged: (val) => setState(() => _isReimbursable = val),
               ),
+              const SizedBox(height: 16),
+              if (widget.expense.type == ExpenseType.standard)
+                ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.account_balance_wallet_outlined),
+                    title: const Text('Financial profile'),
+                    subtitle: Text(profileLabel),
+                    trailing: TextButton(
+                        onPressed: () async {
+                          final choice = await ProfilePickerSheet.show(context,
+                              selectedProfileId: _budgetProfileId,
+                              selectedProfileType: _profileType);
+                          if (choice != null && mounted) {
+                            setState(() {
+                              _budgetProfileId = choice.profileId;
+                              _profileType = choice.profileType;
+                              _profileGuid = choice.syncGuid;
+                              _metadata.evidence.profileChosen = true;
+                              _metadata.evidence.changed = true;
+                              _metadata.evidence.cashConfirmed = false;
+                            });
+                          }
+                        },
+                        child: Text(_metadata.evidence.profileChosen
+                            ? 'Change'
+                            : 'Choose'))),
+              if (widget.expense.type == ExpenseType.standard)
+                ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.calendar_today_outlined),
+                    title: const Text('Expense date'),
+                    subtitle: Text(DateFormat.yMMMd().format(_purchaseDate)),
+                    trailing: const Icon(Icons.edit_calendar_outlined),
+                    onTap: () async {
+                      final parts = widget.expense.yearMonth
+                          .split('-')
+                          .map(int.parse)
+                          .toList();
+                      final first = DateTime(parts[0], parts[1]),
+                          last = DateTime(parts[0], parts[1] + 1, 0);
+                      final selected = await showDatePicker(
+                          context: context,
+                          initialDate: _purchaseDate,
+                          firstDate: first,
+                          lastDate: last);
+                      if (selected != null && mounted) {
+                        setState(() {
+                          _purchaseDate = selected;
+                          _metadata.evidence.cashConfirmed = false;
+                        });
+                      }
+                    }),
+              ExpenseMetadataFields(
+                  draft: _metadata,
+                  status: _status,
+                  showEvidence: widget.expense.type == ExpenseType.standard),
               const SizedBox(height: 16),
               const Text('How did you feel about this?',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
@@ -328,14 +510,15 @@ class _EditExpenseScreenState extends ConsumerState<EditExpenseScreen> {
               ),
               const SizedBox(height: 12),
               // ---- T011: duplicate button ----
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: _saving ? null : _duplicate,
-                  icon: const Icon(Icons.copy_all_rounded),
-                  label: const Text('Duplicate Expense'),
+              if (widget.expense.type == ExpenseType.standard)
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _saving ? null : _duplicate,
+                    icon: const Icon(Icons.copy_all_rounded),
+                    label: const Text('Duplicate Expense'),
+                  ),
                 ),
-              ),
             ],
           ),
         ),

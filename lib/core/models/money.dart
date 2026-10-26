@@ -1,4 +1,9 @@
 import 'currency_code.dart';
+import 'allocation.dart';
+import 'budget_profile.dart';
+import 'direct_expense_profile.dart';
+import 'income_source.dart';
+import 'transfer.dart';
 
 /// An exact amount of money: whole minor units plus the currency they are in.
 ///
@@ -81,4 +86,57 @@ class Money {
 
   @override
   String toString() => 'Money($minorUnits ${currency.code})';
+}
+
+/// Bridges the new financial entities to [Money] (T110).
+///
+/// Every new entity stores its money the same way the app already does: whole
+/// **minor units** in an `int` plus the currency code as a `String`. The code
+/// is a raw string on purpose (FR-021): a legacy or unsupported code must
+/// survive verbatim instead of being silently re-coded.
+///
+/// These helpers turn that pair into a real [Money] so the exact-arithmetic
+/// rules apply, and they return `null` for an unsupported code instead of
+/// inventing one.
+extension IncomeSourceMoney on IncomeSource {
+  /// This source's amount as [Money], or `null` for an unsupported currency.
+  Money? get money {
+    final code = CurrencyCode.tryParse(currency);
+    if (code == null) return null;
+    return Money(amount, code);
+  }
+}
+
+extension BudgetProfileMoney on BudgetProfile {
+  /// This profile's allocation as [Money] in the context currency.
+  ///
+  /// A budget profile has no currency column of its own: it spends in the
+  /// context's currency (the profile's or the space's), so the caller passes it.
+  Money allocationIn(CurrencyCode currency) => Money(allocation, currency);
+
+  /// This profile's spending as [Money] in the context currency.
+  Money spentIn(CurrencyCode currency) => Money(spent, currency);
+}
+
+extension DirectExpenseProfileMoney on DirectExpenseProfile {
+  /// This profile's spending as [Money] in the context currency.
+  Money spentIn(CurrencyCode currency) => Money(spent, currency);
+}
+
+extension AllocationMoney on Allocation {
+  /// This allocation as [Money], or `null` for an unsupported currency.
+  Money? get money {
+    final code = CurrencyCode.tryParse(currency);
+    if (code == null) return null;
+    return Money(amount, code);
+  }
+}
+
+extension TransferMoney on Transfer {
+  /// This transfer as [Money], or `null` for an unsupported currency.
+  Money? get money {
+    final code = CurrencyCode.tryParse(currency);
+    if (code == null) return null;
+    return Money(amount, code);
+  }
 }

@@ -18,16 +18,27 @@ class ExpenseCodec extends SyncCodec<Expense> {
         'profileId': value.profileId,
         'yearMonth': value.yearMonth,
         'type': value.type.name,
+        'financialProfileType': value.financialProfileType,
+        'financialProfileSyncGuid': value.financialProfileSyncGuid,
         'title': value.title,
         'amount': value.amount,
+        'fxHistoryJson': value.fxHistoryJson,
         'currency': value.currency,
         'categoryId': value.categoryId,
         'status': value.status.name,
         'isReimbursable': value.isReimbursable,
         'guiltLevel': value.guiltLevel.name,
         'date': encodeDate(value.date),
-        'receiptPath': value.receiptPath,
+        'receiptPath':
+            value.type == ExpenseType.medical ? value.receiptPath : null,
         'notes': value.notes,
+        'merchantSyncGuid': value.merchantSyncGuid,
+        'merchantName': value.merchantName,
+        'tags': value.tags,
+        'paymentMethod': value.paymentMethod,
+        'paymentEvidenceJson': value.paymentEvidenceJson,
+        'purchaseSyncGuid': value.purchaseSyncGuid,
+        'purchaseEvidenceOwnerGuid': value.purchaseEvidenceOwnerGuid,
         'paidAt': encodeDate(value.paidAt),
       };
 
@@ -38,6 +49,7 @@ class ExpenseCodec extends SyncCodec<Expense> {
         type: decodeEnum(ExpenseType.values, json['type']),
         title: (json['title'] as String?) ?? '',
         amount: decodeInt(json['amount']),
+        fxHistoryJson: json['fxHistoryJson'] as String?,
         currency: (json['currency'] as String?) ?? '',
         categoryId:
             (json['categoryId'] as String?) ?? Expense.defaultCategoryId,
@@ -47,10 +59,21 @@ class ExpenseCodec extends SyncCodec<Expense> {
         date: decodeDateRequired(json['date']),
         receiptPath: json['receiptPath'] as String?,
         notes: json['notes'] as String?,
+        merchantSyncGuid: decodeGuidOrNull(json['merchantSyncGuid']),
+        merchantName: json['merchantName'] as String?,
+        paymentMethod: json['paymentMethod'] as String?,
+        paymentEvidenceJson: json['paymentEvidenceJson'] as String?,
+        purchaseSyncGuid: decodeGuidOrNull(json['purchaseSyncGuid']),
+        purchaseEvidenceOwnerGuid:
+            decodeGuidOrNull(json['purchaseEvidenceOwnerGuid']),
         // `budgetId` is resolved from `budgetSyncGuid` by the applier; the codec
         // is pure and cannot look the budget up.
         budgetId: 0,
+        financialProfileType: json['financialProfileType'] as String?,
+        financialProfileSyncGuid:
+            decodeGuidOrNull(json['financialProfileSyncGuid']),
         paidAt: decodeDate(json['paidAt']),
       ))
+        ..tags = (json['tags'] as List? ?? []).cast<String>()
         ..syncGuid = decodeGuid(json['syncGuid']);
 }

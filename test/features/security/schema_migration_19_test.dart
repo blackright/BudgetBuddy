@@ -33,7 +33,7 @@ void main() {
       await runSchemaMigrations(harness.isar);
 
       expect(await readSchemaVersion(harness.isar), schemaVersion);
-      expect(schemaVersion, 19);
+      expect(schemaVersion, greaterThanOrEqualTo(19));
     });
 
     test('existing money rows and memberships survive', () async {

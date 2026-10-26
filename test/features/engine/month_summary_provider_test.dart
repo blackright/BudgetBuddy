@@ -12,6 +12,8 @@ import 'package:budget_buddy/features/engine/providers/rate_registry_provider.da
 import 'package:budget_buddy/features/engine/providers/true_available_provider.dart';
 import 'package:budget_buddy/features/expenses/models/reimbursement.dart';
 import 'package:budget_buddy/features/finance/providers/finance_providers.dart';
+import 'package:budget_buddy/features/finance/providers/profile_providers.dart';
+import 'package:budget_buddy/core/providers/budget_context_provider.dart';
 import 'package:budget_buddy/features/finance/repositories/month_finance_repository.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -106,6 +108,10 @@ void main() {
   }) {
     final container = ProviderContainer(
       overrides: [
+        budgetContextProvider.overrideWithValue(
+            ContextRef.personal(profileId: 1, yearMonth: yearMonth)),
+        budgetProfilesProvider.overrideWith((ref) => Stream.value([])),
+        contextExpensesProvider.overrideWithValue(expenses),
         selectedYearMonthProvider.overrideWith((ref) => yearMonth),
         activeProfileProvider.overrideWith((ref) => Stream.value(user)),
         activeBudgetProvider.overrideWith((ref) => Stream.value(month)),

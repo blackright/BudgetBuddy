@@ -20,6 +20,17 @@ String formatMoney(Money money) =>
 /// built on, exported so call sites that already hold minor units (engine
 /// aggregates) do not have to allocate a [Money] first.
 String formatMinorUnits(int minorUnits, CurrencyCode currency) {
+  // Isar's missing-int marker cannot be negated/abs() safely on the native VM.
+  if (minorUnits == -9223372036854775807 - 1) return 'Amount needs review';
+  final numeric = formatMinorUnitsInput(minorUnits.abs(), currency);
+  return '${minorUnits < 0 ? '-' : ''}${currency.symbol} $numeric';
+}
+
+/// Formats an editable amount with grouping and currency precision, without a
+/// currency symbol. Controllers need this because input formatters only run
+/// when the user edits text, not when an existing value is loaded.
+String formatMinorUnitsInput(int minorUnits, CurrencyCode currency) {
+  if (minorUnits == -9223372036854775807 - 1) return 'Amount needs review';
   final factor = currency.minorUnitsPerMajor;
   final isNegative = minorUnits < 0;
   final absolute = minorUnits.abs();
@@ -31,7 +42,7 @@ String formatMinorUnits(int minorUnits, CurrencyCode currency) {
       ? grouped
       : '$grouped.${fraction.toString().padLeft(currency.exponent, '0')}';
 
-  return '${isNegative ? '-' : ''}${currency.symbol} $numeric';
+  return '${isNegative ? '-' : ''}$numeric';
 }
 
 /// Renders a major-unit [amount] (e.g. `12.34`) in [currency].

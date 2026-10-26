@@ -1,3 +1,4 @@
+import '../../finance/repositories/audit_repository.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:isar/isar.dart';
 
@@ -5,8 +6,10 @@ import '../../../core/database/isar_helper.dart';
 import '../../../core/models/user_profile.dart';
 import '../../../core/models/monthly_budget.dart';
 import '../../medical/repositories/medical_repository.dart';
+import '../../../core/services/profile_name.dart';
 
 class BudgetSetupState {
+  final String name;
   final double? amount;
   final PrimaryCurrency? currency;
   final String? yearMonth;
@@ -14,6 +17,7 @@ class BudgetSetupState {
   final bool isSaving;
 
   const BudgetSetupState({
+    this.name = '',
     this.amount,
     this.currency,
     this.yearMonth,
@@ -22,6 +26,7 @@ class BudgetSetupState {
   });
 
   BudgetSetupState copyWith({
+    String? name,
     double? amount,
     PrimaryCurrency? currency,
     String? yearMonth,
@@ -30,6 +35,7 @@ class BudgetSetupState {
     bool clearError = false,
   }) {
     return BudgetSetupState(
+      name: name ?? this.name,
       amount: amount ?? this.amount,
       currency: currency ?? this.currency,
       yearMonth: yearMonth ?? this.yearMonth,
@@ -39,6 +45,7 @@ class BudgetSetupState {
   }
 
   bool get isValid =>
+      profileNameProblem(name) == null &&
       amount != null &&
       amount! > 0 &&
       currency != null &&
@@ -47,7 +54,11 @@ class BudgetSetupState {
 }
 
 class BudgetSetupNotifier extends StateNotifier<BudgetSetupState> {
+  int? _savedProfileId;
   BudgetSetupNotifier() : super(const BudgetSetupState());
+
+  void setName(String name) =>
+      state = state.copyWith(name: name, clearError: true);
 
   void setAmount(double amount) {
     if (amount <= 0) {
@@ -78,6 +89,7 @@ class BudgetSetupNotifier extends StateNotifier<BudgetSetupState> {
   }
 
   Future<bool> saveBudget() async {
+    if (state.isSaving) return false;
     if (!state.isValid) {
       state = state.copyWith(errorMessage: 'Please fill all fields correctly');
       return false;
@@ -87,6 +99,12 @@ class BudgetSetupNotifier extends StateNotifier<BudgetSetupState> {
 
     try {
       final isar = IsarHelper.instance;
+      if (_savedProfileId != null) {
+        await MedicalRepository(isar)
+            .ensureDefaultServiceTypes(_savedProfileId!);
+        state = state.copyWith(isSaving: false);
+        return true;
+      }
 
       // Onboarding runs on a fresh/cleared database, so it always creates a
       // new profile rather than reusing (and silently reconfiguring) someone
@@ -96,7 +114,7 @@ class BudgetSetupNotifier extends StateNotifier<BudgetSetupState> {
       final existingCount = await isar.userProfiles.count();
       final now = DateTime.now();
       final userProfile = UserProfile()
-        ..name = 'User' // Default name if new; renamed in the settings switcher
+        ..name = checkedProfileName(state.name)
         ..avatar = '👤'
         ..primaryCurrency = state.currency!
         ..monthlyAvailableAmount = state.amount!
@@ -127,14 +145,20 @@ class BudgetSetupNotifier extends StateNotifier<BudgetSetupState> {
         // Since id is autoIncrement, to truly upsert we would need to check if a budget already exists.
         final existingBudget = await isar.monthlyBudgets
             .filter()
+            .sharedSpaceIdIsNull()
+            .profileIdEqualTo(userProfile.id)
             .yearMonthEqualTo(state.yearMonth!)
             .findFirst();
         if (existingBudget != null) {
           monthlyBudget.id = existingBudget.id;
           monthlyBudget.createdAt = existingBudget.createdAt;
         }
-        await isar.monthlyBudgets.put(monthlyBudget);
+        await AuditRepository(isar, actorId: userProfile.id).put(
+            isar.monthlyBudgets, monthlyBudget,
+            id: monthlyBudget.id, type: 'MonthlyBudget');
       });
+      // If post-commit directory seeding fails, retry that work, not creation.
+      _savedProfileId = userProfile.id;
 
       // A profile created here is brand new, so give it the default medical
       // service types (FR-039). Migration step 0 only covers profiles that

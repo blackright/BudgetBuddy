@@ -1,9 +1,12 @@
 import 'package:budget_buddy/core/models/currency_code.dart';
 import 'package:budget_buddy/core/models/medical_bill.dart';
 import 'package:budget_buddy/core/providers/active_budget_provider.dart';
+import 'package:budget_buddy/core/providers/active_profile_provider.dart';
+import 'package:budget_buddy/core/providers/active_space_provider.dart';
 import 'package:budget_buddy/core/providers/budget_context_provider.dart';
 import 'package:budget_buddy/core/routing/app_router.dart';
 import 'package:budget_buddy/features/dashboard/presentation/dashboard_screen.dart';
+import 'package:budget_buddy/features/dashboard/providers/dashboard_providers.dart';
 import 'package:budget_buddy/features/engine/month_summary.dart';
 import 'package:budget_buddy/features/engine/providers/month_summary_provider.dart';
 import 'package:budget_buddy/features/engine/providers/rate_registry_provider.dart';
@@ -40,7 +43,12 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          activeProfileProvider.overrideWith((ref) => Stream.value(null)),
+          activeSpaceProvider.overrideWith((ref) => Stream.value(null)),
+          mySpacesProvider.overrideWith((ref) => Stream.value([])),
           activeBudgetProvider.overrideWith((ref) => Stream.value(null)),
+          // Profile cards also read Isar; navigation needs only an empty list.
+          dashboardProfilesProvider.overrideWithValue([]),
           // The dashboard's analytics placeholder reads the active context; this
           // is a routing test, so pin a personal context instead of touching Isar.
           budgetContextProvider.overrideWithValue(

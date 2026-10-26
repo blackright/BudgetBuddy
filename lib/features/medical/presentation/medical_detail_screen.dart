@@ -10,6 +10,7 @@ import '../../../core/models/medical_bill.dart';
 import '../../../core/models/money.dart';
 import '../../../core/providers/clock_provider.dart';
 import '../../../core/providers/selected_month_provider.dart';
+import '../../../shared/presentation/money_conversion.dart';
 import '../../../shared/presentation/widgets/degraded_amount_label.dart';
 import '../../engine/providers/rate_registry_provider.dart';
 import '../../spaces/providers/spaces_providers.dart';
@@ -194,6 +195,15 @@ class _HeaderSection extends ConsumerWidget {
     final provider = directory.providerName(bill.providerId);
     final patient = directory.memberName(bill.familyMemberId);
     final stateColor = MedicalTheme.billStateColor(context, bill.state);
+    final table = ref.watch(rateRegistryProvider).tableFor(
+          ref.watch(selectedYearMonthProvider),
+        );
+    final billed = convertAndFormat(
+      bill.billedAmount,
+      bill.currencyCode ?? currency,
+      currency,
+      table,
+    );
 
     return Card(
       color: MedicalTheme.surface(context),
@@ -227,9 +237,9 @@ class _HeaderSection extends ConsumerWidget {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 12),
-            Text(
-              MedicalTheme.moneyMinor(
-                  bill.currencyCode ?? currency, bill.billedAmount),
+            ConvertedAmountText(
+              text: billed.text,
+              originalText: billed.originalText,
               style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
@@ -274,6 +284,20 @@ class _InsuranceBreakdown extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final currency = ref.watch(medicalDisplayCurrencyProvider);
     final billCurrency = bill.currencyCode ?? currency;
+    final table = ref.watch(rateRegistryProvider).tableFor(
+          ref.watch(selectedYearMonthProvider),
+        );
+
+    // T158: read-only figures are converted into the display currency; the
+    // amount as recorded is revealed on long-press (FR-020). The inputs that
+    // write this bill keep using the bill's own currency.
+    ConvertedMoney converted(int minor) =>
+        convertAndFormat(minor, billCurrency, currency, table);
+    final billed = converted(bill.billedAmount);
+    final insurerPaid = converted(bill.insurerPaidAmount);
+    final patientShare = converted(bill.patientShareAmount);
+    final reimbursed = converted(bill.reimbursedAmount);
+    final net = converted(bill.netOutOfPocket);
 
     return _SectionCard(
       title: 'Insurance Breakdown',
@@ -281,29 +305,32 @@ class _InsuranceBreakdown extends ConsumerWidget {
         children: [
           _MoneyRow(
             label: 'Billed amount',
-            value: MedicalTheme.moneyMinor(billCurrency, bill.billedAmount),
+            value: billed.text,
+            originalText: billed.originalText,
           ),
           // FR-048: the user-facing share, with the insurer's complement shown
           // rather than a second percentage the user never entered.
           _MoneyRow(
             label: 'Insurer pays '
                 '(${(100 - bill.patientSharePercent).toStringAsFixed(0)}%)',
-            value:
-                MedicalTheme.moneyMinor(billCurrency, bill.insurerPaidAmount),
+            value: insurerPaid.text,
+            originalText: insurerPaid.originalText,
             color: Colors.green,
           ),
           _MoneyRow(
             label: 'Your share '
                 '(${bill.patientSharePercent.toStringAsFixed(0)}%)',
-            value:
-                MedicalTheme.moneyMinor(billCurrency, bill.patientShareAmount),
+            value: patientShare.text,
+            originalText: patientShare.originalText,
             color: Colors.orange,
           ),
           if (bill.reimbursedAmount > 0)
             _MoneyRow(
               label: 'Reimbursed',
-              value:
-                  '+${MedicalTheme.moneyMinor(billCurrency, bill.reimbursedAmount)}',
+              value: '+${reimbursed.text}',
+              originalText: reimbursed.originalText == null
+                  ? null
+                  : '+${reimbursed.originalText}',
               color: Colors.green,
             ),
           const Divider(height: 24),
@@ -317,8 +344,9 @@ class _InsuranceBreakdown extends ConsumerWidget {
                   color: MedicalTheme.subtleText(context),
                 ),
               ),
-              Text(
-                MedicalTheme.moneyMinor(billCurrency, bill.netOutOfPocket),
+              ConvertedAmountText(
+                text: net.text,
+                originalText: net.originalText,
                 style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -333,14 +361,27 @@ class _InsuranceBreakdown extends ConsumerWidget {
 }
 
 class _MoneyRow extends StatelessWidget {
-  const _MoneyRow({required this.label, required this.value, this.color});
+  const _MoneyRow({
+    required this.label,
+    required this.value,
+    this.originalText,
+    this.color,
+  });
 
   final String label;
   final String value;
+  final String? originalText;
   final Color? color;
 
   @override
   Widget build(BuildContext context) {
+    final text = Text(
+      value,
+      style: TextStyle(
+        fontWeight: FontWeight.w600,
+        color: color,
+      ),
+    );
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
@@ -348,13 +389,10 @@ class _MoneyRow extends StatelessWidget {
         children: [
           Flexible(child: Text(label)),
           const SizedBox(width: 12),
-          Text(
-            value,
-            style: TextStyle(
-              fontWeight: FontWeight.w600,
-              color: color,
-            ),
-          ),
+          if (originalText == null)
+            text
+          else
+            Tooltip(message: 'Original: $originalText', child: text),
         ],
       ),
     );

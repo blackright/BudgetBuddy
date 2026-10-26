@@ -10,6 +10,8 @@ import '../../settings/presentation/profile_switcher_section.dart';
 import '../providers/spaces_providers.dart';
 import '../repositories/spaces_repository.dart';
 import 'create_space_sheet.dart';
+import '../../../shared/presentation/providers/context_navigation_provider.dart';
+import '../../../shared/presentation/financial_feedback.dart';
 
 /// Sentinel popup values: reserved, never a real space id (ids start at 1).
 const _kBackToProfile = -1;
@@ -90,9 +92,39 @@ class ContextSwitcherMenu extends ConsumerWidget {
 
     return PopupMenuButton<int>(
       tooltip: 'Switch context',
-      onSelected: (value) {
+      onSelected: (value) async {
+        final router = GoRouter.maybeOf(context);
+        final primary = router != null &&
+            const {
+              '/dashboard',
+              '/expenses',
+              '/medical',
+              '/analytics',
+              '/spaces'
+            }.contains(router.routeInformationProvider.value.uri.path);
+        if (primary && value != _kNewSpace) {
+          final target = value == _kBackToProfile ? null : value;
+          if (ref.read(activeSpaceIdProvider) == target) return;
+          try {
+            final selected =
+                await ref.read(selectNavigationContextProvider)(target);
+            if (context.mounted) {
+              router.go('/dashboard');
+              showFinancialFeedback(context,
+                  'Switched to ${target == null ? 'Personal' : selected.name}.');
+            }
+          } catch (_) {
+            if (context.mounted) {
+              showFinancialFeedback(context,
+                  'Could not switch. Reopen Spaces to check your access.',
+                  kind: FinancialFeedbackKind.error);
+            }
+          }
+          return;
+        }
         if (value == _kNewSpace) {
-          _createSpace(context, ref);
+          await _createSpace(context, ref);
+          if (primary && context.mounted) router.go('/dashboard');
         } else if (value == _kBackToProfile) {
           ref.read(activeSpaceIdProvider.notifier).state = null;
           if (profile != null) {

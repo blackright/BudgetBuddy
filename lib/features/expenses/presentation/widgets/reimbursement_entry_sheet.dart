@@ -1,3 +1,4 @@
+import '../../../../shared/presentation/financial_feedback.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/models/currency_code.dart';
@@ -116,7 +117,16 @@ class _ReimbursementEntrySheetState
             widget.medicalBill!, newTotal);
       }
 
-      if (mounted) Navigator.pop(context);
+      if (mounted) {
+        showFinancialFeedback(context, 'Reimbursement recorded');
+        Navigator.pop(context);
+      }
+    } catch (_) {
+      if (mounted) {
+        showFinancialFeedback(context,
+            'Reimbursement could not finish. Review its current status before retrying.',
+            kind: FinancialFeedbackKind.error);
+      }
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }

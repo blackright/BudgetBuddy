@@ -1,3 +1,4 @@
+import '../../sync/providers/sync_recorder_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/database/isar_helper.dart';
 import '../../../core/providers/active_profile_provider.dart';
@@ -10,6 +11,7 @@ final reimbursementRepositoryProvider =
     Provider<ReimbursementRepository>((ref) {
   return ReimbursementRepository(
     IsarHelper.instance,
+    recorder: ref.watch(syncRecorderProvider),
     guard: ref.watch(spaceWriteGuardProvider),
     actingProfileId: ref.watch(actingProfileIdProvider),
   );

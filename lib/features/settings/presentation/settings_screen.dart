@@ -3,6 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../finance/presentation/net_salary_section.dart';
+import '../../spaces/providers/spaces_providers.dart';
+import '../../finance/providers/income_source_providers.dart';
+import '../../../core/providers/budget_context_provider.dart';
+import '../../settings/providers/app_settings_providers.dart';
 import '../../identity/presentation/identity_section.dart';
 import '../../pairing/presentation/paired_devices_section.dart';
 import '../../pairing/presentation/people_section.dart';
@@ -14,6 +18,7 @@ import 'font_setting_section.dart';
 import 'profile_switcher_section.dart';
 import 'shared_save_setting_section.dart';
 import 'theme_setting_section.dart';
+import 'audit_diagnostics_section.dart';
 
 /// The Settings tab, grouped by **what the setting is about**.
 ///
@@ -35,6 +40,8 @@ class SettingsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final hasSubject = ref.watch(lockSubjectProvider) != null;
+    final incomeSources = ref.watch(incomeSourcesProvider).value ?? const [];
+    final isShared = ref.watch(budgetContextProvider).isShared;
 
     return Scaffold(
       appBar: AppBar(
@@ -80,15 +87,158 @@ class SettingsScreen extends ConsumerWidget {
               SharedSaveSettingSection(),
             ],
           ),
+          if (incomeSources.isEmpty)
+            const _Section(
+              title: 'Money',
+              cards: [NetSalarySection()],
+            ),
           const _Section(
-            title: 'Money',
-            cards: [NetSalarySection()],
+            title: 'Income',
+            cards: [_IncomeSourcesCard()],
+          ),
+          Card(
+              child: ListTile(
+                  leading: const Icon(Icons.event_available),
+                  title: const Text('Month-End'),
+                  subtitle:
+                      const Text('Review Reset and Carry Forward policies'),
+                  onTap: () => context.push('/month_end'))),
+          Card(
+              child: ListTile(
+                  leading: const Icon(Icons.history),
+                  title: const Text('Audit History'),
+                  onTap: () => context.push('/audit_history'))),
+          Card(
+              child: ListTile(
+                  leading: const Icon(Icons.summarize_outlined),
+                  title: const Text('Reports'),
+                  subtitle: const Text(
+                      'Monthly statements, insights and PDF/CSV exports'),
+                  onTap: () => context.push('/reports'))),
+          if (ref.watch(activeContextCanEditProvider))
+            Card(
+                child: ListTile(
+              leading: const Icon(Icons.playlist_add),
+              title: const Text('Bulk Entry'),
+              subtitle:
+                  const Text('Enter several expenses for the selected month'),
+              onTap: () => context.push('/bulk_entry'),
+            )),
+          const _Section(
+            title: 'Profiles',
+            cards: [_ProfilesCard()],
+          ),
+          // Personal-only: a shared space has no vault, so the entry is hidden
+          // there rather than leading to a blocked screen.
+          if (!isShared)
+            const _Section(
+              title: 'Savings',
+              cards: [_VaultCard()],
+            ),
+          const _Section(
+            title: 'Transfers',
+            cards: [_TransfersCard(), _TransferToggleCard()],
           ),
           const _Section(
             title: 'Appearance',
             cards: [ThemeSettingSection(), FontSettingSection()],
           ),
+          const _Section(
+            title: 'Diagnostics',
+            cards: [AuditDiagnosticsSection()],
+          ),
         ],
+      ),
+    );
+  }
+}
+
+/// A small card that opens the Income Sources screen.
+class _IncomeSourcesCard extends StatelessWidget {
+  const _IncomeSourcesCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: ListTile(
+        leading: const Icon(Icons.attach_money),
+        title: const Text('Income Sources'),
+        subtitle: const Text('Manage salary, freelance, and other income'),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () => context.push('/income_sources'),
+      ),
+    );
+  }
+}
+
+/// A small card that opens the personal Savings Vault (hidden in shared spaces).
+class _VaultCard extends StatelessWidget {
+  const _VaultCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: ListTile(
+        leading: const Icon(Icons.savings_outlined),
+        title: const Text('Savings Vault'),
+        subtitle: const Text('Money swept out of finished months'),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () => context.push('/vault'),
+      ),
+    );
+  }
+}
+
+/// A small card that opens the Profiles screen.
+class _ProfilesCard extends StatelessWidget {
+  const _ProfilesCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: ListTile(
+        leading: const Icon(Icons.account_balance_wallet),
+        title: const Text('Budget & Direct Profiles'),
+        subtitle: const Text('Manage budget and direct expense profiles'),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () => context.push('/profiles'),
+      ),
+    );
+  }
+}
+
+/// A card with a toggle for transfers.
+class _TransferToggleCard extends ConsumerWidget {
+  const _TransferToggleCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final toggle = ref.watch(transferToggleProvider);
+    return Card(
+      child: SwitchListTile(
+        title: const Text('Enable Budget Transfers'),
+        subtitle: const Text('Allow moving allocation between budget profiles'),
+        value: toggle,
+        onChanged: (v) =>
+            ref.read(appSettingsRepositoryProvider).setTransferToggle(v),
+      ),
+    );
+  }
+}
+
+/// A card that opens the Transfers screen.
+class _TransfersCard extends StatelessWidget {
+  const _TransfersCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: ListTile(
+        leading: const Icon(Icons.swap_horiz),
+        title: const Text('Budget Transfers'),
+        subtitle: const Text('Move allocation between budget profiles'),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () => context.push('/transfers'),
       ),
     );
   }

@@ -3,9 +3,13 @@ import 'package:isar/isar.dart';
 import '../models/currency_code.dart';
 import '../models/change_record.dart';
 import '../models/expense.dart';
+import '../models/budget_profile.dart';
+import '../models/direct_expense_profile.dart';
+import '../services/expense_profile_identity.dart';
 import '../models/insurance_profile.dart';
 import '../models/medical_service_type.dart';
 import '../models/monthly_budget.dart';
+import '../models/money.dart';
 import '../models/shared_member.dart';
 import '../models/shared_space.dart';
 import '../models/sync_cursor.dart';
@@ -13,12 +17,16 @@ import '../models/user_profile.dart';
 import '../../features/expenses/models/reimbursement.dart';
 import '../../features/sync/domain/sync_guid.dart';
 import '../models/medical_bill.dart';
+import '../../features/vault/models/savings_vault.dart';
+import '../../features/vault/models/vault_entry.dart';
+import '../../features/vault/vault_math.dart';
+import 'money_integrity.dart' show corruptedMinorSentinel;
 
 part 'schema_migrations.g.dart';
 
 /// Schema version this build expects. Bump whenever a numbered step is added to
 /// [_applySteps]; databases stamped at or above it are left untouched.
-const int schemaVersion = 19;
+const int schemaVersion = 31;
 
 const String schemaVersionKey = 'schema_version';
 
@@ -76,7 +84,7 @@ Future<void> runSchemaMigrations(Isar isar) async {
     final current = int.tryParse(stamp?.value ?? '') ?? 0;
     if (current >= schemaVersion) return;
 
-    await _applySteps(isar);
+    await _applySteps(isar, current);
 
     await isar.schemaMigrationStamps.put(
       SchemaMigrationStamp()
@@ -94,27 +102,69 @@ Future<void> runSchemaMigrations(Isar isar) async {
 /// deliberately listed after step 3 because it migrates a different collection,
 /// and the steps are ordered so each one reads fields that still hold their
 /// pre-migration values.
-Future<void> _applySteps(Isar isar) async {
-  await _step0SeedServiceTypes(isar);
-  await _step1ClearDeductibles(isar);
-  await _step2InvertPercentages(isar);
-  await _step3MapClaimStates(isar);
-  await _step4BackfillReimbursementOrigin(isar);
-  await _step5BackfillBillYearMonth(isar);
-  await _step6ConfirmExistingOpeningBalances(isar);
-  await _step7NormalizePlanNames(isar);
-  await _step8AddCurrencySealCollections(isar);
-  await _step9ConvertAmountsToMinorUnits(isar);
-  await _step10ReconcileCurrencyDefaults(isar);
-  await _step11AddThemePreference(isar);
-  await _step12AddSpacesAndContextColumns(isar);
-  await _step13BackfillContextOwnership(isar);
-  await _step14AddSyncCollections(isar);
-  await _step15BackfillMembershipSyncColumns(isar);
-  await _step16AddConfirmSharedSavePreference(isar);
-  await _step17AddSyncGuids(isar);
-  await _step18RepairSyncConflictCounts(isar);
-  await _step19AddLockSetting(isar);
+Future<void> _applySteps(Isar isar, int current) async {
+  // Step 31 adds nullable FX history. Never invent an old transaction's rate.
+  // Step 30 is additive: purchase membership is never inferred for old rows.
+  // Step 29: nullable expense evidence and immutable document chunks are added
+  // by Isar on open. Never synthesize proof or rewrite legacy money/receipts.
+  // Upgrading 22 ? 23 must not replay historic migrations (including the
+  // retired sync-log reset). Keep this additive identity upgrade isolated.
+  if (current < 22) {
+    await _step0SeedServiceTypes(isar);
+    await _step1ClearDeductibles(isar);
+    await _step2InvertPercentages(isar);
+    await _step3MapClaimStates(isar);
+    await _step4BackfillReimbursementOrigin(isar);
+    await _step5BackfillBillYearMonth(isar);
+    await _step6ConfirmExistingOpeningBalances(isar);
+    await _step7NormalizePlanNames(isar);
+    await _step8AddCurrencySealCollections(isar);
+    await _step9ConvertAmountsToMinorUnits(isar);
+    await _step10ReconcileCurrencyDefaults(isar);
+    await _step11AddThemePreference(isar);
+    await _step12AddSpacesAndContextColumns(isar);
+    await _step13BackfillContextOwnership(isar);
+    await _step14AddSyncCollections(isar);
+    await _step15BackfillMembershipSyncColumns(isar);
+    await _step16AddConfirmSharedSavePreference(isar);
+    await _step17AddSyncGuids(isar);
+    await _step18RepairSyncConflictCounts(isar);
+    await _step19AddLockSetting(isar);
+    await _step20AddFinancialCoreCollections(isar);
+    await _step21AddExpenseBudgetProfileLink(isar);
+    await migrateLegacyVaultToMinorUnits(isar);
+  }
+  if (current < 23) await backfillExpenseProfileIdentity(isar);
+  // Step 24 is additive: MonthEndRun and the BudgetProfile family/default/
+  // provenance fields are reconciled by Isar on open. Keep legacy defaults null
+  // and family links empty for explicit review; no financial data is rewritten.
+  // Step 26 adds a nullable goal month on open, without rewriting old rows.
+  // Step 28 adds optional expense search metadata on open. Unknown historical
+  // merchant/payment fields stay null and tags stay empty; no backfill guesses.
+  // Step 27 adds nullable versioned audit evidence. Preserve all legacy rows.
+  if (current < 27) {
+    await isar.schemaMigrationStamps.put(SchemaMigrationStamp()
+      ..key = 'audit:upgrade-boundary'
+      ..value = DateTime.now().toUtc().toIso8601String());
+  }
+  if (current < 25) {
+    for (final vault in await isar.savingsVaults.where().findAll()) {
+      await seedVaultOpeningInTxn(isar, vault, DateTime.now());
+    }
+  }
+}
+
+/// Step 23: preserve ambiguous IDs for explicit user review. No money changes.
+/// Public so the exact migration can be tested in isolation on a small schema.
+Future<void> backfillExpenseProfileIdentity(Isar isar) async {
+  final budgets = await isar.budgetProfiles.where().findAll();
+  final directs = await isar.directExpenseProfiles.where().findAll();
+  final expenses = await isar.expenses.where().findAll();
+  for (final expense in expenses) {
+    if (resolveExpenseProfileIdentity(expense, budgets, directs)) {
+      await isar.expenses.put(expense);
+    }
+  }
 }
 
 /// Step 19 (016-app-security, data-model §§2, 4) — additive only: the
@@ -859,3 +909,95 @@ String? _normalizeOptional(String? value) {
 
 String _yearMonthOf(DateTime date) => '${date.year.toString().padLeft(4, '0')}-'
     '${date.month.toString().padLeft(2, '0')}';
+
+/// Step 20 (018-financial-core-audit) — additive only: the eight new collections
+/// appear (`IncomeSource`, `BudgetProfile`, `DirectExpenseProfile`, `Allocation`,
+/// `Transfer`, `Merchant`, `AuditEvent`, `AppSettings`).
+///
+/// Isar reconciles the stored schema on open, so the new collections materialise
+/// with their declared defaults before this runs; there is no data to rewrite.
+/// The step exists so the version stamp records the upgrade. No monetary amount,
+/// seal or month total is touched.
+Future<void> _step20AddFinancialCoreCollections(Isar isar) async {
+  // Intentionally empty: additive schema only — see doc comment.
+}
+
+/// Step 21 (018-financial-core-audit) — additive only: `Expense` gains its
+/// `budgetProfileId` column.
+///
+/// This is the link that lets one budget profile own its own spending: an
+/// expense is counted against the profile it was filed under while still
+/// living in its month. Isar reconciles the stored schema on open, so the new
+/// column materialises with its declared default (`null` — "belongs to the
+/// Main Profile directly"), and no existing row is rewritten. The step exists
+/// so the version stamp records the upgrade. No monetary amount, seal or month
+/// total is touched.
+Future<void> _step21AddExpenseBudgetProfileLink(Isar isar) async {
+  // Intentionally empty: additive schema only — see doc comment.
+}
+
+/// Step 22 (018-financial-core-audit, T160) — put the Savings Vault on the same
+/// exact-money footing as every other amount.
+///
+/// `SavingsVault` gains `totalMinor`, a `currency`, and the paused-sweep fields.
+/// A genuinely older schema reads missing totalMinor as Isar's int.MIN, not
+/// the Dart initializer zero. Its separately named legacy
+/// `totalAmount` (a major-unit `double`) intact, because that column is still
+/// mapped. This step converts each legacy total exactly once — rounding at the
+/// input boundary via [Money.fromMajor] — stamps the currency from the owning
+/// profile when the row has none, and zeroes the legacy field so a second run
+/// cannot add it again.
+///
+/// A row whose currency cannot be resolved is left at `totalMinor == 0` and
+/// paused by the sweep rather than relabelled as HUF; no figure is invented.
+Future<void> migrateLegacyVaultToMinorUnits(Isar isar) async {
+  final vaults = await isar.savingsVaults.where().findAll();
+  if (vaults.isEmpty) return;
+
+  final now = DateTime.now();
+  final currentMonth = _yearMonthOf(now);
+  final changed = <SavingsVault>[];
+
+  for (final vault in vaults) {
+    var touched = false;
+
+    if (vault.currency.isEmpty) {
+      final profile = await isar.userProfiles.get(vault.profileId);
+      final code = profile?.primaryCurrency.code;
+      if (code != null) {
+        vault.currency = code.code;
+        touched = true;
+      }
+    }
+
+    // ignore: deprecated_member_use_from_same_package
+    final legacy = vault.totalAmount;
+    final code = CurrencyCode.tryParse(vault.currency);
+    final missingMinor = vault.totalMinor == corruptedMinorSentinel;
+    final candidate =
+        code == null || legacy < 0 ? null : vaultOpening(legacy, code);
+    if ((missingMinor || vault.totalMinor == 0) && candidate != null) {
+      vault.totalMinor = candidate.minorUnits;
+      // Consume the legacy source ONLY after a valid conversion, never on error.
+      // ignore: deprecated_member_use_from_same_package
+      vault.totalAmount = 0;
+      touched = true;
+    } else if (!vault.hasValidBalance || !legacy.isFinite || legacy != 0) {
+      vault.sweepPaused = true;
+      vault.pauseReason =
+          'The saved balance needs review. Legacy evidence has been preserved.';
+      touched = true;
+    }
+
+    if (vault.lastSweepYearMonth.isEmpty) {
+      vault.lastSweepYearMonth = currentMonth;
+      touched = true;
+    }
+    if (touched) {
+      vault.updatedAt = now;
+      changed.add(vault);
+    }
+  }
+
+  if (changed.isNotEmpty) await isar.savingsVaults.putAll(changed);
+}

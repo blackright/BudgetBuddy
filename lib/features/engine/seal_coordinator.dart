@@ -35,10 +35,17 @@ class SealCoordinator {
   final Isar isar;
   final ExchangeRateClient client;
   final DateTime Function() _clock;
+  Future<SealPassResult>? _inFlight;
 
   /// One idempotent pass. [now] defaults to the wall clock but is injectable
   /// so tests can drive the state machine deterministically.
-  Future<SealPassResult> runSealPass([DateTime? now]) async {
+  Future<SealPassResult> runSealPass([DateTime? now]) {
+    return _inFlight ??= _runSealPass(now).whenComplete(() {
+      _inFlight = null;
+    });
+  }
+
+  Future<SealPassResult> _runSealPass(DateTime? now) async {
     final instant = now ?? _clock();
     final liveRefreshed = await _refreshLive(instant);
 

@@ -40,6 +40,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await tester.enterText(find.byKey(const Key('welcomeNameField')), 'Jason');
+    await tester.tap(find.byKey(const Key('welcomeContinueButton')));
+    await tester.pumpAndSettle();
+    expect(notifier.state.name, 'Jason');
+
     await tester.enterText(amountField(), '1000000');
     await tester.pump();
 

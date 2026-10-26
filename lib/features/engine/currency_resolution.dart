@@ -6,6 +6,7 @@ import '../../core/models/user_profile.dart';
 import '../../core/network/rate_types.dart';
 import '../expenses/models/reimbursement.dart';
 import 'currency_conversion.dart';
+import '../../core/services/fx_booking_service.dart';
 
 /// The currency a month's figures are expressed in: the month's own convert-to
 /// choice when set, otherwise the profile's main currency (FR-011).
@@ -48,22 +49,59 @@ Money toDisplay(Money amount, CurrencyCode display, RateTable? table) {
   return result.isDegraded ? Money.zero(display) : result.amount;
 }
 
-/// Converts an expense into the display currency. Rows carrying an unsupported
-/// legacy currency contribute zero and are surfaced separately (FR-021, §4.4).
-Money expenseToDisplay(
-    Expense expense, CurrencyCode display, RateTable? table) {
-  final code = expense.currencyCode;
-  if (code == null) return Money.zero(display);
-  return toDisplay(Money(expense.amount, code), display, table);
+/// Like [toDisplay], but `null` means "cannot be converted" instead of zero.
+///
+/// Aggregates use [toDisplay] because an unsupported row contributes nothing to
+/// a sum. Callers that must *pause* rather than silently drop a figure — the
+/// Savings Vault sweep is the first — use this so a missing rate is never
+/// mistaken for a genuine zero.
+Money? tryToDisplay(Money amount, CurrencyCode display, RateTable? table) {
+  final result = convert(amount, display, table);
+  return result.isDegraded ? null : result.amount;
 }
 
-/// Converts a reimbursement into the display currency.
-Money reimbursementToDisplay(
+/// [tryToDisplay] for an expense row, `null` when its stored currency is
+/// unsupported or no rate exists.
+Money? tryExpenseToDisplay(
+    Expense expense, CurrencyCode display, RateTable? table) {
+  final code = expense.currencyCode;
+  if (code == null) return null;
+  return tryToDisplay(expenseAccountingMoney(expense), display, table);
+}
+
+/// [tryToDisplay] for a reimbursement row.
+Money? tryReimbursementToDisplay(
   Reimbursement reimbursement,
   CurrencyCode display,
   RateTable? table,
 ) {
   final code = reimbursement.currencyCode;
+  if (code == null) return null;
+  return tryToDisplay(
+      reimbursementAccountingMoney(reimbursement), display, table);
+}
+
+/// Converts an expense into the display currency. Rows carrying an unsupported
+/// legacy currency contribute zero and are surfaced separately (FR-021, §4.4).
+Money expenseToDisplay(Expense expense, CurrencyCode display, RateTable? table,
+    {CurrencyCode? accountingCurrency}) {
+  final code = expense.currencyCode;
   if (code == null) return Money.zero(display);
-  return toDisplay(Money(reimbursement.amount, code), display, table);
+  return toDisplay(
+      expenseAccountingMoney(expense, expectedCurrency: accountingCurrency),
+      display,
+      table);
+}
+
+/// Converts a reimbursement into the display currency.
+Money reimbursementToDisplay(
+    Reimbursement reimbursement, CurrencyCode display, RateTable? table,
+    {CurrencyCode? accountingCurrency}) {
+  final code = reimbursement.currencyCode;
+  if (code == null) return Money.zero(display);
+  return toDisplay(
+      reimbursementAccountingMoney(reimbursement,
+          expectedCurrency: accountingCurrency),
+      display,
+      table);
 }

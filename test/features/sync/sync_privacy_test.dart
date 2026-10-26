@@ -1,3 +1,4 @@
+import '../../support/audit_test_support.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -377,7 +378,8 @@ void main() {
           ..createdAt = now
           ..updatedAt = now);
       });
-      final repo = SpacesRepository(a.isar);
+      final repo = SpacesRepository(a.isar,
+          syncRecorder: await auditTestRecorder(a.isar));
       final space = await repo.createSpace(
         createdByProfileId: profileId,
         name: 'Solo',

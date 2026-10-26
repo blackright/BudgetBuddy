@@ -91,6 +91,7 @@ class SpaceAccessGuard {
   static const Set<String> _ownerOnlyEntityTypes = {
     'SharedMember',
     'SharedSpace',
+    'MonthEndRun',
   };
 
   /// Whether [member]'s role may author a change of [entityType] at apply time

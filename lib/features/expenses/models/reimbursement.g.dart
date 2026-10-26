@@ -37,33 +37,38 @@ const ReimbursementSchema = CollectionSchema(
       name: r'expenseId',
       type: IsarType.long,
     ),
-    r'note': PropertySchema(
+    r'fxHistoryJson': PropertySchema(
       id: 4,
+      name: r'fxHistoryJson',
+      type: IsarType.string,
+    ),
+    r'note': PropertySchema(
+      id: 5,
       name: r'note',
       type: IsarType.string,
     ),
     r'originYearMonth': PropertySchema(
-      id: 5,
+      id: 6,
       name: r'originYearMonth',
       type: IsarType.string,
     ),
     r'orphaned': PropertySchema(
-      id: 6,
+      id: 7,
       name: r'orphaned',
       type: IsarType.bool,
     ),
     r'profileId': PropertySchema(
-      id: 7,
+      id: 8,
       name: r'profileId',
       type: IsarType.long,
     ),
     r'sharedSpaceId': PropertySchema(
-      id: 8,
+      id: 9,
       name: r'sharedSpaceId',
       type: IsarType.long,
     ),
     r'syncGuid': PropertySchema(
-      id: 9,
+      id: 10,
       name: r'syncGuid',
       type: IsarType.string,
     )
@@ -169,6 +174,12 @@ int _reimbursementEstimateSize(
   var bytesCount = offsets.last;
   bytesCount += 3 + object.currency.length * 3;
   {
+    final value = object.fxHistoryJson;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
+  {
     final value = object.note;
     if (value != null) {
       bytesCount += 3 + value.length * 3;
@@ -189,12 +200,13 @@ void _reimbursementSerialize(
   writer.writeString(offsets[1], object.currency);
   writer.writeDateTime(offsets[2], object.date);
   writer.writeLong(offsets[3], object.expenseId);
-  writer.writeString(offsets[4], object.note);
-  writer.writeString(offsets[5], object.originYearMonth);
-  writer.writeBool(offsets[6], object.orphaned);
-  writer.writeLong(offsets[7], object.profileId);
-  writer.writeLong(offsets[8], object.sharedSpaceId);
-  writer.writeString(offsets[9], object.syncGuid);
+  writer.writeString(offsets[4], object.fxHistoryJson);
+  writer.writeString(offsets[5], object.note);
+  writer.writeString(offsets[6], object.originYearMonth);
+  writer.writeBool(offsets[7], object.orphaned);
+  writer.writeLong(offsets[8], object.profileId);
+  writer.writeLong(offsets[9], object.sharedSpaceId);
+  writer.writeString(offsets[10], object.syncGuid);
 }
 
 Reimbursement _reimbursementDeserialize(
@@ -208,14 +220,15 @@ Reimbursement _reimbursementDeserialize(
     currency: reader.readString(offsets[1]),
     date: reader.readDateTime(offsets[2]),
     expenseId: reader.readLongOrNull(offsets[3]),
+    fxHistoryJson: reader.readStringOrNull(offsets[4]),
     id: id,
-    note: reader.readStringOrNull(offsets[4]),
-    originYearMonth: reader.readString(offsets[5]),
-    orphaned: reader.readBoolOrNull(offsets[6]) ?? false,
-    profileId: reader.readLong(offsets[7]),
-    sharedSpaceId: reader.readLongOrNull(offsets[8]),
+    note: reader.readStringOrNull(offsets[5]),
+    originYearMonth: reader.readString(offsets[6]),
+    orphaned: reader.readBoolOrNull(offsets[7]) ?? false,
+    profileId: reader.readLong(offsets[8]),
+    sharedSpaceId: reader.readLongOrNull(offsets[9]),
   );
-  object.syncGuid = reader.readString(offsets[9]);
+  object.syncGuid = reader.readString(offsets[10]);
   return object;
 }
 
@@ -237,14 +250,16 @@ P _reimbursementDeserializeProp<P>(
     case 4:
       return (reader.readStringOrNull(offset)) as P;
     case 5:
-      return (reader.readString(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 6:
-      return (reader.readBoolOrNull(offset) ?? false) as P;
+      return (reader.readString(offset)) as P;
     case 7:
-      return (reader.readLong(offset)) as P;
+      return (reader.readBoolOrNull(offset) ?? false) as P;
     case 8:
-      return (reader.readLongOrNull(offset)) as P;
+      return (reader.readLong(offset)) as P;
     case 9:
+      return (reader.readLongOrNull(offset)) as P;
+    case 10:
       return (reader.readString(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -1158,6 +1173,160 @@ extension ReimbursementQueryFilter
     });
   }
 
+  QueryBuilder<Reimbursement, Reimbursement, QAfterFilterCondition>
+      fxHistoryJsonIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'fxHistoryJson',
+      ));
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterFilterCondition>
+      fxHistoryJsonIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'fxHistoryJson',
+      ));
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterFilterCondition>
+      fxHistoryJsonEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'fxHistoryJson',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterFilterCondition>
+      fxHistoryJsonGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'fxHistoryJson',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterFilterCondition>
+      fxHistoryJsonLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'fxHistoryJson',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterFilterCondition>
+      fxHistoryJsonBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'fxHistoryJson',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterFilterCondition>
+      fxHistoryJsonStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'fxHistoryJson',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterFilterCondition>
+      fxHistoryJsonEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'fxHistoryJson',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterFilterCondition>
+      fxHistoryJsonContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'fxHistoryJson',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterFilterCondition>
+      fxHistoryJsonMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'fxHistoryJson',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterFilterCondition>
+      fxHistoryJsonIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'fxHistoryJson',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterFilterCondition>
+      fxHistoryJsonIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'fxHistoryJson',
+        value: '',
+      ));
+    });
+  }
+
   QueryBuilder<Reimbursement, Reimbursement, QAfterFilterCondition> idEqualTo(
       Id value) {
     return QueryBuilder.apply(this, (query) {
@@ -1836,6 +2005,20 @@ extension ReimbursementQuerySortBy
     });
   }
 
+  QueryBuilder<Reimbursement, Reimbursement, QAfterSortBy>
+      sortByFxHistoryJson() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'fxHistoryJson', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterSortBy>
+      sortByFxHistoryJsonDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'fxHistoryJson', Sort.desc);
+    });
+  }
+
   QueryBuilder<Reimbursement, Reimbursement, QAfterSortBy> sortByNote() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'note', Sort.asc);
@@ -1968,6 +2151,20 @@ extension ReimbursementQuerySortThenBy
     });
   }
 
+  QueryBuilder<Reimbursement, Reimbursement, QAfterSortBy>
+      thenByFxHistoryJson() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'fxHistoryJson', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Reimbursement, Reimbursement, QAfterSortBy>
+      thenByFxHistoryJsonDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'fxHistoryJson', Sort.desc);
+    });
+  }
+
   QueryBuilder<Reimbursement, Reimbursement, QAfterSortBy> thenById() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'id', Sort.asc);
@@ -2087,6 +2284,14 @@ extension ReimbursementQueryWhereDistinct
     });
   }
 
+  QueryBuilder<Reimbursement, Reimbursement, QDistinct> distinctByFxHistoryJson(
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'fxHistoryJson',
+          caseSensitive: caseSensitive);
+    });
+  }
+
   QueryBuilder<Reimbursement, Reimbursement, QDistinct> distinctByNote(
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
@@ -2158,6 +2363,13 @@ extension ReimbursementQueryProperty
   QueryBuilder<Reimbursement, int?, QQueryOperations> expenseIdProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'expenseId');
+    });
+  }
+
+  QueryBuilder<Reimbursement, String?, QQueryOperations>
+      fxHistoryJsonProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'fxHistoryJson');
     });
   }
 

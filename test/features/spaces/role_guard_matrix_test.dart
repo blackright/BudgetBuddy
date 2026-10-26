@@ -1,3 +1,5 @@
+import '../../support/audit_test_support.dart';
+import 'package:budget_buddy/core/services/expense_evidence.dart';
 import 'package:budget_buddy/core/models/currency_code.dart';
 import 'package:budget_buddy/core/models/expense.dart';
 import 'package:budget_buddy/core/models/medical_bill.dart';
@@ -346,6 +348,11 @@ void main() {
           categoryId: 'general',
           date: DateTime(2026, 3, 5),
           budgetId: 0,
+          status: ExpenseStatus.planned,
+          merchantName: 'Market',
+          paymentMethod: 'cash',
+          paymentEvidenceJson:
+              const ExpenseEvidence(profileChosen: true).encode(),
         );
 
     test('ExpenseRepository refuses a viewer and persists nothing', () async {
@@ -369,6 +376,7 @@ void main() {
 
       final ownerRepo = ExpenseRepository(
         h.isar,
+        syncRecorder: await auditTestRecorder(h.isar),
         guard: SpaceWriteGuard(h.isar),
         actingProfileId: owner,
       );
@@ -480,6 +488,7 @@ void main() {
       // An owner may write the same month.
       final ownerRepo = MonthFinanceRepository(
         h.isar,
+        syncRecorder: await auditTestRecorder(h.isar),
         guard: SpaceWriteGuard(h.isar),
         actingProfileId: owner,
       );
@@ -503,6 +512,11 @@ void main() {
             profileId: profileId,
             yearMonth: '2026-03',
             title: 'Personal',
+            status: ExpenseStatus.planned,
+            merchantName: 'Market',
+            paymentMethod: 'cash',
+            paymentEvidenceJson:
+                const ExpenseEvidence(profileChosen: true).encode(),
             amount: 100,
             currency: 'USD',
             categoryId: 'general',
@@ -523,8 +537,11 @@ void main() {
 
     setUp(() async {
       h = await MedicalTestHarness.create();
-      ops = MonthMoveOperations(h.isar, rateRegistry: MedicalTestHarness.rates);
-      repo = SpacesRepository(h.isar, monthMoves: ops);
+      ops = MonthMoveOperations(h.isar,
+          recorder: await auditTestRecorder(h.isar),
+          rateRegistry: MedicalTestHarness.rates);
+      repo = SpacesRepository(h.isar,
+          monthMoves: ops, syncRecorder: await auditTestRecorder(h.isar));
     });
 
     tearDown(() => h.close());

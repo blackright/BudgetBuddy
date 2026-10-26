@@ -1,6 +1,12 @@
+import '../../../core/models/merchant.dart';
+import '../../../core/models/expense_purchase.dart';
+import '../../../core/models/expense_evidence_chunk.dart';
+import '../../../core/models/audit_event.dart';
 import 'package:isar/isar.dart';
 
 import '../../../core/models/expense.dart';
+import '../../../core/models/budget_profile.dart';
+import '../../../core/models/month_end_run.dart';
 import '../../../core/models/insurance_profile.dart';
 import '../../../core/models/medical_bill.dart';
 import '../../../core/models/medical_service_type.dart';
@@ -35,6 +41,30 @@ class SyncIdTranslator {
       String entityType, String? entitySyncGuid) async {
     if (entitySyncGuid == null || entitySyncGuid.isEmpty) return null;
     switch (entityType) {
+      case 'ExpensePurchase':
+        return (await isar.expensePurchases
+                .filter()
+                .syncGuidEqualTo(entitySyncGuid)
+                .findFirst())
+            ?.id;
+      case 'ExpenseEvidenceChunk':
+        return (await isar.expenseEvidenceChunks
+                .filter()
+                .syncGuidEqualTo(entitySyncGuid)
+                .findFirst())
+            ?.id;
+      case 'Merchant':
+        return (await isar.merchants
+                .filter()
+                .syncGuidEqualTo(entitySyncGuid)
+                .findFirst())
+            ?.id;
+      case 'AuditEvent':
+        return (await isar.auditEvents
+                .filter()
+                .syncGuidEqualTo(entitySyncGuid)
+                .findFirst())
+            ?.id;
       case 'SharedSpace':
         return (await isar.sharedSpaces
                 .filter()
@@ -49,6 +79,18 @@ class SyncIdTranslator {
             ?.id;
       case 'MonthlyBudget':
         return (await isar.monthlyBudgets
+                .filter()
+                .syncGuidEqualTo(entitySyncGuid)
+                .findFirst())
+            ?.id;
+      case 'BudgetProfile':
+        return (await isar.budgetProfiles
+                .filter()
+                .syncGuidEqualTo(entitySyncGuid)
+                .findFirst())
+            ?.id;
+      case 'MonthEndRun':
+        return (await isar.monthEndRuns
                 .filter()
                 .syncGuidEqualTo(entitySyncGuid)
                 .findFirst())

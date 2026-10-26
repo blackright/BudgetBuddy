@@ -1,3 +1,6 @@
+import '../../../core/services/audit_financial_state.dart';
+import '../../../core/models/money.dart';
+import 'audit_repository.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:isar/isar.dart';
 
@@ -154,7 +157,10 @@ class MonthFinanceRepository {
         unclaimed.profileId = context.profileKey;
       }
       unclaimed.updatedAt = DateTime.now();
-      await _isar.monthlyBudgets.put(unclaimed);
+      await AuditRepository(_isar,
+              recorder: _syncRecorder, actorId: _actingProfileId)
+          .put(_isar.monthlyBudgets, unclaimed,
+              id: unclaimed.id, type: 'MonthlyBudget');
       await _recordBudget(unclaimed);
       return unclaimed;
     }
@@ -171,7 +177,10 @@ class MonthFinanceRepository {
     } else {
       budget.profileId = context.profileKey;
     }
-    budget.id = await _isar.monthlyBudgets.put(budget);
+    budget.id = await AuditRepository(_isar,
+            recorder: _syncRecorder, actorId: _actingProfileId)
+        .put(_isar.monthlyBudgets, budget,
+            id: budget.id, type: 'MonthlyBudget');
     await _recordBudget(budget);
     return budget;
   }
@@ -197,7 +206,10 @@ class MonthFinanceRepository {
       ..openingBalanceConfirmed = false
       ..createdAt = now
       ..updatedAt = now;
-    budget.id = await _isar.monthlyBudgets.put(budget);
+    budget.id = await AuditRepository(_isar,
+            recorder: _syncRecorder, actorId: _actingProfileId)
+        .put(_isar.monthlyBudgets, budget,
+            id: budget.id, type: 'MonthlyBudget');
     return budget;
   }
 
@@ -215,7 +227,10 @@ class MonthFinanceRepository {
       budget.baseAvailableAmount = amount;
       budget.openingBalanceConfirmed = true;
       budget.updatedAt = DateTime.now();
-      await _isar.monthlyBudgets.put(budget);
+      await AuditRepository(_isar,
+              recorder: _syncRecorder, actorId: _actingProfileId)
+          .put(_isar.monthlyBudgets, budget,
+              id: budget.id, type: 'MonthlyBudget');
       await _recordBudget(budget);
     });
   }
@@ -228,7 +243,10 @@ class MonthFinanceRepository {
       final budget = await _ensureMonthInTxn(context);
       budget.currency = currency?.name;
       budget.updatedAt = DateTime.now();
-      await _isar.monthlyBudgets.put(budget);
+      await AuditRepository(_isar,
+              recorder: _syncRecorder, actorId: _actingProfileId)
+          .put(_isar.monthlyBudgets, budget,
+              id: budget.id, type: 'MonthlyBudget');
       await _recordBudget(budget);
     });
   }
@@ -252,7 +270,10 @@ class MonthFinanceRepository {
       final budget = await _ensureMonthInTxn(context);
       budget.netSalaryOverride = amount;
       budget.updatedAt = DateTime.now();
-      await _isar.monthlyBudgets.put(budget);
+      await AuditRepository(_isar,
+              recorder: _syncRecorder, actorId: _actingProfileId)
+          .put(_isar.monthlyBudgets, budget,
+              id: budget.id, type: 'MonthlyBudget');
       await _recordBudget(budget);
     });
   }
@@ -275,7 +296,10 @@ class MonthFinanceRepository {
           final budget = await _ensureMonthInTxn(context);
           budget.sharedIncomeOverride = amount;
           budget.updatedAt = DateTime.now();
-          await _isar.monthlyBudgets.put(budget);
+          await AuditRepository(_isar,
+                  recorder: _syncRecorder, actorId: _actingProfileId)
+              .put(_isar.monthlyBudgets, budget,
+                  id: budget.id, type: 'MonthlyBudget');
         }));
   }
 
@@ -328,9 +352,29 @@ class MonthFinanceRepository {
           ? await _isar.userProfiles.get(profileId)
           : await _isar.userProfiles.where().findFirst();
       if (profile == null) return;
+      final oldSalary = profile.defaultNetSalary;
+      final scope = AuditFinancialScope(profile.id, null, null);
+      final financialBefore = await auditFinancialState(_isar, scope);
       profile.defaultNetSalary = amount;
       profile.updatedAt = DateTime.now();
       await _isar.userProfiles.put(profile);
+      await AuditRepository(_isar, actorId: _actingProfileId).append(
+          profileId: profile.id,
+          action: 'income.default.update',
+          objectType: 'UserProfile',
+          objectGuid: 'personal:${profile.id}',
+          before: {
+            'amount': Money.fromMajor(oldSalary, profile.primaryCurrency.code)
+                .minorUnits,
+            'currency': profile.primaryCurrency.code.code
+          },
+          after: {
+            'amount': Money.fromMajor(amount, profile.primaryCurrency.code)
+                .minorUnits,
+            'currency': profile.primaryCurrency.code.code
+          });
+      await AuditRepository(_isar, actorId: _actingProfileId).recordDerived(
+          scope, financialBefore, await auditFinancialState(_isar, scope));
     });
   }
 
@@ -413,7 +457,10 @@ class MonthFinanceRepository {
       budget.baseAvailableAmount = amount;
       budget.openingBalanceConfirmed = true;
       budget.updatedAt = DateTime.now();
-      await _isar.monthlyBudgets.put(budget);
+      await AuditRepository(_isar,
+              recorder: _syncRecorder, actorId: _actingProfileId)
+          .put(_isar.monthlyBudgets, budget,
+              id: budget.id, type: 'MonthlyBudget');
     });
   }
 
@@ -422,7 +469,10 @@ class MonthFinanceRepository {
       final budget = await _ensureLegacyMonthTxn(yearMonth);
       budget.currency = currency?.name;
       budget.updatedAt = DateTime.now();
-      await _isar.monthlyBudgets.put(budget);
+      await AuditRepository(_isar,
+              recorder: _syncRecorder, actorId: _actingProfileId)
+          .put(_isar.monthlyBudgets, budget,
+              id: budget.id, type: 'MonthlyBudget');
     });
   }
 
@@ -435,7 +485,10 @@ class MonthFinanceRepository {
       final budget = await _ensureLegacyMonthTxn(yearMonth);
       budget.netSalaryOverride = amount;
       budget.updatedAt = DateTime.now();
-      await _isar.monthlyBudgets.put(budget);
+      await AuditRepository(_isar,
+              recorder: _syncRecorder, actorId: _actingProfileId)
+          .put(_isar.monthlyBudgets, budget,
+              id: budget.id, type: 'MonthlyBudget');
     });
   }
 

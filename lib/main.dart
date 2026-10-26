@@ -23,6 +23,7 @@ import 'features/sync/providers/sync_coordinator_provider.dart';
 import 'features/sync/repositories/sync_coordinator.dart';
 
 import 'core/services/reminder_notification_service.dart';
+import 'features/vault/providers/vault_providers.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -33,8 +34,6 @@ void main() async {
   await appMonotonicClock.warmUp();
 
   final container = ProviderContainer();
-  // Execute end of month sweep check on startup
-  await container.read(sweepServiceProvider).executeSweepCheck();
 
   runApp(
     UncontrolledProviderScope(
@@ -42,6 +41,13 @@ void main() async {
       child: const MyApp(),
     ),
   );
+
+  // The vault sweep runs after the first frame — never before it — because it
+  // needs the rate registry and the active profile hydrated. It runs again on
+  // resume so a month that rolled over while the app was backgrounded is swept
+  // without waiting for a cold start.
+  final sweepObserver = _SweepLifecycleObserver(container);
+  WidgetsBinding.instance.addObserver(sweepObserver);
 
   // The seal pass runs after the first frame so it never blocks startup
   // (invariant I3), and again whenever the app resumes (FR-004).
@@ -57,12 +63,33 @@ void main() async {
   final lockObserver = LockLifecycleObserver(container);
   WidgetsBinding.instance.addObserver(lockObserver);
   WidgetsBinding.instance.addPostFrameCallback((_) {
+    sweepObserver.run();
     sealObserver.run();
     syncObserver.run();
     // Warm up notifications only once the first frame is up, so the Android
     // plugin's context is guaranteed to exist (never block startup on it).
     unawaited(ReminderNotificationService().ensureInitialized());
   });
+}
+
+/// Runs the end-of-month Savings Vault sweep on cold start and resume.
+///
+/// Fire-and-forget: the sweep is personal and best-effort, and a paused sweep
+/// surfaces its reason in the vault screen rather than blocking the UI.
+class _SweepLifecycleObserver extends WidgetsBindingObserver {
+  _SweepLifecycleObserver(this._container);
+
+  final ProviderContainer _container;
+
+  void run() {
+    _container.invalidate(vaultNowProvider);
+    unawaited(_container.read(sweepServiceProvider).executeSweepCheck());
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) run();
+  }
 }
 
 /// Drives the device-global month-seal coordinator on cold start and resume.
@@ -161,8 +188,11 @@ class MyApp extends ConsumerWidget {
     // nonsense numbers or crash a screen.
     final integrity = ref.watch(moneyIntegrityIssuesProvider);
     return integrity.when(
+      skipLoadingOnRefresh: false,
       loading: () => const _StartupSplash(),
-      error: (error, stackTrace) => const _StartupSplash(),
+      error: (error, stackTrace) => _StartupSplash(
+        onRetry: () => ref.invalidate(moneyIntegrityIssuesProvider),
+      ),
       data: (issues) => issues.isEmpty
           ? _buildRouterApp(context, ref)
           : DatabaseCorruptionScreen(issues: issues),
@@ -221,7 +251,9 @@ class MyApp extends ConsumerWidget {
 }
 
 class _StartupSplash extends StatelessWidget {
-  const _StartupSplash();
+  const _StartupSplash({this.onRetry});
+
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -231,7 +263,32 @@ class _StartupSplash extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
-      home: const Scaffold(body: Center(child: CircularProgressIndicator())),
+      home: Scaffold(
+        body: Center(
+          child: onRetry == null
+              ? const CircularProgressIndicator()
+              : Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('Unable to check saved data'),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Your data has not been changed. Retry the safety '
+                        'check to continue.',
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 16),
+                      FilledButton(
+                        onPressed: onRetry,
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
+                ),
+        ),
+      ),
     );
   }
 }

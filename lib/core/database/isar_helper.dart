@@ -10,6 +10,7 @@ import '../../core/models/shared_member.dart';
 import '../../core/models/shared_space.dart';
 import '../../features/expenses/models/reimbursement.dart';
 import '../../features/vault/models/savings_vault.dart';
+import '../../features/vault/models/vault_entry.dart';
 import '../models/category.dart';
 import '../models/medical_bill.dart';
 import '../models/insurance_profile.dart';
@@ -24,6 +25,19 @@ import '../models/paired_context.dart';
 import '../models/pairing_token.dart';
 import '../models/change_record.dart';
 import '../models/sync_cursor.dart';
+import '../models/income_source.dart';
+import '../models/budget_profile.dart';
+import '../models/month_end_run.dart';
+import '../models/direct_expense_profile.dart';
+import '../models/allocation.dart';
+import '../models/transfer.dart';
+import '../models/merchant.dart';
+import '../models/expense_evidence_chunk.dart';
+import '../models/expense_purchase.dart';
+import '../services/evidence_staging.dart';
+import 'dart:developer' as developer;
+import '../models/audit_event.dart';
+import '../models/app_settings.dart';
 import 'schema_migrations.dart';
 
 class IsarHelper {
@@ -58,6 +72,7 @@ class IsarHelper {
         ExpenseTemplateSchema,
         ReimbursementSchema,
         SavingsVaultSchema,
+        VaultEntrySchema,
         CategorySchema,
         MedicalBillSchema,
         InsuranceProfileSchema,
@@ -77,10 +92,30 @@ class IsarHelper {
         ChangeRecordSchema,
         SyncCursorSchema,
         LockSettingSchema,
+        IncomeSourceSchema,
+        BudgetProfileSchema,
+        MonthEndRunSchema,
+        DirectExpenseProfileSchema,
+        AllocationSchema,
+        TransferSchema,
+        MerchantSchema,
+        ExpenseEvidenceChunkSchema,
+        ExpensePurchaseSchema,
+        AuditEventSchema,
+        AppSettingsSchema,
       ],
       directory: dir.path,
     );
 
     await runSchemaMigrations(_isarValue!);
+    try {
+      await EvidenceStaging.root();
+    } catch (_) {
+      // Temporary-storage failure must not stop access to existing finances.
+      // Attachment selection retries cleanup and reports any storage failure.
+      developer.log(
+          'Temporary evidence cleanup unavailable; attachment selection will retry.',
+          name: 'ExpenseEvidence');
+    }
   }
 }

@@ -37,7 +37,16 @@ class AnalyticsScreen extends ConsumerWidget {
     final isShared = ref.watch(chartLensProvider) == ChartLens.shared;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Analytics')),
+      appBar: AppBar(
+          automaticallyImplyLeading: false,
+          toolbarHeight: 48,
+          title: const Text('Analytics'),
+          actions: [
+            IconButton(
+                tooltip: 'Reports',
+                onPressed: () => context.push('/reports'),
+                icon: const Icon(Icons.summarize_outlined))
+          ]),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -50,7 +59,7 @@ class AnalyticsScreen extends ConsumerWidget {
             size: ChartSize.full,
             onDrillDown: (d) {
               if (d is ChartDrillDownCategory) {
-                context.push('/expenses', extra: {
+                context.go('/expenses', extra: {
                   'categoryId': d.categoryId,
                 });
               }
@@ -62,7 +71,7 @@ class AnalyticsScreen extends ConsumerWidget {
             size: ChartSize.full,
             onDrillDown: (d) {
               if (d is ChartDrillDownStatus) {
-                context.push('/expenses', extra: {
+                context.go('/expenses', extra: {
                   'status': d.status.name,
                 });
               }

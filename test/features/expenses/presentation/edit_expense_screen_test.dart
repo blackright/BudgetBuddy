@@ -1,4 +1,7 @@
 import 'package:budget_buddy/core/models/category.dart';
+import 'package:budget_buddy/core/providers/budget_context_provider.dart';
+import 'package:budget_buddy/features/finance/providers/profile_providers.dart';
+import 'package:budget_buddy/features/expenses/providers/expense_search_provider.dart';
 import 'package:budget_buddy/core/models/currency_code.dart';
 import 'package:budget_buddy/core/models/expense.dart';
 import 'package:budget_buddy/core/models/money.dart';
@@ -54,6 +57,12 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          budgetContextProvider.overrideWithValue(
+              ContextRef.personal(profileId: 1, yearMonth: '2026-01')),
+          budgetProfilesProvider.overrideWith((ref) => Stream.value([])),
+          directExpenseProfilesProvider.overrideWith((ref) => Stream.value([])),
+          expenseSearchMerchantsProvider
+              .overrideWith((ref) => Stream.value([])),
           activeProfileProvider
               .overrideWith((ref) => Stream.value(makeProfile())),
           activeBudgetProvider
@@ -106,5 +115,31 @@ void main() {
     await tester.pump();
 
     expect(find.textContaining('at 1 \$ = 345 Ft'), findsNothing);
+  });
+  testWidgets(
+      'legacy cancelled status and unknown currency stay unchanged while editing notes',
+      (tester) async {
+    final row = makeExpense(currency: 'XYZ', major: 345)
+      ..status = ExpenseStatus.cancelled;
+    await pumpExpense(tester, row);
+    await tester.pumpAndSettle();
+    expect(find.text('XYZ (legacy)'), findsOneWidget);
+    expect(find.text('Status: Cancelled'), findsOneWidget);
+    expect(tester.widget<TextField>(amountField()).controller!.text, '345');
+    expect(row.currency, 'XYZ');
+    expect(row.status, ExpenseStatus.cancelled);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets(
+      'stored large decimal amounts load exactly without losing a minor unit',
+      (tester) async {
+    final row = makeExpense(currency: 'USD', major: 1)
+      ..amount = 9007199254740991;
+    await pumpExpense(tester, row);
+    await tester.pumpAndSettle();
+    expect(tester.widget<TextField>(amountField()).controller!.text,
+        '90,071,992,547,409.91');
+    expect(row.amount, 9007199254740991);
+    expect(tester.takeException(), isNull);
   });
 }

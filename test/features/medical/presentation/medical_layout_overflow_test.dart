@@ -325,7 +325,7 @@ void main() {
     });
 
     testWidgets(
-        'T-R06: a foreign bill keeps its own amount and a converted budget',
+        'T-R06: a foreign bill uses display currency without changing stored money',
         (tester) async {
       await pumpDashboard(
         tester,
@@ -339,10 +339,8 @@ void main() {
       );
 
       expect(tester.takeException(), isNull);
-      // The bill is labelled in its own currency, not mislabelled as the display
-      // currency (the T-R01/T-R06 defect).
-      expect(find.textContaining('€ 1,000.00'), findsOneWidget);
-      // ...and a converted budget line is shown in the display currency.
+      // Bundled EUR 0.86 per USD converts EUR 1,000 to USD 1,162.79.
+      expect(find.textContaining(r'$ 1,162.79'), findsWidgets);
       expect(find.textContaining('budget'), findsOneWidget);
     });
 

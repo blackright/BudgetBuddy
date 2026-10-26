@@ -1,3 +1,14 @@
+import 'package:budget_buddy/core/models/merchant.dart';
+import 'package:budget_buddy/core/models/income_source.dart';
+import 'package:budget_buddy/core/models/transfer.dart';
+import 'package:budget_buddy/core/models/expense_evidence_chunk.dart';
+import 'package:budget_buddy/core/models/expense_purchase.dart';
+import 'package:budget_buddy/features/vault/models/vault_entry.dart';
+import 'package:budget_buddy/core/models/allocation.dart';
+import 'package:budget_buddy/core/models/budget_profile.dart';
+import 'package:budget_buddy/core/models/direct_expense_profile.dart';
+import 'package:budget_buddy/core/models/month_end_run.dart';
+import 'package:budget_buddy/core/models/audit_event.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -58,10 +69,21 @@ class SyncTestHarness {
       [
         UserProfileSchema,
         MonthlyBudgetSchema,
+        BudgetProfileSchema,
+        AllocationSchema,
+        IncomeSourceSchema,
+        TransferSchema,
+        DirectExpenseProfileSchema,
+        MonthEndRunSchema,
+        AuditEventSchema,
         ExpenseSchema,
+        MerchantSchema,
+        ExpenseEvidenceChunkSchema,
+        ExpensePurchaseSchema,
         ExpenseTemplateSchema,
         ReimbursementSchema,
         SavingsVaultSchema,
+        VaultEntrySchema,
         CategorySchema,
         MedicalBillSchema,
         InsuranceProfileSchema,

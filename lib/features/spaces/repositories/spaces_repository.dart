@@ -1,3 +1,7 @@
+import '../../../core/models/merchant.dart';
+import '../../../core/services/evidence_privacy.dart';
+import '../../finance/repositories/audit_repository.dart';
+import '../../../core/models/month_end_run.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:isar/isar.dart';
 
@@ -108,7 +112,8 @@ class SpacesRepository {
         ..defaultIncome = defaultIncome
         ..createdByProfileId = createdByProfileId
         ..createdAt = clock;
-      space.id = await _isar.sharedSpaces.put(space);
+      space.id = await AuditRepository(_isar, recorder: _syncRecorder)
+          .put(_isar.sharedSpaces, space, id: space.id, type: 'SharedSpace');
 
       final creator = SharedMember()
         ..sharedSpaceId = space.id
@@ -120,7 +125,9 @@ class SpacesRepository {
         ..joinedAt = clock
         ..updatedAt = clock;
       await _authorMembership(creator, clock);
-      await _isar.sharedMembers.put(creator);
+      await AuditRepository(_isar, recorder: _syncRecorder).put(
+          _isar.sharedMembers, creator,
+          id: creator.id, type: 'SharedMember');
 
       await _syncRecorder?.recordSpace(space, now: clock);
       await _syncRecorder?.recordMember(creator, now: clock);
@@ -225,7 +232,8 @@ class SpacesRepository {
         }
         space.defaultIncome = defaultIncome;
       }
-      await _isar.sharedSpaces.put(space);
+      await AuditRepository(_isar, recorder: _syncRecorder)
+          .put(_isar.sharedSpaces, space, id: space.id, type: 'SharedSpace');
       await _syncRecorder?.recordSpace(space);
     });
   }
@@ -243,7 +251,13 @@ class SpacesRepository {
       _guard.assertManage(await _member(spaceId, actingProfileId));
       final space = await _requireSpace(spaceId);
 
-      final hasMoney = await _isar.monthlyBudgets
+      final hasMoney = await _isar.monthEndRuns
+                  .filter()
+                  .sharedSpaceIdEqualTo(spaceId)
+                  .count() >
+              0 ||
+          await _isar
+                  .monthlyBudgets
                   .filter()
                   .sharedSpaceIdEqualTo(spaceId)
                   .count() >
@@ -281,6 +295,8 @@ class SpacesRepository {
           .filter()
           .sharedSpaceIdEqualTo(spaceId)
           .deleteAll();
+      await _isar.merchants.filter().sharedSpaceIdEqualTo(spaceId).deleteAll();
+      await purgeSpaceEvidenceInTxn(_isar, spaceId);
       await _isar.familyMembers
           .filter()
           .sharedSpaceIdEqualTo(spaceId)
@@ -344,7 +360,9 @@ class SpacesRepository {
         ..joinedAt = clock
         ..updatedAt = clock;
       await _authorMembership(member, clock);
-      await _isar.sharedMembers.put(member);
+      await AuditRepository(_isar, recorder: _syncRecorder).put(
+          _isar.sharedMembers, member,
+          id: member.id, type: 'SharedMember');
       await _syncRecorder?.recordMember(member, now: clock);
     });
   }
@@ -376,7 +394,9 @@ class SpacesRepository {
       final clock = DateTime.now();
       member.updatedAt = clock;
       await _authorMembership(member, clock);
-      await _isar.sharedMembers.put(member);
+      await AuditRepository(_isar, recorder: _syncRecorder).put(
+          _isar.sharedMembers, member,
+          id: member.id, type: 'SharedMember');
       await _syncRecorder?.recordMember(member, now: clock);
     });
   }
@@ -410,7 +430,8 @@ class SpacesRepository {
       } else {
         await _syncRecorder?.recordMemberRemoved(member);
       }
-      await _isar.sharedMembers.delete(member.id);
+      await AuditRepository(_isar, recorder: _syncRecorder)
+          .remove(_isar.sharedMembers, member.id, type: 'SharedMember');
     });
   }
 
@@ -435,13 +456,17 @@ class SpacesRepository {
       final clock = DateTime.now();
       newOwner.updatedAt = clock;
       await _authorMembership(newOwner, clock);
-      await _isar.sharedMembers.put(newOwner);
+      await AuditRepository(_isar, recorder: _syncRecorder).put(
+          _isar.sharedMembers, newOwner,
+          id: newOwner.id, type: 'SharedMember');
       await _syncRecorder?.recordMember(newOwner, now: clock);
       if (former != null && former.id != newOwner.id) {
         former.role = SharedMemberRole.editor;
         former.updatedAt = clock;
         await _authorMembership(former, clock);
-        await _isar.sharedMembers.put(former);
+        await AuditRepository(_isar, recorder: _syncRecorder).put(
+            _isar.sharedMembers, former,
+            id: former.id, type: 'SharedMember');
         await _syncRecorder?.recordMember(former, now: clock);
       }
     });
@@ -472,7 +497,8 @@ class SpacesRepository {
       } else {
         await _syncRecorder?.recordMemberRemoved(member);
       }
-      await _isar.sharedMembers.delete(member.id);
+      await AuditRepository(_isar, recorder: _syncRecorder)
+          .remove(_isar.sharedMembers, member.id, type: 'SharedMember');
       // FR-034: leaving takes this phone's security setting for the space with
       // it — the member is no longer admitted to the space at all.
       final space = await _isar.sharedSpaces.get(spaceId);
@@ -567,6 +593,7 @@ final spacesRepositoryProvider = Provider<SpacesRepository>(
       isar,
       monthMoves: MonthMoveOperations(
         isar,
+        recorder: ref.watch(syncRecorderProvider),
         rateRegistry: ref.watch(rateRegistryProvider),
         guard: ref.watch(spaceRoleGuardProvider),
       ),

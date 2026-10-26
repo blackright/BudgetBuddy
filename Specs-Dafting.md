@@ -31,10 +31,218 @@ Halt immediately. Present your full analysis and the draft spec preview. Do not 
 [RAW INPUT SPECIFICATION START]
 {{
 
-I need your assistance on thisExpense Screen have cards named by Date of the purchasesPut all the day expenses on the respective cardAllow bulk expenses adding at onceallow uploading pictures for each expenses or bulk expense: 2 pictures requires, the first one is the invoice from where we purchased and the second one is the card payment screenshot and if in cash, (HERE I NEED YOUR HELP TO FIND A SOLUTION).Allow later expenses added to the same card if spent the same day.Other ImprovementsArrow on top of the screen should be removed. Allow the action of the dropdown come down when clicked on either personal or shared so if that is touched, we have the dropdown that shows (Profile and Spaces) so that if profile is clicked, the setting part of the profile is shown and if Spaces is touched then the Space screen is shown.We should also plan for something like a monthly statement for the entire month and across spaces and profile (We need to figure out how we can implement this, we need to be innovative) downloadable.We also need to make sure that we decide if all the profile have their own salary or whatever money added there (in each profile) as the income for each profile is actually coming from the main salary added in setting and whatever expenses added to each profile, it should reflect in the main expense also and subtract from the main income.In this case, we need to have the main profile where the salary will be set and then we have other profiles as sub profiles meaning they are like small budgets. Let's say I earn 1000000 HUF and then I plan for example Money for Food 100,000 HUF and then 50,000 pocket money and here both of those are added to their own sub profile. So no direct expense added and removed from the main income. Only the medical is taken directly from the main income directly.Each sub profile should be independent when to comes to its own calculations. It should show how much it has remained with, how much has been spent and comparing to the main income, what % it is of the main income. On the Lock screen, we have (Lock now and Unlock) on the same screen, I think it does not make any sense the screen is locked already.And the main Profile should have a name, so we need to ask the user their name and then that becomes the main profile and on the top left conner, we only write the first later of their first name in a circle avatar like.For Spaces, when creating a space, everything regarding the month should be moved to the spaces, all sub profiles or we can choose what should be added as profile but in the main expenses even if the Think about me and we come up with something really innovative
+Feature Specification: Onboarding & First-Time Setup (Unified)
 
-You can ask me any question you think should be asked and then we clarify all this. We need to make sure that we think also in case the money for the sub profile exceeds the allocated amount. We need to have user experience in when planning for this. We need to alwas make is as easy as possible to use our app.
+## Purpose
+Provide a guided first-time experience that helps users configure the application correctly before they begin tracking finances.
 
+The onboarding process should be friendly, simple, modern, and focused on quickly bringing users to a functional dashboard while collecting only the information required for the initial setup.
+
+## Sub-Features Included
+1. Onboarding Flow
+2. First-Time Setup
+
+## Objectives
+- Introduce the application
+- Explain the app's core concepts
+- Create the first profile
+- Configure the first monthly budget
+- Configure the first currency
+- Configure security settings
+- Guide users into the dashboard
+
+## Entities Involved
+- UserProfile
+- SecurityConfig
+- MonthlyBudget
+- SharedSpace (optional later)
+- AppSettings
+
+## First Launch Detection
+
+Rules:
+- Detect whether application is launched for the first time.
+- If no profile exists:
+  - Launch onboarding immediately.
+- If at least one profile exists:
+  - Skip onboarding.
+  - Navigate directly to authentication/dashboard.
+
+## Onboarding Flow
+
+### Step 1: Welcome Screen
+
+Purpose:
+- Introduce the application.
+
+Content:
+- App overview
+- Main benefits
+- Personal finance assistant explanation
+
+Actions:
+- Continue
+- Skip (optional)
+
+### Step 2: How Budgeting Works
+
+Purpose:
+Explain:
+- Monthly budget
+- Available amount
+- Planned expenses
+- Paid expenses
+- Medical reimbursements
+
+Visuals:
+- Simple illustrations
+- Example budget scenario
+
+### Step 3: Create First Personal Profile
+
+Inputs:
+- Name
+- Avatar
+- Preferred currency
+
+Rules:
+- Name required
+- Currency required
+
+Output:
+- UserProfile created
+
+### Step 4: Configure Monthly Budget
+
+Inputs:
+- Monthly available amount
+- Currency confirmation
+
+Rules:
+- Amount > 0
+
+Output:
+- Budget initialized
+
+### Step 5: Security Setup
+
+Options:
+- Create PIN
+- Enable biometrics
+- Skip (optional)
+
+Rules:
+- PIN must meet security requirements
+
+Output:
+- Security configuration saved
+
+### Step 6: App Overview
+
+Explain:
+- Dashboard
+- Expenses
+- Medical bills
+- Analytics
+- Shared spaces
+
+### Step 7: Finish Setup
+
+Actions:
+- Complete onboarding
+- Navigate to Dashboard
+
+Output:
+- Onboarding completion flag saved
+
+## First-Time Setup Logic
+
+After onboarding:
+
+System automatically:
+- Creates initial month context
+- Calculates initial available amount
+- Creates default categories
+- Activates selected profile
+- Loads dashboard
+
+## Default Categories
+
+Pre-created:
+
+- Housing
+- Utilities
+- Food
+- Transportation
+- Health
+- Insurance
+- Subscriptions
+- Entertainment
+- Savings
+- Miscellaneous
+
+Users may modify these later.
+
+## Dashboard Handoff
+
+Upon completion:
+
+Dashboard displays:
+- Monthly budget
+- Available amount
+- Quick actions
+- Empty-state guidance
+
+Example:
+"Add your first expense"
+"Create your first medical bill"
+
+## Returning User Flow
+
+If onboarding previously completed:
+
+Launch sequence:
+- Authentication
+- Profile load
+- Dashboard
+
+Onboarding is not shown again.
+
+## UI Requirements
+
+Screens:
+1. Welcome
+2. Budgeting Overview
+3. Profile Creation
+4. Budget Setup
+5. Security Setup
+6. App Overview
+7. Completion Screen
+
+Requirements:
+- Modern animations
+- Progress indicator
+- Ability to go back
+- Offline-first operation
+
+## Navigation
+
+Start:
+- App launch
+
+End:
+- Dashboard Shell
+
+Optional Access:
+- Settings → Restart Onboarding
+
+## Non-Functional Requirements
+
+- Offline-first
+- Fast onboarding (<3 minutes)
+- Accessible design
+- Responsive layouts
+- Supports future onboarding steps
 
 }}
 [RAW INPUT SPECIFICATION END]

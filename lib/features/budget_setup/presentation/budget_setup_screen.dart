@@ -7,6 +7,7 @@ import '../../../core/providers/active_profile_provider.dart';
 import '../../../shared/presentation/widgets/money_field.dart';
 import '../../spaces/presentation/space_switcher.dart';
 import '../providers/budget_setup_provider.dart';
+import 'welcome_step.dart';
 
 class BudgetSetupScreen extends ConsumerStatefulWidget {
   const BudgetSetupScreen({super.key});
@@ -16,6 +17,7 @@ class BudgetSetupScreen extends ConsumerStatefulWidget {
 }
 
 class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
+  bool _welcomeComplete = false;
   final TextEditingController _amountController = TextEditingController();
   final TextEditingController _monthController = TextEditingController();
 
@@ -73,14 +75,28 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
     final state = ref.watch(budgetSetupProvider);
     final notifier = ref.read(budgetSetupProvider.notifier);
 
+    if (!_welcomeComplete) {
+      return WelcomeStep(
+          name: state.name,
+          onContinue: (name) {
+            notifier.setName(name);
+            setState(() => _welcomeComplete = true);
+          });
+    }
+
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+            tooltip: 'Back to your name',
+            icon: const Icon(Icons.arrow_back),
+            onPressed: state.isSaving
+                ? null
+                : () => setState(() => _welcomeComplete = false)),
         title: const Text('Budget Setup'),
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+        child: ListView(
           children: [
             if (state.errorMessage != null)
               Container(
@@ -154,7 +170,7 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
                 }
               },
             ),
-            const Spacer(),
+            const SizedBox(height: 24),
             ElevatedButton(
               onPressed: state.isSaving
                   ? null

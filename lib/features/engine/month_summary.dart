@@ -1,5 +1,6 @@
 import '../../core/models/expense.dart';
 import '../../core/models/money.dart';
+import '../../core/services/free_funds.dart';
 import '../../features/expenses/models/reimbursement.dart';
 
 /// The financial verdict for exactly one calendar month.
@@ -11,8 +12,13 @@ import '../../features/expenses/models/reimbursement.dart';
 /// (FR-016).
 ///
 /// Money semantics, straight from the contract:
-/// - `kept = income - paymentsMade + moneyReturned`
-/// - `moneyInBank = openingBalance + kept`
+/// - `kept = income - paymentsMade + moneyReturned - setAside - carryOver`
+/// - `moneyInBank = openingBalance + keptBeforeAllocations` (actual bank money,
+///   not earmarked money)
+///
+/// `setAside` is the unused part of the allocations (allocation - spent, never
+/// below zero): money still sitting in the profile envelopes, so it is not free
+/// to spend. `carryOver` is 0 until Phase 8 (Carry Forward month-end) lands.
 ///
 /// Neither figure is ever floored at zero: an over-reimbursement is surfaced
 /// through [excessReturned] instead of being silently clamped (R14, invariant
@@ -31,6 +37,22 @@ class MonthSummary {
     this.insuranceReturned = 0.0,
     this.expenseReturned = 0.0,
     this.openingBalance,
+    // T143: allocation data. `allocated` is the total set aside across every
+    // budget profile; `setAside` is the part of that which has not been spent
+    // yet (allocation - spent, never below zero). `kept` subtracts `setAside`
+    // so the free money — the reserve overspending draws from — is what the
+    // user sees. `moneyInBank` keeps its old meaning (actual bank money) via
+    // `keptBeforeAllocations`, so nothing existing breaks.
+    this.allocated = 0.0,
+    this.setAside = 0.0,
+    // T150: carry-over hook for Phase 8 month-end policies. When Carry
+    // Forward is in effect, last month's unused allocation is added here so
+    // the free money reflects it. Left at 0 until Phase 8 lands.
+    this.carryOver = 0.0,
+    this.carriedIn = 0.0,
+    this.releasedAtMonthEnd = 0.0,
+    this.vaultTransfers = 0.0,
+    this.resolvedFreeToSpend,
   });
 
   /// Assembles a summary for [yearMonth].
@@ -59,6 +81,17 @@ class MonthSummary {
     double? openingBalance,
     Map<int, double> targetPaidAmounts = const {},
     Set<int> medicalTargetIds = const {},
+    // T143/T144: allocation inputs. `allocated` is the total set aside across
+    // every budget profile; `setAside` is the unused portion (allocation -
+    // spent, never below zero), both in the display currency. `carryOver` is
+    // the unused allocation carried in from last month (Phase 8).
+    double allocated = 0.0,
+    double setAside = 0.0,
+    double carryOver = 0.0,
+    double carriedIn = 0.0,
+    double releasedAtMonthEnd = 0.0,
+    double vaultTransfers = 0.0,
+    double? resolvedFreeToSpend,
   }) {
     var paymentsMade = 0.0;
     var planned = 0.0;
@@ -121,6 +154,13 @@ class MonthSummary {
       insuranceReturned: insuranceReturned,
       expenseReturned: expenseReturned,
       openingBalance: openingBalance,
+      allocated: allocated,
+      setAside: setAside,
+      carryOver: carryOver,
+      carriedIn: carriedIn,
+      releasedAtMonthEnd: releasedAtMonthEnd,
+      vaultTransfers: vaultTransfers,
+      resolvedFreeToSpend: resolvedFreeToSpend,
     );
   }
 
@@ -169,15 +209,59 @@ class MonthSummary {
   /// never confirmed one (FR-006, FR-010).
   final double? openingBalance;
 
-  /// `income - paymentsMade + moneyReturned` (FR-012).
-  double get kept => income - paymentsMade + moneyReturned;
+  /// Total allocated across every budget profile this month, in the display
+  /// currency (T143, FR-003). Reference only — it is `setAside` that
+  /// reduces `kept`.
+  final double allocated;
 
-  /// `openingBalance + kept`, or `null` when there is no confirmed opening
-  /// balance — the app prompts rather than assuming a figure (FR-008, FR-010).
+  /// The money still sitting inside the profile envelopes: the unused part of
+  /// the allocations (allocation − spent, never below zero), in the display
+  /// currency (T143, FR-003, FR-011).
+  final double setAside;
+
+  /// Additional outgoing carry reservation not already covered by the live
+  /// unused envelopes. This stays reserved if late source spending consumes
+  /// part of an envelope after its immutable settlement.
+  final double carryOver;
+
+  /// Settlement funds are not income or bank-balance changes. Incoming carry
+  /// offsets its inclusion in next month's allocation; Reset releases an
+  /// unused envelope without rewriting historical allocation records.
+  final double carriedIn, releasedAtMonthEnd;
+
+  /// Withdrawals minus deposits; an internal transfer, never income/spending.
+  final double vaultTransfers;
+
+  /// Accounting-currency verdict converted once at the display boundary.
+  final double? resolvedFreeToSpend;
+
+  /// `income - paymentsMade + moneyReturned - setAside - carryOver` (FR-012,
+  /// T143). This is the free money — the reserve overspending draws from.
+  double get kept =>
+      resolvedFreeToSpend ??
+      freeToSpend(
+              income: income,
+              paid: paymentsMade,
+              returned: moneyReturned,
+              unused: setAside,
+              carry: carryOver,
+              incoming: carriedIn,
+              released: releasedAtMonthEnd,
+              transfers: vaultTransfers)
+          .toDouble();
+
+  /// The same calculation without the allocation carve-out, so `moneyInBank`
+  /// keeps its old meaning (actual money in the bank, not earmarked money).
+  double get keptBeforeAllocations =>
+      income - paymentsMade + moneyReturned + vaultTransfers;
+
+  /// `openingBalance + keptBeforeAllocations`, or `null` when there is no
+  /// confirmed opening balance — the app prompts rather than assuming a figure
+  /// (FR-008, FR-010).
   double? get moneyInBank {
     final opening = openingBalance;
     if (opening == null) return null;
-    return opening + kept;
+    return opening + keptBeforeAllocations;
   }
 
   /// Opening balance present *and* income recorded (FR-025).

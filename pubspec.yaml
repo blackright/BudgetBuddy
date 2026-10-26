@@ -11,6 +11,7 @@ dependencies:
   add_2_calendar: ^3.1.1
   basic_utils: ^5.7.0
   cryptography: ^2.9.0
+  crypto: ^3.0.3
   device_calendar: ^4.3.3
   dio: ^5.11.1
   file_picker: ^13.1.0
@@ -37,6 +38,7 @@ dependencies:
   share_plus: ^13.3.1
   timezone: ^0.11.1
   uuid: ^4.2.0
+  pdf: 3.13.1
 
 dev_dependencies:
   flutter_test:
@@ -47,6 +49,10 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/fonts/reports/NotoSans-Regular.ttf
+    - assets/fonts/reports/NotoSans-Bold.ttf
+    - assets/fonts/reports/OFL.txt
 
 dependency_overrides:
   timezone: ^0.11.1

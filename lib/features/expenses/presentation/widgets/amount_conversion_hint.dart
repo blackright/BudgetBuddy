@@ -41,6 +41,9 @@ class AmountConversionHint extends StatelessWidget {
     if (value == null || value <= 0 || from == null || from == display) {
       return const SizedBox.shrink();
     }
+    if (!value.isFinite || value * from.minorUnitsPerMajor > 9007199254740991) {
+      return const SizedBox.shrink();
+    }
 
     final result = convert(Money.fromMajor(value, from), display, table);
     if (result.isDegraded) return const SizedBox.shrink();

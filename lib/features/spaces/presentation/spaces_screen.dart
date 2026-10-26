@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../../../shared/presentation/providers/context_navigation_provider.dart';
+import '../../../shared/presentation/financial_feedback.dart';
 
 import '../../../core/models/shared_space.dart';
 import '../../../core/providers/active_space_provider.dart';
@@ -17,7 +20,10 @@ class SpacesScreen extends ConsumerWidget {
     final activeSpaceId = ref.watch(activeSpaceProvider).valueOrNull?.id;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Spaces')),
+      appBar: AppBar(
+          automaticallyImplyLeading: false,
+          toolbarHeight: 48,
+          title: const Text('Spaces')),
       body: GridView.builder(
         padding: const EdgeInsets.all(16),
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -38,8 +44,22 @@ class SpacesScreen extends ConsumerWidget {
           return _SpaceCard(
             space: space,
             isActive: isActive,
-            onTap: () {
-              ref.read(activeSpaceIdProvider.notifier).state = space.id;
+            onTap: () async {
+              if (ref.read(activeSpaceIdProvider) == space.id) return;
+              try {
+                await ref.read(selectNavigationContextProvider)(space.id);
+                if (context.mounted) {
+                  context.go('/dashboard');
+                  showFinancialFeedback(
+                      context, 'Switched to ${space.displayName}.');
+                }
+              } catch (_) {
+                if (context.mounted) {
+                  showFinancialFeedback(context,
+                      'This space is no longer available. Reopen Spaces.',
+                      kind: FinancialFeedbackKind.error);
+                }
+              }
             },
           );
         },

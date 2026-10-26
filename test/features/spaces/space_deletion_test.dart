@@ -1,3 +1,4 @@
+import '../../support/audit_test_support.dart';
 import 'package:budget_buddy/core/models/expense.dart';
 import 'package:budget_buddy/core/models/insurance_profile.dart';
 import 'package:budget_buddy/core/models/medical_bill.dart';
@@ -30,8 +31,11 @@ void main() {
 
   setUp(() async {
     h = await MedicalTestHarness.create();
-    ops = MonthMoveOperations(h.isar, rateRegistry: MedicalTestHarness.rates);
-    repo = SpacesRepository(h.isar, monthMoves: ops);
+    ops = MonthMoveOperations(h.isar,
+        recorder: await auditTestRecorder(h.isar),
+        rateRegistry: MedicalTestHarness.rates);
+    repo = SpacesRepository(h.isar,
+        monthMoves: ops, syncRecorder: await auditTestRecorder(h.isar));
   });
 
   tearDown(() => h.close());

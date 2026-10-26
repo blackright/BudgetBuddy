@@ -1,3 +1,11 @@
+import '../../../core/services/audit_verify_service.dart';
+import '../domain/codecs/audit_event_codec.dart';
+import '../../../core/models/month_end_run.dart';
+import '../../../core/models/merchant.dart';
+import '../../../core/models/expense_purchase.dart';
+import '../../../core/database/schema_migrations.dart';
+import '../../../core/services/evidence_privacy.dart';
+import '../domain/sync_guid.dart';
 import 'dart:convert';
 
 import 'package:cryptography/cryptography.dart';
@@ -19,6 +27,7 @@ import '../domain/entity_applier.dart';
 import '../domain/hlc.dart';
 import '../domain/month_key.dart';
 import '../domain/sync_codec_registry.dart';
+import '../domain/sync_codec.dart';
 import '../domain/sync_id_translator.dart';
 import '../transport/transport.dart';
 import 'sync_recorder.dart';
@@ -116,11 +125,16 @@ class SyncEngine {
     'SharedSpace': 0,
     'SharedMember': 1,
     'MonthlyBudget': 2,
+    'BudgetProfile': 3,
+    'Merchant': 3,
+    'MonthEndRun': 4,
     'FamilyMember': 3,
     'MedicalProvider': 3,
     'MedicalServiceType': 3,
     'InsuranceProfile': 3,
     'Expense': 4,
+    'ExpensePurchase': 4,
+    'ExpenseEvidenceChunk': 5,
     'Reimbursement': 5,
     'MedicalBill': 5,
   };
@@ -155,7 +169,15 @@ class SyncEngine {
   /// `droppedUnauthorized` (`applied 0 of N`).
   Future<List<ChangeRecord>> _outboundSnapshot(int contextLocalId) async {
     await _recorder?.backfillContext(contextLocalId);
-    return recordsForContext(contextLocalId);
+    final query = _isar.changeRecords
+        .filter()
+        .contextLocalIdEqualTo(contextLocalId)
+        .and()
+        .not()
+        .entityTypeEqualTo('ExpenseEvidenceChunk');
+    return _selfIdentityId == null
+        ? query.findAll()
+        : query.authorIdentityIdEqualTo(_selfIdentityId!).findAll();
   }
 
   /// The current winning record for an entity key, or `null` if none exists.
@@ -200,6 +222,29 @@ class SyncEngine {
     // §7): reject it defensively rather than key it on a foreign local id.
     if (record.entitySyncGuid.isEmpty) return ApplyOutcome.droppedUnknownType;
     if (!await _verify(record)) return ApplyOutcome.droppedBadSignature;
+    if (record.entityType == 'AuditEvent') {
+      if (record.contextKind != ContextKind.shared ||
+          record.contextSyncGuid.isEmpty ||
+          record.op == 'delete') {
+        return ApplyOutcome.droppedUnauthorized;
+      }
+      try {
+        final event = const AuditEventCodec().fromPayload(record.payload)
+          ..sharedSpaceId = record.contextLocalId;
+        if (event.contextSyncGuid != record.contextSyncGuid ||
+            event.syncGuid != record.entitySyncGuid ||
+            event.userIdentity != record.authorIdentityId ||
+            (await const AuditVerifyService()
+                        .verify([event], trustedKeys: _trustedKeys))
+                    .status ==
+                AuditStatus.failed ||
+            !_trustedKeys.containsKey(event.userIdentity)) {
+          return ApplyOutcome.droppedBadSignature;
+        }
+      } catch (_) {
+        return ApplyOutcome.droppedBadSignature;
+      }
+    }
     if (await _isDuplicate(record)) {
       // A membership this device already holds still has to name the pairing
       // context. The row may have landed before the authoring peer was a contact
@@ -235,6 +280,56 @@ class SyncEngine {
         return denied;
       }
 
+      if (record.entityType == 'ExpenseEvidenceChunk') {
+        if (record.op == 'delete' || record.contextKind != ContextKind.shared) {
+          return ApplyOutcome.droppedUnauthorized;
+        }
+        final payload = canonicalJsonDecode(record.payload);
+        if (payload['syncGuid'] != record.entitySyncGuid ||
+            payload['sharedSpaceSyncGuid'] != record.contextSyncGuid) {
+          return ApplyOutcome.droppedUnauthorized;
+        }
+      }
+      if (record.entityType == 'Merchant' ||
+          record.entityType == 'ExpensePurchase') {
+        final purchase = record.entityType == 'ExpensePurchase'
+            ? await _isar.expensePurchases
+                .filter()
+                .syncGuidEqualTo(record.entitySyncGuid)
+                .findFirst()
+            : null;
+        final merchant = record.entityType == 'Merchant'
+            ? await _isar.merchants
+                .filter()
+                .syncGuidEqualTo(record.entitySyncGuid)
+                .findFirst()
+            : null;
+        final existingSpace =
+            purchase?.sharedSpaceId ?? merchant?.sharedSpaceId;
+        if (record.contextKind != ContextKind.shared ||
+            record.contextSyncGuid.isEmpty ||
+            ((purchase != null || merchant != null) &&
+                existingSpace != record.contextLocalId)) {
+          return ApplyOutcome.droppedUnauthorized;
+        }
+        if (record.op != 'delete') {
+          final payload = canonicalJsonDecode(record.payload);
+          if (payload['syncGuid'] != record.entitySyncGuid ||
+              payload['sharedSpaceSyncGuid'] != record.contextSyncGuid) {
+            return ApplyOutcome.droppedUnauthorized;
+          }
+        }
+      }
+
+      if (record.entityType == 'MonthEndRun') {
+        if (record.op == 'delete') return ApplyOutcome.droppedUnauthorized;
+        final payload = canonicalJsonDecode(record.payload);
+        if (payload['sharedSpaceSyncGuid'] != record.contextSyncGuid ||
+            payload['syncGuid'] != record.entitySyncGuid ||
+            payload['actor'] != record.authorIdentityId) {
+          return ApplyOutcome.droppedUnauthorized;
+        }
+      }
       final head = await headFor(
         contextKind: record.contextKind,
         contextLocalId: record.contextLocalId,
@@ -242,9 +337,26 @@ class SyncEngine {
         entitySyncGuid: record.entitySyncGuid,
       );
 
+      if (record.entityType == 'AuditEvent' &&
+          head != null &&
+          record.payload != head.payload) {
+        return ApplyOutcome.droppedUnauthorized;
+      }
       if (head != null && !_wins(record, head)) {
         // Retain the losing record (so a re-send dedupes and the cursor can
         // advance) but never project it; surface it as a conflict.
+        if (record.entityType == 'MonthEndRun' && record.op != 'delete') {
+          final run = await _isar.monthEndRuns
+              .filter()
+              .syncGuidEqualTo(record.entitySyncGuid)
+              .findFirst();
+          if (run != null &&
+              canonicalJsonDecode(record.payload)['fingerprint'] !=
+                  run.fingerprint) {
+            run.hasConflict = true;
+            await _isar.monthEndRuns.put(run);
+          }
+        }
         await _isar.changeRecords.put(record);
         _observe(record);
         await _bumpConflict(peerId, record.contextLocalId);
@@ -287,27 +399,31 @@ class SyncEngine {
     void Function(int spaceId)? onRoundEnd,
   }) async {
     var applied = 0;
+    final evidenceReceipt = _EvidenceReceipt();
     if (initiator) {
       onRoundStart?.call(contextLocalId);
       try {
         final outbound = await _outboundSnapshot(contextLocalId);
-        await connection.send(
-          _encodeEnvelope(
-            'snapshot',
-            await _contextSyncGuid(contextLocalId),
-            outbound,
-          ),
-        );
+        final transfer =
+            await _sendSnapshot(connection, contextLocalId, outbound, peerId);
         var acknowledged = false;
         await for (final message in connection.incoming) {
           final envelope = await _decodeEnvelope(message);
+          final evidenceApplied =
+              await _consumeEvidence(envelope, peerId, evidenceReceipt);
+          if (evidenceApplied != null) {
+            applied += evidenceApplied;
+            continue;
+          }
           if (envelope.type == 'snapshot') {
             applied += await _applyAll(envelope.records, peerId);
+            await _ackEvidence(transfer, envelope.evidenceAck, peerId);
             await connection.send(
               _encodeEnvelope(
                 'ack',
                 await _contextSyncGuid(contextLocalId),
                 const [],
+                evidenceAck: evidenceReceipt.acknowledge(envelope),
               ),
             );
             // Their snapshot only leaves after ours was processed, so a reply
@@ -326,9 +442,16 @@ class SyncEngine {
       final active = <int>[];
       int? sentContext;
       List<ChangeRecord>? sentRecords;
+      _EvidenceTransfer? transfer;
       try {
         await for (final message in connection.incoming) {
           final envelope = await _decodeEnvelope(message);
+          final evidenceApplied =
+              await _consumeEvidence(envelope, peerId, evidenceReceipt);
+          if (evidenceApplied != null) {
+            applied += evidenceApplied;
+            continue;
+          }
           if (envelope.type == 'snapshot') {
             applied += await _applyAll(envelope.records, peerId);
             // T069: same guard as [respond] — a dialed peer cannot plant a space
@@ -340,14 +463,11 @@ class SyncEngine {
             active.add(replyContext);
             sentContext = replyContext;
             sentRecords = await _outboundSnapshot(replyContext);
-            await connection.send(
-              _encodeEnvelope(
-                'snapshot',
-                await _contextSyncGuid(replyContext),
-                sentRecords,
-              ),
-            );
+            transfer = await _sendSnapshot(
+                connection, replyContext, sentRecords, peerId,
+                evidenceAck: evidenceReceipt.acknowledge(envelope));
           } else if (envelope.type == 'ack') {
+            await _ackEvidence(transfer, envelope.evidenceAck, peerId);
             // The peer's ack is the delivery signal for the snapshot above.
             if (sentRecords != null) {
               await _advanceSent(peerId, sentContext!, sentRecords);
@@ -378,9 +498,17 @@ class SyncEngine {
     final active = <int>[];
     int? sentContext;
     List<ChangeRecord>? sentRecords;
+    final evidenceReceipt = _EvidenceReceipt();
+    _EvidenceTransfer? transfer;
     try {
       await for (final message in connection.incoming) {
         final envelope = await _decodeEnvelope(message);
+        final evidenceApplied =
+            await _consumeEvidence(envelope, peerId, evidenceReceipt);
+        if (evidenceApplied != null) {
+          applied += evidenceApplied;
+          continue;
+        }
         if (envelope.type == 'snapshot') {
           final localContextId = envelope.contextSyncGuid.isEmpty
               ? 0
@@ -401,14 +529,11 @@ class SyncEngine {
           active.add(localContextId);
           sentContext = localContextId;
           sentRecords = await _outboundSnapshot(localContextId);
-          await connection.send(
-            _encodeEnvelope(
-              'snapshot',
-              await _contextSyncGuid(localContextId),
-              sentRecords,
-            ),
-          );
+          transfer = await _sendSnapshot(
+              connection, localContextId, sentRecords, peerId,
+              evidenceAck: evidenceReceipt.acknowledge(envelope));
         } else if (envelope.type == 'ack') {
+          await _ackEvidence(transfer, envelope.evidenceAck, peerId);
           // The peer's ack is the delivery signal for the snapshot above.
           if (sentRecords != null) {
             await _advanceSent(peerId, sentContext!, sentRecords);
@@ -427,6 +552,136 @@ class SyncEngine {
   // ---------------------------------------------------------------------------
   // Internals
   // ---------------------------------------------------------------------------
+
+  /// Financial snapshots retain the existing protocol. Document bytes travel
+  /// in separate bounded messages; old peers ignore these extension messages.
+  Future<_EvidenceTransfer?> _sendSnapshot(TransportConnection connection,
+      int contextId, List<ChangeRecord> financial, int? peerId,
+      {String? evidenceAck}) async {
+    final contextGuid = await _contextSyncGuid(contextId);
+    final stampKey =
+        'evidence:sent:$peerId:${_selfIdentityId ?? 'local'}:$contextGuid';
+    var watermark = Hlc.genesis;
+    if (peerId != null) {
+      final stamp = await _isar.schemaMigrationStamps
+          .filter()
+          .keyEqualTo(stampKey)
+          .findFirst();
+      if (stamp != null) {
+        try {
+          final value = jsonDecode(stamp.value) as List;
+          watermark = Hlc(value[0] as int, value[1] as int, value[2] as String);
+        } catch (_) {
+          /* Unknown/corrupt acknowledgement safely resends files. */
+        }
+      }
+    }
+    var query = _isar.changeRecords
+        .filter()
+        .contextLocalIdEqualTo(contextId)
+        .entityTypeEqualTo('ExpenseEvidenceChunk')
+        .hlcMillisGreaterThan(watermark.millis, include: true);
+    if (_selfIdentityId != null) {
+      query = query.authorIdentityIdEqualTo(_selfIdentityId!);
+    }
+    String? round;
+    var head = watermark;
+    var offset = 0;
+    while (true) {
+      final batch = await query
+          .sortByHlcMillis()
+          .thenByHlcCounter()
+          .thenByDeviceId()
+          .offset(offset)
+          .limit(16)
+          .findAll();
+      if (batch.isEmpty) break;
+      for (final record in batch) {
+        final clock = Hlc(record.hlcMillis, record.hlcCounter, record.deviceId);
+        if (clock <= watermark) continue;
+        if (round == null) {
+          round = newSyncGuid();
+          await connection
+              .send(_encodeEnvelope('evidence-base', contextGuid, financial));
+        }
+        await connection
+            .send(_encodeEnvelope('evidence-chunk', contextGuid, [record]));
+        if (clock > head) head = clock;
+      }
+      offset += batch.length;
+    }
+    await connection.send(_encodeEnvelope('snapshot', contextGuid, financial,
+        evidenceRound: round, evidenceAck: evidenceAck));
+    return round == null ? null : _EvidenceTransfer(round, stampKey, head);
+  }
+
+  Future<void> _ackEvidence(
+      _EvidenceTransfer? transfer, String? ack, int? peerId) async {
+    if (transfer == null || transfer.token != ack || peerId == null) return;
+    await _isar.writeTxn(() async {
+      final stamp = await _isar.schemaMigrationStamps
+          .filter()
+          .keyEqualTo(transfer.key)
+          .findFirst();
+      if (stamp != null) {
+        try {
+          final value = jsonDecode(stamp.value) as List;
+          if (Hlc(value[0] as int, value[1] as int, value[2] as String) >
+              transfer.head) {
+            return;
+          }
+        } catch (_) {
+          /* Replace malformed acknowledgement with a verified one. */
+        }
+      }
+      await _isar.schemaMigrationStamps.put((stamp ?? SchemaMigrationStamp())
+        ..key = transfer.key
+        ..value = jsonEncode([
+          transfer.head.millis,
+          transfer.head.counter,
+          transfer.head.deviceId
+        ]));
+    });
+  }
+
+  Future<int?> _consumeEvidence(
+      _Envelope envelope, int? peerId, _EvidenceReceipt receipt) async {
+    if (envelope.type == 'evidence-base') {
+      receipt.context = envelope.contextSyncGuid;
+      receipt.started = true;
+      receipt.valid = false;
+      if (envelope.contextSyncGuid.isEmpty ||
+          envelope.records.any((r) => r.entityType == 'ExpenseEvidenceChunk')) {
+        return 0;
+      }
+      final context = await _isar.writeTxn(() => SyncIdTranslator(_isar)
+          .resolveLocalContext(envelope.contextSyncGuid));
+      if (!await _contextAccepted(peerId, context)) return 0;
+      final applied = await _applyAll(envelope.records, peerId);
+      await _discardNonMemberContexts(envelope.records);
+      receipt.valid = await _isar.sharedSpaces.get(context) != null;
+      return applied;
+    }
+    if (envelope.type != 'evidence-chunk') return null;
+    if (!receipt.started ||
+        !receipt.valid ||
+        receipt.context != envelope.contextSyncGuid ||
+        envelope.records.length != 1 ||
+        envelope.records.single.entityType != 'ExpenseEvidenceChunk') {
+      receipt.valid = false;
+      return 0;
+    }
+    final record = envelope.records.single;
+    if (record.contextSyncGuid != receipt.context) {
+      receipt.valid = false;
+      return 0;
+    }
+    final outcome = await applyIncoming(record, peerId: peerId);
+    if (outcome != ApplyOutcome.applied && outcome != ApplyOutcome.duplicate) {
+      receipt.valid = false;
+    }
+    return outcome == ApplyOutcome.applied ? 1 : 0;
+  }
 
   Future<int> _applyAll(List<ChangeRecord> records, int? peerId) async {
     // Sort by dependency rank, keeping the original order within a rank so the
@@ -541,7 +796,14 @@ class SyncEngine {
         .filter()
         .sharedSpaceIdEqualTo(record.contextLocalId)
         .findAll();
-    if (!members.any((m) => m.authorIdentityId != null)) return null;
+    if (!members.any((m) => m.authorIdentityId != null) &&
+        record.entityType != 'MonthEndRun' &&
+        record.entityType != 'AuditEvent' &&
+        record.entityType != 'Merchant' &&
+        record.entityType != 'ExpenseEvidenceChunk' &&
+        record.entityType != 'ExpensePurchase') {
+      return null;
+    }
 
     SharedMember? head;
     final key = sharedMemberKey(record.authorIdentityId);
@@ -554,13 +816,34 @@ class SyncEngine {
     head ??= batchMembers?[key];
 
     var sealed = false;
-    final month = monthKeyOf(record.entityType, record.payload);
+    // Delivering already-declared immutable file bytes does not edit a sealed
+    // financial month. The applier still requires its expense/history manifest.
+    final month = record.entityType == 'ExpenseEvidenceChunk'
+        ? null
+        : record.entityType == 'ExpensePurchase' && record.op == 'delete'
+            ? (await _isar.expensePurchases
+                    .filter()
+                    .syncGuidEqualTo(record.entitySyncGuid)
+                    .findFirst())
+                ?.yearMonth
+            : monthKeyOf(record.entityType, record.payload);
     if (month != null) {
       sealed =
           await _isar.monthRateSeals.filter().yearMonthEqualTo(month).count() >
               0;
     }
 
+    if (record.entityType == 'AuditEvent') {
+      try {
+        final type =
+            const AuditEventCodec().fromPayload(record.payload).objectType;
+        if (!_guard.canAuthor(head, type)) {
+          return ApplyOutcome.droppedUnauthorized;
+        }
+      } catch (_) {
+        return ApplyOutcome.droppedUnauthorized;
+      }
+    }
     try {
       _guard.assertAuthorizedAt(
         record,
@@ -779,6 +1062,7 @@ class SyncEngine {
       for (final member in members) {
         await _isar.sharedMembers.delete(member.id);
       }
+      await purgeSpaceEvidenceInTxn(_isar, spaceId);
       await _isar.sharedSpaces.delete(spaceId);
     });
   }
@@ -823,14 +1107,14 @@ class SyncEngine {
   // --- envelope wire format --------------------------------------------------
 
   String _encodeEnvelope(
-    String type,
-    String contextSyncGuid,
-    List<ChangeRecord> records,
-  ) =>
+          String type, String contextSyncGuid, List<ChangeRecord> records,
+          {String? evidenceRound, String? evidenceAck}) =>
       jsonEncode({
         'type': type,
         'contextSyncGuid': contextSyncGuid,
         'records': [for (final record in records) _encodeRecord(record)],
+        if (evidenceRound != null) 'evidenceRound': evidenceRound,
+        if (evidenceAck != null) 'evidenceAck': evidenceAck,
       });
 
   Future<_Envelope> _decodeEnvelope(String message) async {
@@ -843,6 +1127,11 @@ class SyncEngine {
       json['type'] as String,
       (json['contextSyncGuid'] as String?) ?? '',
       records,
+      evidenceRound: json['evidenceRound'] is String
+          ? json['evidenceRound'] as String
+          : null,
+      evidenceAck:
+          json['evidenceAck'] is String ? json['evidenceAck'] as String : null,
     );
   }
 
@@ -885,9 +1174,26 @@ class SyncEngine {
 }
 
 class _Envelope {
-  const _Envelope(this.type, this.contextSyncGuid, this.records);
+  const _Envelope(this.type, this.contextSyncGuid, this.records,
+      {this.evidenceRound, this.evidenceAck});
 
   final String type;
   final String contextSyncGuid;
   final List<ChangeRecord> records;
+  final String? evidenceRound, evidenceAck;
+}
+
+class _EvidenceTransfer {
+  const _EvidenceTransfer(this.token, this.key, this.head);
+  final String token, key;
+  final Hlc head;
+}
+
+class _EvidenceReceipt {
+  bool started = false, valid = false;
+  String context = '';
+  String? acknowledge(_Envelope envelope) =>
+      started && valid && context == envelope.contextSyncGuid
+          ? envelope.evidenceRound
+          : null;
 }

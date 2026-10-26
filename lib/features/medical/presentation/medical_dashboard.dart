@@ -17,6 +17,7 @@ import '../../engine/providers/rate_registry_provider.dart';
 import '../../settings/providers/settings_provider.dart';
 import '../../spaces/providers/spaces_providers.dart';
 import '../../dashboard/presentation/widgets/month_convert_to_menu.dart';
+import '../../../shared/presentation/money_conversion.dart';
 import '../../../shared/presentation/money_format.dart';
 import '../../../shared/presentation/widgets/conversion_footnote.dart';
 import '../../../shared/presentation/widgets/money_field.dart';
@@ -36,6 +37,8 @@ class MedicalDashboard extends ConsumerWidget {
     return Scaffold(
       backgroundColor: background,
       appBar: AppBar(
+        automaticallyImplyLeading: false,
+        toolbarHeight: 48,
         title: const Text('Health & Insurance'),
         backgroundColor: background,
         elevation: 0,
@@ -761,11 +764,19 @@ class _BillTile extends ConsumerWidget {
     final provider = directory.providerName(bill.providerId);
     final patient = directory.memberName(bill.familyMemberId);
 
+    // T158: every read-only amount is shown in the display currency, with the
+    // bill's own amount revealed on long-press (FR-020). A legacy bill with no
+    // currency of its own is treated as already being in the display currency.
+    final from = bill.currencyCode ?? currency;
+    final billed = convertAndFormat(bill.billedAmount, from, currency, table);
+    final patientShare =
+        convertAndFormat(bill.patientShareAmount, from, currency, table);
+
     // The budget impact is denominated in the bill's own currency; show it in
     // the display currency so a foreign-currency bill's cost is comparable with
     // the rest of the month (FR-016).
     final fundsImpactMinor = toDisplay(
-      Money(bill.fundsImpact, bill.currencyCode ?? currency),
+      Money(bill.fundsImpact, from),
       currency,
       table,
     ).minorUnits;
@@ -865,14 +876,17 @@ class _BillTile extends ConsumerWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Text(
-              MedicalTheme.moneyMinor(
-                  bill.currencyCode ?? currency, bill.billedAmount),
+            ConvertedAmountText(
+              text: billed.text,
+              originalText: billed.originalText,
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
             if (bill.paymentMethod == MedicalPaymentMethod.insurerPaid)
-              Text(
-                '${MedicalTheme.moneyMinor(bill.currencyCode ?? currency, bill.patientShareAmount)} you',
+              ConvertedAmountText(
+                text: '${patientShare.text} you',
+                originalText: patientShare.originalText == null
+                    ? null
+                    : '${patientShare.originalText} you',
                 style: TextStyle(
                   fontSize: 12,
                   color: MedicalTheme.subtleText(context),

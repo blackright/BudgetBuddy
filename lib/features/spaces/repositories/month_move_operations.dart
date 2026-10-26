@@ -1,5 +1,16 @@
+import '../../expenses/repositories/merchant_repository.dart';
+import '../../../core/models/expense_purchase.dart';
+import '../../../core/services/expense_evidence.dart';
+import '../../expenses/repositories/expense_evidence_repository.dart';
+import '../../../core/models/merchant.dart';
+import '../../finance/repositories/audit_repository.dart';
+import '../../sync/repositories/sync_recorder.dart';
+import '../../sync/providers/sync_recorder_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:isar/isar.dart';
+import '../../../core/models/month_end_run.dart';
+import '../../vault/models/vault_entry.dart';
+import '../../vault/vault_transfer_ledger.dart';
 
 import '../../../core/database/isar_helper.dart';
 import '../../../core/models/currency_code.dart';
@@ -50,12 +61,14 @@ class _SourceIncome {
 class MonthMoveOperations {
   MonthMoveOperations(
     this._isar, {
+    this.recorder,
     RateTableRegistry? rateRegistry,
     SpaceAccessGuard guard = const SpaceAccessGuard(),
   })  : _rates = rateRegistry ?? RateTableRegistry(),
         _guard = guard;
 
   final Isar _isar;
+  final SyncRecorder? recorder;
   final RateTableRegistry _rates;
   final SpaceAccessGuard _guard;
 
@@ -128,6 +141,17 @@ class MonthMoveOperations {
         'room (US3 AC4)',
       );
     }
+    await _assertNoSettlement(from, yearMonth);
+    await _assertNoSettlement(destination, yearMonth);
+    if ((await _expensesIn(from, yearMonth))
+            .any((e) => e.fxHistoryJson != null) ||
+        (await _reimbursementsIn(from, yearMonth))
+            .any((r) => r.fxHistoryJson != null)) {
+      throw StateError(
+          'This month contains booked accounting evidence. Moving it to another owner requires a reviewed accounting transfer. No records were moved.');
+    }
+
+    final auditBefore = await _auditMoney(from, yearMonth);
 
     // Resolve the source pot's income before the context columns change.
     final income = await _resolveSourceIncome(from, source);
@@ -137,9 +161,13 @@ class MonthMoveOperations {
     source.updatedAt = DateTime.now();
     await _isar.monthlyBudgets.put(source);
 
-    await _moveExpenses(from, destination, yearMonth, source.id);
+    await _moveExpenses(
+        from, destination, yearMonth, source.id, actingProfileId);
     await _moveReimbursements(from, destination, yearMonth);
     await _moveBills(from, destination, yearMonth);
+    final auditAfter = await _auditMoney(destination, yearMonth);
+    await _auditMove(
+        auditBefore, auditAfter, from, destination, actingProfileId);
 
     return source;
   }
@@ -167,6 +195,8 @@ class MonthMoveOperations {
           'only the owning profile may delete a personal month',
         );
       }
+      await _assertNoSettlement(target, yearMonth);
+      final auditBefore = await _auditMoney(target, yearMonth);
 
       await _isar.monthlyBudgets
           .filter()
@@ -175,6 +205,13 @@ class MonthMoveOperations {
               : q.profileIdEqualTo(target.profileKey))
           .and()
           .yearMonthEqualTo(yearMonth)
+          .deleteAll();
+      await _isar.expensePurchases
+          .filter()
+          .yearMonthEqualTo(yearMonth)
+          .group((q) => target.isShared
+              ? q.sharedSpaceIdEqualTo(target.spaceId)
+              : q.sharedSpaceIdIsNull().profileIdEqualTo(target.profileKey))
           .deleteAll();
       await _isar.expenses
           .filter()
@@ -200,7 +237,122 @@ class MonthMoveOperations {
           .and()
           .yearMonthEqualTo(yearMonth)
           .deleteAll();
+      for (final group in auditBefore.entries) {
+        for (final row in group.value) {
+          await AuditRepository(_isar,
+                  recorder: recorder, actorId: actingProfileId)
+              .append(
+                  profileId: target.isShared ? null : target.profileId,
+                  spaceId: target.spaceId,
+                  action: '${group.key.toLowerCase()}.delete',
+                  objectType: group.key,
+                  objectGuid: row['syncGuid'] as String,
+                  before: row);
+        }
+      }
     });
+  }
+
+  /// Re-homing only one leg would detach carry funding from its destination.
+  /// The legacy month-resolution flow cannot rewrite an immutable settlement.
+  Future<Map<String, List<Map<String, dynamic>>>> _auditMoney(
+      ContextRef context, String month) async {
+    final query = _isar.monthlyBudgets.filter().yearMonthEqualTo(month).group(
+        (q) => context.isShared
+            ? q.sharedSpaceIdEqualTo(context.spaceId)
+            : q.sharedSpaceIdIsNull().profileIdEqualTo(context.profileId));
+    return {
+      'MonthlyBudget': await query.exportJson(),
+      'Expense': await _isar.expenses
+          .filter()
+          .yearMonthEqualTo(month)
+          .group((q) => context.isShared
+              ? q.sharedSpaceIdEqualTo(context.spaceId)
+              : q.sharedSpaceIdIsNull().profileIdEqualTo(context.profileKey))
+          .exportJson(),
+      'Reimbursement': await _isar.reimbursements
+          .filter()
+          .originYearMonthEqualTo(month)
+          .group((q) => context.isShared
+              ? q.sharedSpaceIdEqualTo(context.spaceId)
+              : q.sharedSpaceIdIsNull().profileIdEqualTo(context.profileKey))
+          .exportJson(),
+      'MedicalBill': await _isar.medicalBills
+          .filter()
+          .yearMonthEqualTo(month)
+          .group((q) => context.isShared
+              ? q.sharedSpaceIdEqualTo(context.spaceId)
+              : q.sharedSpaceIdIsNull().profileIdEqualTo(context.profileKey))
+          .exportJson(),
+    };
+  }
+
+  Future<void> _auditMove(
+      Map<String, List<Map<String, dynamic>>> before,
+      Map<String, List<Map<String, dynamic>>> after,
+      ContextRef from,
+      ContextRef to,
+      int actor) async {
+    final audit = AuditRepository(_isar, recorder: recorder, actorId: actor);
+    for (final group in before.entries) {
+      for (final row in group.value) {
+        final next = after[group.key]!
+            .where((r) => r['syncGuid'] == row['syncGuid'])
+            .firstOrNull;
+        if (next == null) {
+          throw StateError('Moved financial evidence is missing.');
+        }
+        await audit.append(
+            profileId: from.isShared ? null : from.profileId,
+            spaceId: from.spaceId,
+            action: '${group.key.toLowerCase()}.move.out',
+            objectType: group.key,
+            objectGuid: row['syncGuid'] as String,
+            before: row,
+            after: {
+              'movedToSharedSpace': to.isShared,
+              'yearMonth': to.yearMonth
+            });
+        await audit.append(
+            profileId: to.isShared ? null : to.profileId,
+            spaceId: to.spaceId,
+            action: '${group.key.toLowerCase()}.move.in',
+            objectType: group.key,
+            objectGuid: row['syncGuid'] as String,
+            before: {
+              'movedFromSharedSpace': from.isShared,
+              'yearMonth': from.yearMonth
+            },
+            after: next);
+      }
+    }
+  }
+
+  Future<void> _assertNoSettlement(ContextRef context, String month) async {
+    if (!context.isShared) {
+      final entries = await _isar.vaultEntrys
+          .filter()
+          .profileIdEqualTo(context.profileId!)
+          .yearMonthEqualTo(month)
+          .findAll();
+      if (entries.any((e) => vaultTransferKinds.contains(e.kind))) {
+        throw const UnauthorizedSpaceAction(
+            'This personal month contains Savings Vault transfers and cannot be moved or deleted individually. Its linked financial history must remain intact.');
+      }
+    }
+    final count = await _isar.monthEndRuns
+        .filter()
+        .group((q) => context.isShared
+            ? q.sharedSpaceIdEqualTo(context.spaceId)
+            : q.profileIdEqualTo(context.profileId).sharedSpaceIdIsNull())
+        .and()
+        .group((q) =>
+            q.yearMonthEqualTo(month).or().destinationMonthEqualTo(month))
+        .count();
+    if (count > 0) {
+      throw const UnauthorizedSpaceAction(
+          'This month participates in a saved month-end settlement and cannot be moved or deleted individually. A settlement correction is required.');
+    }
   }
 
   /// The context a personal [to] moves into, honouring an explicit
@@ -292,10 +444,40 @@ class MonthMoveOperations {
     ContextRef to,
     String yearMonth,
     int targetBudgetId,
+    int actorId,
   ) async {
     final rows = await _expensesIn(from, yearMonth);
     if (rows.isEmpty) return;
+    final sharedDocuments = <String, List<PreparedEvidence>>{};
+    final remaining = <String, int>{};
+    for (final row in rows) {
+      if (row.purchaseSyncGuid != null) {
+        remaining.update(row.purchaseSyncGuid!, (n) => n + 1,
+            ifAbsent: () => 1);
+      }
+    }
     for (final expense in rows) {
+      final evidenceRepository =
+          ExpenseEvidenceRepository(_isar, recorder: recorder);
+      final documents = expense.purchaseSyncGuid == null
+          ? await evidenceRepository.prepareContextMove(expense)
+          : sharedDocuments[expense.purchaseSyncGuid!] ??=
+              await evidenceRepository.prepareContextMove(expense);
+      if (expense.merchantSyncGuid != null && expense.merchantName == null) {
+        final merchant = await _isar.merchants
+            .filter()
+            .syncGuidEqualTo(expense.merchantSyncGuid!)
+            .findFirst();
+        if (merchant != null &&
+            (from.isShared
+                ? merchant.sharedSpaceId == from.spaceId
+                : merchant.sharedSpaceId == null &&
+                    merchant.profileId == from.profileId)) {
+          expense.merchantName = merchant.canonicalName;
+        }
+      }
+      expense.merchantSyncGuid =
+          null; // Rebind a portable target in the destination.
       if (to.isShared) {
         expense
           ..sharedSpaceId = to.spaceId
@@ -309,8 +491,32 @@ class MonthMoveOperations {
       // setting it explicitly keeps the invariant true even if provisioning
       // ever changes.
       expense.budgetId = targetBudgetId;
+      await evidenceRepository.finishContextMoveInTxn(expense, documents);
+      if (expense.purchaseSyncGuid != null) {
+        final guid = expense.purchaseSyncGuid!;
+        remaining[guid] = remaining[guid]! - 1;
+        if (remaining[guid] == 0) {
+          sharedDocuments.remove(guid);
+        }
+      }
+      await MerchantRepository(_isar, recorder: recorder, actorId: actorId)
+          .bindExpenseInTxn(expense);
     }
     await _isar.expenses.putAll(rows);
+    for (final guid
+        in rows.map((e) => e.purchaseSyncGuid).whereType<String>().toSet()) {
+      final purchase = await _isar.expensePurchases
+          .filter()
+          .syncGuidEqualTo(guid)
+          .findFirst();
+      if (purchase == null) throw StateError('Purchase is missing.');
+      purchase
+        ..profileId = to.profileKey
+        ..sharedSpaceId = to.spaceId
+        ..budgetId = targetBudgetId
+        ..advanceRevision();
+      await _isar.expensePurchases.put(purchase);
+    }
   }
 
   Future<void> _moveReimbursements(
@@ -541,6 +747,7 @@ class MonthMoveOperations {
 final monthMoveOperationsProvider = Provider<MonthMoveOperations>((ref) {
   return MonthMoveOperations(
     IsarHelper.instance,
+    recorder: ref.watch(syncRecorderProvider),
     rateRegistry: ref.watch(rateRegistryProvider),
     guard: ref.watch(spaceRoleGuardProvider),
   );

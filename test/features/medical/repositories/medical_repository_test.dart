@@ -1,3 +1,4 @@
+import '../../../support/audit_test_support.dart';
 import 'package:budget_buddy/core/models/currency_code.dart';
 import 'package:budget_buddy/core/models/expense.dart';
 import 'package:budget_buddy/core/models/insurance_profile.dart';
@@ -1295,8 +1296,10 @@ void main() {
       // save itself must overwrite it, because the context owns the row.
       final subject = bill()..profileId = context.profileId;
 
-      final saved =
-          await harness.repository.saveBill(subject, sharedBillContext);
+      final saved = await MedicalRepository(harness.isar,
+              rateRegistry: MedicalTestHarness.rates,
+              syncRecorder: await auditTestRecorder(harness.isar))
+          .saveBill(subject, sharedBillContext);
 
       expect(saved.sharedSpaceId, spaceId);
       expect(saved.profileId, 0,
