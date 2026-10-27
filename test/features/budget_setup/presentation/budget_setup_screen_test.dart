@@ -40,7 +40,14 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await tester.scrollUntilVisible(
+        find.byKey(const Key('welcomeNameField')), 200,
+        scrollable: find.byType(Scrollable).first);
     await tester.enterText(find.byKey(const Key('welcomeNameField')), 'Jason');
+    await tester.scrollUntilVisible(
+        find.byKey(const Key('welcomeContinueButton')), 200,
+        scrollable: find.byType(Scrollable).first);
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('welcomeContinueButton')));
     await tester.pumpAndSettle();
     expect(notifier.state.name, 'Jason');

@@ -1,3 +1,4 @@
+import 'package:budget_buddy/core/models/app_settings.dart';
 import 'package:budget_buddy/core/models/live_rate_set.dart';
 import '../../support/audit_test_support.dart';
 import 'package:budget_buddy/core/models/month_end_run.dart';
@@ -86,6 +87,7 @@ void main() {
       MonthRateSealSchema,
       LiveRateSetSchema,
       ChangeRecordSchema,
+      AppSettingsSchema,
       SchemaMigrationStampSchema
     ], directory: directory.path, name: 'refund_${serial++}');
     auditRecorder = await auditTestRecorder(isar);

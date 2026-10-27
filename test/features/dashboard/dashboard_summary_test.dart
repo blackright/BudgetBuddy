@@ -378,7 +378,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('monthIncompleteBanner')), findsOneWidget);
-      expect(find.textContaining('Net salary'), findsOneWidget);
+      expect(find.textContaining('Income Sources'), findsOneWidget);
     });
 
     testWidgets('the banner is absent for a complete month', (tester) async {

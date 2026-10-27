@@ -1,3 +1,4 @@
+import 'package:budget_buddy/core/models/app_settings.dart';
 import 'dart:io';
 import 'package:budget_buddy/core/database/schema_migrations.dart';
 import 'package:budget_buddy/core/models/audit_event.dart';
@@ -32,7 +33,8 @@ void main() {
         ..value = '26');
     });
     await db.close();
-    db = await Isar.open([AuditEventSchema, SchemaMigrationStampSchema],
+    db = await Isar.open(
+        [AppSettingsSchema, AuditEventSchema, SchemaMigrationStampSchema],
         directory: dir.path, name: 'audit-native-upgrade');
     try {
       await runSchemaMigrations(db);

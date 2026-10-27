@@ -1,3 +1,5 @@
+import 'package:budget_buddy/core/models/lock_setting.dart';
+import 'package:budget_buddy/core/models/expense_template.dart';
 import 'package:budget_buddy/core/models/merchant.dart';
 import 'package:budget_buddy/core/models/expense_evidence_chunk.dart';
 import 'package:budget_buddy/core/models/expense_purchase.dart';
@@ -56,6 +58,8 @@ class MedicalTestHarness {
 
   static List<CollectionSchema> get schemas => [
         AppSettingsSchema,
+        LockSettingSchema,
+        ExpenseTemplateSchema,
         MerchantSchema,
         ExpenseEvidenceChunkSchema,
         ExpensePurchaseSchema,

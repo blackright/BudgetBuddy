@@ -53,19 +53,24 @@ class IncomeSourceRepository {
     return _isar.incomeSources.where().watch(fireImmediately: true);
   }
 
-  Future<void> save(IncomeSource source) async {
+  Future<void> save(IncomeSource source) =>
+      _isar.writeTxn(() => saveInTxn(source));
+
+  /// The caller owns the transaction and explicitly supplies this repository's
+  /// actor/record owner. This seam avoids nested financial transactions.
+  Future<void> saveInTxn(IncomeSource source) async {
     final now = DateTime.now();
     source.updatedAt = now;
     if (source.createdAt.millisecondsSinceEpoch == 0) {
       source.createdAt = now;
     }
-    await _isar.writeTxn(() async {
-      source.id = await audit.put(_isar.incomeSources, source,
-          id: source.id, type: 'IncomeSource');
-    });
+    source.id = await audit.put(_isar.incomeSources, source,
+        id: source.id, type: 'IncomeSource');
   }
 
-  Future<void> delete(int id) => _isar.writeTxn(() async {
-        await audit.remove(_isar.incomeSources, id, type: 'IncomeSource');
-      });
+  Future<void> delete(int id) => _isar.writeTxn(() => deleteInTxn(id));
+
+  Future<void> deleteInTxn(int id) async {
+    await audit.remove(_isar.incomeSources, id, type: 'IncomeSource');
+  }
 }

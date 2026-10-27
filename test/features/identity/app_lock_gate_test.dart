@@ -189,53 +189,40 @@ void main() {
     expect(find.text('secret app'), findsOneWidget);
   });
 
-  testWidgets(
-      'a key left in memory is dropped after the frame, not during build',
+  testWidgets('owner resolution clears an existing key without a build write',
       (tester) async {
     final identityController = StreamController<Identity?>();
-    final consentController = StreamController<ConsentRecord?>();
     addTearDown(identityController.close);
-    addTearDown(consentController.close);
-
-    final container = ProviderContainer(
-      overrides: [
-        identityProvider.overrideWith((ref) => identityController.stream),
-        consentProvider.overrideWith((ref) => consentController.stream),
-        deviceAuthenticatorProvider
-            .overrideWithValue(_ScriptedAuthenticator([true])),
-        identityKeyLoaderProvider.overrideWithValue(_FakeKeyLoader(_keyPair())),
-      ],
-    );
+    final container = ProviderContainer(overrides: [
+      identityProvider.overrideWith((ref) => identityController.stream),
+      consentProvider
+          .overrideWith((ref) => Stream.value(_consent(deviceAuth: true))),
+      deviceAuthenticatorProvider
+          .overrideWithValue(_ScriptedAuthenticator([true])),
+      identityKeyLoaderProvider.overrideWithValue(_FakeKeyLoader(_keyPair())),
+    ]);
     addTearDown(container.dispose);
-
     await tester.pumpWidget(_app(container));
-    expect(find.text('secret app'), findsOneWidget,
-        reason: 'nothing has settled, so the gate cannot decide yet');
-
-    // Something already released the key this session (a tap-time prompt such
-    // as "Pair with a device"), so the guard has a real write to make. This is
-    // the case the in-build call crashed on.
+    expect(find.text('secret app'), findsNothing);
     expect(
-      await container
-          .read(deviceKeySessionProvider.notifier)
-          .require(reason: 'Pair with a device'),
-      isNotNull,
-    );
-    expect(container.read(deviceKeySessionProvider), isNotNull);
-
+        await container
+            .read(deviceKeySessionProvider.notifier)
+            .require(reason: 'Pair with a device'),
+        isNull,
+        reason: 'unknown identity cannot release a key');
     identityController.add(_identity());
-    consentController.add(_consent(deviceAuth: true));
-    await tester.pump();
-    await tester.pump();
-
-    expect(tester.takeException(), isNull,
-        reason: 'the write must not happen during the build pass');
-    expect(find.text('BudgetBuddy is locked'), findsOneWidget);
-    expect(container.read(deviceKeySessionProvider), isNull,
-        reason: 'the shut gate drops the key it found');
+    await _settle(tester);
+    await tester.tap(find.byKey(const Key('unlockButton')));
+    await tester.pumpAndSettle();
+    expect(container.read(deviceKeySessionProvider), isNotNull);
+    identityController.add(null);
+    await _settle(tester);
+    expect(tester.takeException(), isNull);
+    expect(find.text('secret app'), findsNothing);
+    expect(container.read(deviceKeySessionProvider), isNull);
   });
 
-  testWidgets('no identity leaves the gate inert and never prompts',
+  testWidgets('no identity still requires native authentication',
       (tester) async {
     final authenticator = _ScriptedAuthenticator([true]);
     final container = _containerWith(
@@ -249,11 +236,16 @@ void main() {
     await _settle(tester);
 
     expect(tester.takeException(), isNull);
-    expect(find.text('secret app'), findsOneWidget);
+    expect(find.text('secret app'), findsNothing);
     expect(authenticator.prompts, 0);
+    await tester.tap(find.byKey(const Key('unlockButton')));
+    await tester.pumpAndSettle();
+    expect(authenticator.prompts, 1);
+    expect(find.text('secret app'), findsOneWidget);
   });
 
-  testWidgets('declined device auth leaves the gate inert and never prompts',
+  testWidgets(
+      'old optional consent cannot disable mandatory native authentication',
       (tester) async {
     final authenticator = _ScriptedAuthenticator([true]);
     final container = _containerWith(
@@ -267,7 +259,11 @@ void main() {
     await _settle(tester);
 
     expect(tester.takeException(), isNull);
-    expect(find.text('secret app'), findsOneWidget);
+    expect(find.text('secret app'), findsNothing);
     expect(authenticator.prompts, 0);
+    await tester.tap(find.byKey(const Key('unlockButton')));
+    await tester.pumpAndSettle();
+    expect(authenticator.prompts, 1);
+    expect(find.text('secret app'), findsOneWidget);
   });
 }

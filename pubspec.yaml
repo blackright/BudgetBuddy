@@ -50,6 +50,8 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
+    - assets/branding/production/wallet.png
+    - assets/branding/production/coin.png
     - assets/fonts/reports/NotoSans-Regular.ttf
     - assets/fonts/reports/NotoSans-Bold.ttf
     - assets/fonts/reports/OFL.txt

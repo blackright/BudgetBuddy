@@ -25,7 +25,7 @@ void main() {
   setUp(() async {
     await Isar.initializeIsarCore(download: false);
     dir = await Directory.systemTemp.createTemp('phase14_');
-    db = await Isar.open([...MedicalTestHarness.schemas, LockSettingSchema],
+    db = await Isar.open(MedicalTestHarness.schemas,
         directory: dir.path, name: 'p14_${serial++}');
     IsarHelper.instance = db;
   });

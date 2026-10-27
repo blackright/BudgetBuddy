@@ -175,6 +175,10 @@ void main() {
     String? chosen;
     await tester.pumpWidget(MaterialApp(
         home: WelcomeStep(name: '', onContinue: (name) => chosen = name)));
+    await tester.scrollUntilVisible(
+        find.byKey(const Key('welcomeContinueButton')), 200,
+        scrollable: find.byType(Scrollable).first);
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('welcomeContinueButton')));
     await tester.pump();
     expect(chosen, isNull);
@@ -182,6 +186,10 @@ void main() {
     await tester.enterText(find.byKey(const Key('welcomeNameField')), ' José ');
     await tester.pumpAndSettle();
     expect(find.text('J'), findsOneWidget);
+    await tester.scrollUntilVisible(
+        find.byKey(const Key('welcomeContinueButton')), 200,
+        scrollable: find.byType(Scrollable).first);
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('welcomeContinueButton')));
     expect(chosen, 'José');
   });

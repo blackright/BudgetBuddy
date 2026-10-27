@@ -34,8 +34,8 @@ class LockSetting {
   /// else `''`.
   String subjectGuid = '';
 
-  /// Whether this subject asks for a lock at all. `false` means the app behaves
-  /// exactly as it did before this feature — opt-in, never forced (assumption).
+  /// Whether this subject asks for an additional app PIN. Native phone
+  /// authentication remains mandatory when this additional factor is off.
   bool lockEnabled = false;
 
   /// Whether the in-session biometric shortcut is on for this subject

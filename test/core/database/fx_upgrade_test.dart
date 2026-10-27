@@ -1,3 +1,4 @@
+import 'package:budget_buddy/core/models/app_settings.dart';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:isar/isar.dart';
@@ -7,7 +8,7 @@ import '../../features/expenses/support/previous_purchase_expense.dart';
 
 void main() {
   test(
-      'pre-FX native schema reopens at 31 without booking or changing legacy money',
+      'pre-FX native schema reopens at 32 without booking or changing legacy money',
       () async {
     await Isar.initializeIsarCore(download: false);
     final directory = await Directory.systemTemp.createTemp('fx_upgrade_');
@@ -28,7 +29,8 @@ void main() {
     await db.writeTxn(() => db.previousPurchaseExpenses.put(old));
     await writeSchemaVersion(db, 30);
     await db.close();
-    db = await Isar.open([ExpenseSchema, SchemaMigrationStampSchema],
+    db = await Isar.open(
+        [AppSettingsSchema, ExpenseSchema, SchemaMigrationStampSchema],
         directory: directory.path, name: 'fx-upgrade');
     try {
       await runSchemaMigrations(db);
@@ -41,9 +43,10 @@ void main() {
       expect(row.date, old.date);
       expect(row.status, ExpenseStatus.paid);
       expect(row.merchantName, 'Market');
-      expect(await readSchemaVersion(db), 31);
+      expect(await readSchemaVersion(db), 32);
       await db.close();
-      db = await Isar.open([ExpenseSchema, SchemaMigrationStampSchema],
+      db = await Isar.open(
+          [AppSettingsSchema, ExpenseSchema, SchemaMigrationStampSchema],
           directory: directory.path, name: 'fx-upgrade');
       expect((await db.expenses.get(old.id))!.fxHistoryJson, isNull);
     } finally {

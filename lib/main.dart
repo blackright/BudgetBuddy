@@ -1,3 +1,5 @@
+import 'shared/presentation/branding/branded_startup.dart';
+import 'features/budget_setup/providers/setup_handoff_provider.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -15,6 +17,9 @@ import 'core/providers/database_integrity_provider.dart';
 import 'core/routing/router_providers.dart';
 import 'features/engine/providers/sweep_provider.dart';
 import 'features/engine/seal_coordinator.dart';
+import 'features/budget_setup/domain/onboarding_automation_guard.dart';
+import 'features/budget_setup/providers/onboarding_rollout_provider.dart';
+import 'core/providers/budget_context_provider.dart';
 import 'features/identity/presentation/app_lock_gate.dart';
 import 'features/security/providers/lock_lifecycle_observer.dart';
 import 'features/security/repositories/monotonic_clock_impl.dart';
@@ -103,14 +108,35 @@ class _SealLifecycleObserver extends WidgetsBindingObserver {
     unawaited(
       _container.read(sealCoordinatorProvider).runSealPass(DateTime.now()),
     );
-    _snapToCurrentMonth();
+    unawaited(_snapToCurrentMonth());
   }
 
   /// US8: if the app comes back after the month rolled over, show the current
   /// month rather than the one it was left on. A current or deliberately chosen
   /// future month is left alone.
-  void _snapToCurrentMonth() {
+  Future<void> _snapToCurrentMonth() async {
     final selected = _container.read(selectedYearMonthProvider);
+    final context = _container.read(budgetContextProvider);
+    final handoff = _container.read(setupHandoffProvider);
+    if (setupHandoffOwnsContext(handoff,
+        profileId: context.profileId, isShared: context.isShared)) {
+      return;
+    }
+
+    if (await preserveAutomaticSetupMonth(IsarHelper.instance,
+        profileId: context.profileId,
+        isShared: context.isShared,
+        allowDraft: _container.read(unifiedOnboardingEnabledProvider))) {
+      return;
+    }
+    if (_container.read(selectedYearMonthProvider) != selected ||
+        _container.read(budgetContextProvider) != context) {
+      return;
+    }
+    if (setupHandoffOwnsContext(_container.read(setupHandoffProvider),
+        profileId: context.profileId, isShared: context.isShared)) {
+      return;
+    }
     final snapped = snapToCurrentMonthIfBehind(selected);
     if (snapped != selected) {
       _container.read(selectedYearMonthProvider.notifier).state = snapped;
@@ -178,8 +204,11 @@ class _SyncLifecycleObserver extends WidgetsBindingObserver {
   }
 }
 
+final _processBrandSession = StartupBrandSession();
+
 class MyApp extends ConsumerWidget {
-  const MyApp({super.key});
+  const MyApp({super.key, this.startupSession});
+  final StartupBrandSession? startupSession;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -189,13 +218,23 @@ class MyApp extends ConsumerWidget {
     final integrity = ref.watch(moneyIntegrityIssuesProvider);
     return integrity.when(
       skipLoadingOnRefresh: false,
-      loading: () => const _StartupSplash(),
+      loading: () =>
+          _StartupSplash(session: startupSession ?? _processBrandSession),
       error: (error, stackTrace) => _StartupSplash(
+        session: startupSession ?? _processBrandSession,
         onRetry: () => ref.invalidate(moneyIntegrityIssuesProvider),
       ),
-      data: (issues) => issues.isEmpty
-          ? _buildRouterApp(context, ref)
-          : DatabaseCorruptionScreen(issues: issues),
+      data: (issues) {
+        // A fast resolved start also consumes the one-time decoration slot.
+        // Later integrity refreshes must not introduce a new startup sequence.
+        (startupSession ?? _processBrandSession).claim();
+        return issues.isEmpty
+            ? _buildRouterApp(context, ref)
+            : MaterialApp(
+                theme: buildAppTheme(brightness: Brightness.light),
+                darkTheme: buildAppTheme(brightness: Brightness.dark),
+                home: DatabaseCorruptionScreen(issues: issues));
+      },
     );
   }
 
@@ -241,9 +280,8 @@ class MyApp extends ConsumerWidget {
       ),
       themeMode: themeMode,
       routerConfig: router,
-      // US1 (FR-002 AC2): when the user has an identity and has granted device
-      // auth, the app opens behind the phone's own authentication. Inert
-      // otherwise, so existing (identity-less) installs are unchanged.
+      // Native phone verification also protects personal-only and no-PIN users.
+      // Configured app PINs and real sharing keys remain required.
       builder: (context, child) =>
           AppLockGate(child: child ?? const SizedBox.shrink()),
     );
@@ -251,44 +289,17 @@ class MyApp extends ConsumerWidget {
 }
 
 class _StartupSplash extends StatelessWidget {
-  const _StartupSplash({this.onRetry});
-
+  const _StartupSplash({required this.session, this.onRetry});
+  final StartupBrandSession session;
   final VoidCallback? onRetry;
-
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
+  Widget build(BuildContext context) => MaterialApp(
       title: 'BudgetBuddy',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
-      ),
-      home: Scaffold(
-        body: Center(
-          child: onRetry == null
-              ? const CircularProgressIndicator()
-              : Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text('Unable to check saved data'),
-                      const SizedBox(height: 12),
-                      const Text(
-                        'Your data has not been changed. Retry the safety '
-                        'check to continue.',
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 16),
-                      FilledButton(
-                        onPressed: onRetry,
-                        child: const Text('Retry'),
-                      ),
-                    ],
-                  ),
-                ),
-        ),
-      ),
-    );
-  }
+      theme: buildAppTheme(brightness: Brightness.light),
+      darkTheme: buildAppTheme(brightness: Brightness.dark),
+      home: BrandedStartup(
+          session: session,
+          ready: false,
+          onRetry: onRetry,
+          child: const SizedBox.shrink()));
 }

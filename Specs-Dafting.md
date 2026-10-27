@@ -31,218 +31,657 @@ Halt immediately. Present your full analysis and the draft spec preview. Do not 
 [RAW INPUT SPECIFICATION START]
 {{
 
-Feature Specification: Onboarding & First-Time Setup (Unified)
+Feature Specification: Shared Financial Spaces
 
 ## Purpose
-Provide a guided first-time experience that helps users configure the application correctly before they begin tracking finances.
 
-The onboarding process should be friendly, simple, modern, and focused on quickly bringing users to a functional dashboard while collecting only the information required for the initial setup.
+Allow multiple BudgetBuddy users to collaboratively manage a shared monthly budget while continuing to manage their personal finances separately.
 
-## Sub-Features Included
-1. Onboarding Flow
-2. First-Time Setup
+A shared financial space represents a collaborative financial context for couples, families, roommates, or other trusted groups. Members can contribute income, record expenses, manage medical bills and reimbursements, and view the same shared financial position.
 
-## Objectives
-- Introduce the application
-- Explain the app's core concepts
-- Create the first profile
-- Configure the first monthly budget
-- Configure the first currency
-- Configure security settings
-- Guide users into the dashboard
+Personal financial records must never become visible inside a shared space unless the user explicitly adds or transfers an item to that shared space.
 
-## Entities Involved
-- UserProfile
-- SecurityConfig
-- MonthlyBudget
-- SharedSpace (optional later)
-- AppSettings
+## Scope
 
-## First Launch Detection
+This feature includes:
 
-Rules:
-- Detect whether application is launched for the first time.
-- If no profile exists:
-  - Launch onboarding immediately.
-- If at least one profile exists:
-  - Skip onboarding.
-  - Navigate directly to authentication/dashboard.
+1. Create a shared financial space
+2. Invite users to a shared space
+3. Accept or decline invitations
+4. Join and leave a shared space
+5. Switch between personal and shared financial contexts
+6. Manage shared members and roles
+7. Record shared income contributions
+8. Manage a shared monthly budget
+9. Create and manage shared expenses
+10. Create and manage shared medical bills
+11. Record shared reimbursements
+12. Calculate the shared available amount
+13. Record member activity
+14. Synchronise shared data between members
+15. Preserve complete separation between personal and shared finances
 
-## Onboarding Flow
+## Core User Scenario
 
-### Step 1: Welcome Screen
+A user manages a personal monthly income and personal expenses privately.
 
-Purpose:
-- Introduce the application.
+The same user also belongs to a shared household space with another BudgetBuddy user.
 
-Content:
-- App overview
-- Main benefits
-- Personal finance assistant explanation
+Inside the shared space:
 
-Actions:
-- Continue
-- Skip (optional)
+- Both members can contribute money to the shared monthly budget.
+- Both members can add and manage shared expenses.
+- Both members see the same shared available amount.
+- Shared reimbursements increase the shared available amount.
+- Personal income and expenses remain private.
+- Shared financial activity does not modify either member’s personal available amount.
 
-### Step 2: How Budgeting Works
+## Entities
 
-Purpose:
-Explain:
-- Monthly budget
-- Available amount
-- Planned expenses
-- Paid expenses
-- Medical reimbursements
+### SharedSpace
 
-Visuals:
-- Simple illustrations
-- Example budget scenario
+Fields:
 
-### Step 3: Create First Personal Profile
-
-Inputs:
-- Name
-- Avatar
-- Preferred currency
+- id
+- name
+- description, optional
+- avatar
+- primaryCurrency
+- createdByUserId
+- createdAt
+- updatedAt
+- archivedAt, optional
+- syncVersion
+- syncStatus
 
 Rules:
-- Name required
-- Currency required
 
-Output:
-- UserProfile created
+- A shared space must have at least one owner.
+- The creator becomes the first owner.
+- The name must not be empty.
+- All shared records must reference the sharedSpaceId.
+- Archiving a shared space must preserve its historical data.
 
-### Step 4: Configure Monthly Budget
+### SharedMember
 
-Inputs:
-- Monthly available amount
-- Currency confirmation
+Fields:
+
+- id
+- sharedSpaceId
+- userId
+- displayName
+- role
+- status
+- joinedAt
+- invitedAt
+- lastActiveAt
+- invitedByUserId
+
+Role values:
+
+- owner
+- administrator
+- contributor
+- viewer
+
+Status values:
+
+- invited
+- active
+- declined
+- left
+- removed
 
 Rules:
-- Amount > 0
 
-Output:
-- Budget initialized
+- Membership must be unique for each user and shared space.
+- Only active members may access shared financial data.
+- A shared space must always retain at least one owner.
+- A user may belong to multiple shared spaces.
+- Removing a member must not delete financial records created by that member.
 
-### Step 5: Security Setup
+### SharedInvitation
 
-Options:
-- Create PIN
-- Enable biometrics
-- Skip (optional)
+Fields:
+
+- id
+- sharedSpaceId
+- invitedByUserId
+- invitedUserIdentifier
+- assignedRole
+- invitationToken
+- status
+- expiresAt
+- createdAt
+- respondedAt, optional
+
+Status values:
+
+- pending
+- accepted
+- declined
+- expired
+- revoked
 
 Rules:
-- PIN must meet security requirements
 
-Output:
-- Security configuration saved
+- Only authorised members may send invitations.
+- An invitation may be accepted only once.
+- Expired or revoked invitations cannot be accepted.
+- Accepting an invitation creates an active SharedMember record.
 
-### Step 6: App Overview
+### SharedMonthlyBudget
 
-Explain:
-- Dashboard
-- Expenses
-- Medical bills
-- Analytics
-- Shared spaces
+Fields:
 
-### Step 7: Finish Setup
+- id
+- sharedSpaceId
+- year
+- month
+- primaryCurrency
+- targetAmount
+- createdAt
+- updatedAt
 
-Actions:
-- Complete onboarding
-- Navigate to Dashboard
+Rules:
 
-Output:
-- Onboarding completion flag saved
+- A shared space may have only one budget record for each month.
+- Previous monthly budgets must remain available as historical records.
+- Changing the shared budget must not modify members’ personal budgets.
 
-## First-Time Setup Logic
+### SharedContribution
 
-After onboarding:
+Fields:
 
-System automatically:
-- Creates initial month context
-- Calculates initial available amount
-- Creates default categories
-- Activates selected profile
-- Loads dashboard
+- id
+- sharedSpaceId
+- monthlyBudgetId
+- contributedByUserId
+- amount
+- currency
+- convertedAmount
+- exchangeRateSnapshot, optional
+- contributionDate
+- note, optional
+- createdAt
+- updatedAt
 
-## Default Categories
+Rules:
 
-Pre-created:
+- Contribution amount must be greater than zero.
+- The contribution must belong to an active member.
+- Contributions increase the funds available in the shared space.
+- Contributions must not increase the contributor’s personal available amount.
+- The original amount and currency must be preserved.
 
-- Housing
-- Utilities
-- Food
-- Transportation
-- Health
-- Insurance
-- Subscriptions
-- Entertainment
-- Savings
-- Miscellaneous
+### SharedExpense
 
-Users may modify these later.
+Fields:
 
-## Dashboard Handoff
+- id
+- sharedSpaceId
+- createdByUserId
+- paidByUserId, optional
+- title
+- description, optional
+- amount
+- currency
+- convertedAmount
+- exchangeRateSnapshot, optional
+- categoryId
+- status
+- expenseDate
+- paidAt, optional
+- createdAt
+- updatedAt
 
-Upon completion:
+Status values:
 
-Dashboard displays:
-- Monthly budget
-- Available amount
-- Quick actions
-- Empty-state guidance
+- planned
+- paid
+- reimbursed
+- cancelled
 
-Example:
-"Add your first expense"
-"Create your first medical bill"
+Rules:
 
-## Returning User Flow
+- Planned expenses do not reduce the shared available amount.
+- Paid expenses reduce the shared available amount.
+- Reimbursements increase the shared available amount.
+- Cancelled expenses do not affect the shared available amount.
+- A shared expense must never affect a member’s personal available amount.
 
-If onboarding previously completed:
+### SharedMedicalBill
 
-Launch sequence:
-- Authentication
-- Profile load
-- Dashboard
+Fields:
 
-Onboarding is not shown again.
+- id
+- sharedSpaceId
+- createdByUserId
+- paidByUserId, optional
+- title
+- provider
+- billedAmount
+- currency
+- insuranceCoveragePercent
+- expectedReimbursementAmount
+- actualReimbursementAmount
+- status
+- billDate
+- paidAt, optional
+- createdAt
+- updatedAt
+
+Rules:
+
+- A paid medical bill reduces the shared available amount by the amount actually paid.
+- An insurance percentage provides an estimate only.
+- The actual recorded reimbursement increases the shared available amount.
+- Actual reimbursement may differ from the estimated insurance reimbursement.
+- Shared medical bills remain separate from members’ personal medical bills.
+
+### SharedReimbursement
+
+Fields:
+
+- id
+- sharedSpaceId
+- sourceType
+- sourceId
+- recordedByUserId
+- amount
+- currency
+- convertedAmount
+- exchangeRateSnapshot, optional
+- receivedAt
+- note, optional
+- createdAt
+
+Source types:
+
+- sharedExpense
+- sharedMedicalBill
+
+Rules:
+
+- The source must belong to the same shared space.
+- The source must have been paid before a reimbursement can be recorded.
+- The reimbursement amount must be greater than zero.
+- Total reimbursements must not exceed the amount eligible for reimbursement.
+- Reimbursements increase only the shared available amount.
+
+### SharedActivity
+
+Fields:
+
+- id
+- sharedSpaceId
+- performedByUserId
+- actionType
+- entityType
+- entityId
+- summary
+- occurredAt
+- syncStatus
+
+Activity examples:
+
+- Member added an expense
+- Member marked an expense as paid
+- Owner changed the monthly budget
+- Member recorded a reimbursement
+- Administrator invited a new member
+
+Rules:
+
+- Important financial and membership changes must create activity entries.
+- Activity entries are read-only.
+- Deleting or editing the source record must not silently remove its activity history.
+
+## Shared Available Amount
+
+The shared available amount must be calculated dynamically.
+
+Formula:
+
+sharedAvailableAmount =
+    sharedMonthlyBudget.targetAmount
+    + sum(sharedContributions)
+    - sum(sharedPaidExpenses)
+    - sum(sharedPaidMedicalBills)
+    + sum(sharedReimbursements)
+
+Rules:
+
+- Planned items do not reduce the shared available amount.
+- Cancelled items do not affect the shared available amount.
+- Reimbursements increase the balance only after being recorded as received.
+- All values must be converted to the shared space’s primary currency.
+- The calculated value must not be stored as an independently editable balance.
+
+## Personal and Shared Data Separation
+
+The application must maintain two distinct contexts:
+
+### Personal Context
+
+Contains:
+
+- Personal monthly budget
+- Personal income
+- Personal expenses
+- Personal medical bills
+- Personal reimbursements
+- Personal analytics
+
+### Shared Context
+
+Contains:
+
+- Shared monthly budget
+- Member contributions
+- Shared expenses
+- Shared medical bills
+- Shared reimbursements
+- Shared analytics
+- Shared membership and activity
+
+Rules:
+
+- Personal records must not appear in shared spaces automatically.
+- Shared records must not affect personal calculations.
+- Switching context must update all visible financial information.
+- Every financial record must have exactly one ownership context.
+- A record belongs either to a personal profile or to a shared space, never both simultaneously.
+
+## Roles and Permissions
+
+### Owner
+
+Can:
+
+- Edit shared-space settings
+- Invite, remove, and manage members
+- Change member roles
+- Manage the monthly budget
+- Create and manage financial records
+- Archive the shared space
+- Transfer ownership
+
+### Administrator
+
+Can:
+
+- Invite and manage contributors and viewers
+- Manage the monthly budget
+- Create and manage financial records
+- View activity history
+
+Cannot:
+
+- Remove the final owner
+- Transfer ownership
+- Permanently delete the shared space
+
+### Contributor
+
+Can:
+
+- Add contributions
+- Create shared expenses
+- Create shared medical bills
+- Mark permitted items as paid
+- Record reimbursements
+- View shared financial information
+
+Cannot:
+
+- Manage owners or administrators
+- Archive the shared space
+- change member roles
+
+### Viewer
+
+Can:
+
+- View the shared dashboard
+- View shared records
+- View shared analytics
+
+Cannot:
+
+- Create, edit, delete, or change financial records
+- Invite or remove members
+
+## Main Workflows
+
+### Create Shared Space
+
+1. User enters a name and optional avatar.
+2. User selects the primary currency.
+3. System creates the shared space.
+4. System assigns the creator as owner.
+5. System creates the first monthly budget context.
+6. Application opens the shared dashboard.
+
+### Invite Member
+
+1. Authorised member selects Invite Member.
+2. Authorised member enters the recipient identifier.
+3. Authorised member assigns an initial role.
+4. System creates an invitation.
+5. Recipient accepts or declines.
+6. On acceptance, the recipient becomes an active member.
+
+### Switch Financial Context
+
+1. User opens the context switcher.
+2. User selects Personal or a Shared Space.
+3. Application updates the active context.
+4. Dashboard, expenses, medical bills, reimbursements, and analytics reload for the selected context.
+5. Navigation returns to the dashboard.
+
+### Add Shared Contribution
+
+1. Member enters an amount and currency.
+2. Member optionally adds a note.
+3. System stores the contribution.
+4. System recalculates the shared available amount.
+5. Other members receive the update through synchronisation.
+
+### Add Shared Expense
+
+1. Member creates a planned or paid expense.
+2. Expense is assigned to the active shared space.
+3. If planned, the shared available amount remains unchanged.
+4. If paid, the shared available amount is recalculated.
+5. The activity feed records the change.
+
+### Record Shared Reimbursement
+
+1. Member selects a paid shared expense or medical bill.
+2. Member enters the amount actually received.
+3. System validates the amount.
+4. System creates the reimbursement.
+5. Shared available amount increases.
+6. Activity history records the reimbursement.
+
+### Leave Shared Space
+
+1. Member requests to leave.
+2. System verifies that the user is not the final owner.
+3. Membership status changes to left.
+4. Historical records remain attributed to that member.
+5. The shared space disappears from the former member’s active context list.
 
 ## UI Requirements
 
-Screens:
-1. Welcome
-2. Budgeting Overview
-3. Profile Creation
-4. Budget Setup
-5. Security Setup
-6. App Overview
-7. Completion Screen
+### Context Switcher
 
-Requirements:
-- Modern animations
-- Progress indicator
-- Ability to go back
-- Offline-first operation
+Displays:
+
+- Personal profile
+- Shared spaces
+- Active context
+- Create Shared Space action
+
+### Shared Spaces Screen
+
+Users can:
+
+- View spaces they belong to
+- Create a shared space
+- Open a shared space
+- View pending invitations
+- Leave or archive a space where permitted
+
+### Shared Dashboard
+
+Displays:
+
+- Shared available amount
+- Monthly target
+- Total member contributions
+- Paid expenses
+- Planned expenses
+- Medical costs
+- Reimbursements
+- Recent member activity
+- Quick actions
+
+### Shared Members Screen
+
+Displays:
+
+- Member list
+- Member roles
+- Invitation status
+- Invite action
+- Role-management actions
+- Remove or leave actions where permitted
+
+### Shared Activity Screen
+
+Displays chronological activity for:
+
+- Membership changes
+- Budget changes
+- Contributions
+- Expenses
+- Medical bills
+- Reimbursements
 
 ## Navigation
 
-Start:
-- App launch
+Routes:
 
-End:
-- Dashboard Shell
+- /shared
+- /shared/create
+- /shared/invitations
+- /shared/:spaceId
+- /shared/:spaceId/members
+- /shared/:spaceId/activity
+- /shared/:spaceId/contributions
+- /shared/:spaceId/expenses
+- /shared/:spaceId/medical
+- /shared/:spaceId/reimbursements
+- /shared/:spaceId/settings
 
-Optional Access:
-- Settings → Restart Onboarding
+The active personal or shared context must remain accessible through the dashboard header.
+
+## Synchronisation Requirements
+
+Shared financial spaces require synchronisation between different devices and users.
+
+Rules:
+
+- Shared changes must be saved locally first.
+- Local changes must be queued when offline.
+- Queued changes must synchronise when connectivity returns.
+- Every synchronised record must include a version or updated timestamp.
+- Conflicting changes must not silently overwrite financial records.
+- Synchronisation failures must be visible to the user.
+- Personal records must not be uploaded as shared records.
+- Membership permissions must be validated before accepting remote changes.
+
+## Offline Behaviour
+
+While offline, active members can:
+
+- View previously synchronised data
+- Create shared expenses
+- Create shared medical bills
+- Record contributions
+- Record reimbursements
+
+Offline changes must display a pending synchronisation indicator.
+
+Actions requiring remote validation may be unavailable offline, including:
+
+- Accepting invitations
+- Inviting or removing members
+- Changing ownership
+- Permanently deleting a shared space
+
+## Validation and Error Conditions
+
+Reject an operation when:
+
+- Shared space does not exist
+- User is not an active member
+- User lacks the required permission
+- Financial amount is zero or negative
+- Currency is unsupported
+- Related records belong to another shared space
+- Invitation is invalid, expired, revoked, or already used
+- Removal would leave the shared space without an owner
+- Reimbursement exceeds the permitted amount
+- Remote membership validation fails
+
+## Privacy and Security
+
+- Shared financial data is visible only to active members.
+- Personal financial data remains private by default.
+- Invitations must use secure, expiring tokens.
+- Permission checks must occur in both the application and backend.
+- Sensitive shared data must be encrypted in transit and at rest.
+- Members must be clearly warned that information added to a shared space is visible to other active members.
 
 ## Non-Functional Requirements
 
-- Offline-first
-- Fast onboarding (<3 minutes)
-- Accessible design
-- Responsive layouts
-- Supports future onboarding steps
+- Offline-first financial entry
+- Reliable multi-device synchronisation
+- Deterministic currency calculations
+- Clear personal/shared context distinction
+- Role-based access control
+- Auditable member activity
+- Responsive Android-first interface
+- Architecture compatible with future iOS, web, and desktop support
+
+## Dependencies
+
+Feature 20 depends on:
+
+- Monthly Budget Setup
+- Available Amount Calculation
+- Dashboard Shell and Navigation
+- Expenses Management
+- Medical Bills and Insurance
+- Reimbursements
+- Multi-Currency System
+- User Authentication
+- Cloud synchronisation and backend membership validation
+
+## Out of Scope
+
+The initial version does not include:
+
+- Bank account linking
+- Automatic splitting or debt settlement between members
+- Direct money transfers
+- Chat or messaging
+- Public shared spaces
+- Anonymous membership
+- Business accounting or payroll
 
 }}
 [RAW INPUT SPECIFICATION END]

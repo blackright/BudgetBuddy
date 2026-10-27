@@ -1,3 +1,5 @@
+import 'package:budget_buddy/features/identity/providers/device_auth_session.dart';
+import '../security/support/native_identity_fixture.dart';
 import 'package:budget_buddy/core/models/identity.dart';
 import 'package:budget_buddy/core/providers/identity_provider.dart';
 import 'package:budget_buddy/features/identity/providers/device_key_session.dart';
@@ -101,6 +103,7 @@ void main() {
   }) {
     final container = ProviderContainer(
       overrides: [
+        nativeAccessBindingProvider.overrideWith(nativeFixtureBinding),
         deviceAuthenticatorProvider.overrideWithValue(authenticator),
         identityKeyLoaderProvider.overrideWithValue(loader),
       ],

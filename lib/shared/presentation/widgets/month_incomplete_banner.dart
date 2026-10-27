@@ -20,7 +20,8 @@ class MonthIncompleteBanner extends ConsumerWidget {
     if (summary.isComplete) return const SizedBox.shrink();
 
     final missing = <String>[
-      if (summary.income <= 0) 'Net salary',
+      if (summary.openingBalance == null) 'opening balance',
+      if (summary.income <= 0) 'income in Income Sources',
     ];
 
     return Container(
@@ -42,7 +43,7 @@ class MonthIncompleteBanner extends ConsumerWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              'Add your ${missing.join(' and ')} to see what you kept this month.',
+              'Review your ${missing.join(' and ')} for this month. No income yet is allowed; you can record income later.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: Theme.of(context).colorScheme.onSecondaryContainer,
                   ),

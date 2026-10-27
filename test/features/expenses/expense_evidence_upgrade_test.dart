@@ -1,3 +1,4 @@
+import 'package:budget_buddy/core/models/app_settings.dart';
 import 'dart:io';
 import 'package:budget_buddy/core/database/schema_migrations.dart';
 import 'package:budget_buddy/core/models/expense.dart';
@@ -35,9 +36,12 @@ void main() {
         ..value = '28');
     });
     await db.close();
-    db = await Isar.open(
-        [ExpenseSchema, ExpenseEvidenceChunkSchema, SchemaMigrationStampSchema],
-        directory: directory.path, name: 'evidence-upgrade');
+    db = await Isar.open([
+      AppSettingsSchema,
+      ExpenseSchema,
+      ExpenseEvidenceChunkSchema,
+      SchemaMigrationStampSchema
+    ], directory: directory.path, name: 'evidence-upgrade');
     try {
       await runSchemaMigrations(db);
       final row = (await db.expenses.where().findAll()).single;

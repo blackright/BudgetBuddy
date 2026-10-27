@@ -1,3 +1,4 @@
+import '../../budget_setup/repositories/onboarding_lifecycle.dart';
 import '../../../core/models/merchant.dart';
 import '../../../core/services/profile_name.dart';
 import '../../../core/models/expense_evidence_chunk.dart';
@@ -297,6 +298,7 @@ class ProfileSwitcherController {
           await _isar.schemaMigrationStamps.delete(stamp.id);
         }
       }
+      await pruneDeletedProfileSetupInTxn(_isar, profileId);
       await _isar.userProfiles.delete(profileId);
 
       // FR-034: the profile's security setting is removed with the profile. The

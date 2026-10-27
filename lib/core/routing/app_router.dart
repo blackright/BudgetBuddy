@@ -1,3 +1,5 @@
+import '../models/user_profile.dart';
+import '../../features/budget_setup/presentation/introduction_screen.dart';
 import '../../features/finance/presentation/audit_history_screen.dart';
 import '../../features/finance/presentation/month_end_screen.dart';
 import 'package:flutter/material.dart';
@@ -6,7 +8,6 @@ import '../providers/budget_context_provider.dart';
 import '../providers/active_profile_provider.dart';
 import 'package:go_router/go_router.dart';
 import '../database/isar_helper.dart';
-import '../../core/models/monthly_budget.dart';
 import '../../features/budget_setup/presentation/budget_setup_screen.dart';
 import '../../features/dashboard/presentation/dashboard_screen.dart';
 import '../../features/dashboard/presentation/month_summary_detail_screen.dart';
@@ -50,20 +51,33 @@ final shellNavigatorSettingsKey =
     GlobalKey<NavigatorState>(debugLabel: 'settingsShell');
 
 String _getInitialLocation() {
-  final hasBudget = IsarHelper.instance.monthlyBudgets.countSync() > 0;
-  return hasBudget ? '/dashboard' : '/setup';
+  // A missing month is provisioned normally; it is not a missing identity.
+  final hasProfile = IsarHelper.instance.userProfiles.countSync() > 0;
+  return hasProfile ? '/dashboard' : '/setup';
 }
 
-GoRouter createAppRouter({String? initialLocation}) => GoRouter(
+GoRouter createAppRouter(
+        {String? initialLocation,
+        Listenable? refreshListenable,
+        GoRouterRedirect? redirect,
+        WidgetBuilder? setupBuilder,
+        WidgetBuilder? dashboardBuilder}) =>
+    GoRouter(
       navigatorKey: rootNavigatorKey,
+      refreshListenable: refreshListenable,
+      redirect: redirect,
       initialLocation: initialLocation ?? _getInitialLocation(),
       routes: [
+        GoRoute(
+            path: '/introduction',
+            builder: (context, state) => const IntroductionScreen()),
         GoRoute(
             path: '/profile',
             builder: (context, state) => const ProfileScreen()),
         GoRoute(
           path: '/setup',
-          builder: (context, state) => const BudgetSetupScreen(),
+          builder: (context, state) =>
+              setupBuilder?.call(context) ?? const BudgetSetupScreen(),
         ),
         GoRoute(
           path: '/settings',
@@ -180,8 +194,9 @@ GoRouter createAppRouter({String? initialLocation}) => GoRouter(
               routes: [
                 GoRoute(
                   path: '/dashboard',
-                  builder: (context, state) =>
-                      const _ContextRoot(child: DashboardScreen()),
+                  builder: (context, state) => _ContextRoot(
+                      child: dashboardBuilder?.call(context) ??
+                          const DashboardScreen()),
                 ),
               ],
             ),

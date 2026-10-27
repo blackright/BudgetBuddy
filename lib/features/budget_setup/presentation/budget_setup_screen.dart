@@ -8,6 +8,9 @@ import '../../../shared/presentation/widgets/money_field.dart';
 import '../../spaces/presentation/space_switcher.dart';
 import '../providers/budget_setup_provider.dart';
 import 'welcome_step.dart';
+import 'guided_setup_screen.dart';
+import '../providers/onboarding_rollout_provider.dart';
+import '../../identity/presentation/app_lock_gate.dart';
 
 class BudgetSetupScreen extends ConsumerStatefulWidget {
   const BudgetSetupScreen({super.key});
@@ -41,7 +44,9 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
     super.initState();
     // Auto-fill logic (T015)
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted || ref.read(unifiedOnboardingEnabledProvider)) return;
       await ref.read(budgetSetupProvider.notifier).loadAutoFillData();
+      if (!mounted) return;
       final state = ref.read(budgetSetupProvider);
       if (state.amount != null) {
         _amountController.text =
@@ -72,6 +77,9 @@ class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (ref.watch(unifiedOnboardingEnabledProvider)) {
+      return const AppLockGate(child: GuidedSetupScreen());
+    }
     final state = ref.watch(budgetSetupProvider);
     final notifier = ref.read(budgetSetupProvider.notifier);
 

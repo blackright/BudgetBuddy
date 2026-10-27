@@ -1,3 +1,5 @@
+import 'package:budget_buddy/features/identity/providers/device_auth_session.dart';
+import 'support/native_identity_fixture.dart';
 import 'package:budget_buddy/core/models/lock_setting.dart';
 import 'package:budget_buddy/core/providers/active_space_provider.dart';
 import 'package:budget_buddy/core/providers/identity_provider.dart';
@@ -79,6 +81,8 @@ void main() {
 
   Future<ProviderContainer> start() async {
     final container = ProviderContainer(overrides: [
+      nativeAccessBindingProvider.overrideWith(nativeFixtureBinding),
+      nativeAccessBindingProvider.overrideWith(nativeFixtureBinding),
       lockSubjectProvider.overrideWithValue(subject),
       lockSettingRepositoryProvider.overrideWithValue(settings),
       secretStoreProvider.overrideWithValue(secrets),
@@ -87,7 +91,8 @@ void main() {
       deviceAuthenticatorProvider
           .overrideWithValue(_ScriptedAuthenticator(const [true])),
       identityKeyLoaderProvider.overrideWithValue(_FakeKeyLoader(_keyPair())),
-      identityProvider.overrideWith((ref) => Stream.value(null)),
+      identityProvider
+          .overrideWith((ref) => Stream.value(nativeFixtureIdentity())),
       consentProvider.overrideWith((ref) => Stream.value(null)),
     ]);
     addTearDown(container.dispose);
