@@ -19,6 +19,7 @@ import '../../vault/personal_month_funds.dart';
 import '../../../core/services/free_funds.dart';
 import '../currency_resolution.dart';
 import 'rate_registry_provider.dart';
+import '../../budget_setup/domain/onboarding_automation_guard.dart';
 
 final sweepServiceProvider = Provider<SweepService>((ref) => SweepService(ref));
 final sweepResultProvider = StateProvider<SweepResult?>((ref) => null);
@@ -72,10 +73,20 @@ class SweepService {
         return finish(SweepOutcome.unchanged, 'The vault is personal only.');
       }
       final isar = IsarHelper.instance;
+      if (await isPendingSetupOwner(isar, id!)) {
+        return finish(SweepOutcome.paused,
+            'Finish personal setup before checking savings. No savings were changed.');
+      }
       final now = _clock();
       final currentMonth = _yearMonth(now);
       while (true) {
         final step = await isar.writeTxn(() async {
+          if (await isPendingSetupOwner(isar, id!)) {
+            return const _Step(
+                done: true,
+                pause:
+                    'Finish personal setup before checking savings. No savings were changed.');
+          }
           if (_ref.read(budgetContextProvider).isShared ||
               _ref.read(budgetContextProvider).profileId != id ||
               _ref.read(activeProfileProvider).valueOrNull?.id != id) {

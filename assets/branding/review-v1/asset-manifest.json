@@ -1,0 +1,87 @@
+{
+  "prepared": "2026-10-27",
+  "status": "Proposed; owner fidelity approval pending",
+  "method": "Built-in image_gen; code-native HTML composition; no image pixel edits by this script",
+  "files": [
+    {
+      "file": "layers/arrow-v3.png",
+      "width": 1536,
+      "height": 1024,
+      "bytes": 1087077,
+      "sha256": "876c74518dabf43e4e4eb7d7bcff8f0768018f0e710f9fc085cbb37cb5c1d8ef",
+      "bitDepth": 8,
+      "colorType": 6,
+      "alpha": {
+        "minimum": 0,
+        "maximum": 254,
+        "transparentPixels": 1291830,
+        "translucentPixels": 281034,
+        "opaquePixels": 0
+      }
+    },
+    {
+      "file": "layers/coin-v1.png",
+      "width": 1244,
+      "height": 1264,
+      "bytes": 987202,
+      "sha256": "3fc0aa8a52527cb04c92486779daf75415adeb5cbaa7b145f86b23cd7bb0988b",
+      "bitDepth": 8,
+      "colorType": 6,
+      "alpha": {
+        "minimum": 0,
+        "maximum": 255,
+        "transparentPixels": 798226,
+        "translucentPixels": 773553,
+        "opaquePixels": 637
+      }
+    },
+    {
+      "file": "layers/wallet-v1.png",
+      "width": 1443,
+      "height": 1090,
+      "bytes": 970201,
+      "sha256": "5dc99ae77c47ccba5a0d5ab89b58c419cda1d1abbeaa0c0d714c8bf0753fe4cd",
+      "bitDepth": 8,
+      "colorType": 6,
+      "alpha": {
+        "minimum": 0,
+        "maximum": 255,
+        "transparentPixels": 847220,
+        "translucentPixels": 724373,
+        "opaquePixels": 1277
+      }
+    },
+    {
+      "file": "source/logo-original.png",
+      "width": 1254,
+      "height": 1254,
+      "bytes": 2579162,
+      "sha256": "0d31a72fa6377676b596c72a0010dd2655a81c9f0ba0d99eebe5e2af8c38f3e8",
+      "bitDepth": 8,
+      "colorType": 6,
+      "alpha": {
+        "minimum": 0,
+        "maximum": 255,
+        "transparentPixels": 95600,
+        "translucentPixels": 1476832,
+        "opaquePixels": 84
+      }
+    },
+    {
+      "file": "source/splash-original.png",
+      "width": 1024,
+      "height": 1536,
+      "bytes": 1872014,
+      "sha256": "f9252b8a0842c75e779bf3755f7618e03891ce997fe0a27352c4ae7ce5b82434",
+      "bitDepth": 8,
+      "colorType": 2,
+      "alpha": {
+        "minimum": 255,
+        "maximum": 255,
+        "transparentPixels": 0,
+        "translucentPixels": 0,
+        "opaquePixels": 1572864
+      }
+    }
+  ]
+}

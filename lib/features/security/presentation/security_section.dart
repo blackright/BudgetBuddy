@@ -75,9 +75,11 @@ class SecuritySection extends ConsumerWidget {
                 (true, true) =>
                   'Required for this ${_noun(subject)} — the Owner turned '
                       'this on.',
-                (true, false) => 'On — a PIN opens this ${_noun(subject)}.',
-                (false, _) => 'Off — anyone who opens the app sees this '
-                    '${_noun(subject)}.',
+                (true, false) =>
+                  'On: app PIN and phone verification protect this ${_noun(subject)}.',
+                (false, _) =>
+                  'Extra app PIN is off. Phone verification still protects this '
+                      '${_noun(subject)}.',
               },
             ),
             value: locked,
@@ -360,7 +362,7 @@ class _DeviceAuthCard extends ConsumerWidget {
           onChanged: (value) => _set(context, ref, value),
           title: const Text('Protect my identity key'),
           subtitle: const Text(
-            'Ask for my phone\'s PIN or biometrics before syncing or pairing.',
+            'Additional identity-key consent. Phone verification remains required to open personal information.',
           ),
         ),
         if (!enabled)
@@ -374,8 +376,7 @@ class _DeviceAuthCard extends ConsumerWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Without your phone\'s PIN or biometrics, your data is '
-                    'less protected.',
+                    'This optional identity-key setting is off. Mandatory phone verification still applies.',
                     key: const Key('deviceAuthWarning'),
                     style: theme.textTheme.bodySmall
                         ?.copyWith(color: theme.colorScheme.error),

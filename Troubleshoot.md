@@ -204,6 +204,20 @@ Once I reply with "Approved" or "Proceed":
 
 Never claim success without evidence. If verification is incomplete, clearly explain what remains untested.
 
+### Focused verification and efficient work - owner-approved 2026-10-27
+
+Apply the focused-testing policy in `Phase-Builder-Agent.md` Sections 4.5-4.6 to troubleshooting too:
+
+- Run the smallest meaningful tests for the confirmed fix and its direct integration points. Small UI/wording changes need affected-screen/source review; add a focused test when behavior or a concrete risk warrants it. Documentation-only edits normally need no application tests.
+- For money, security and database fixes, retain important correctness and failure-path checks for the affected paths. Do not automatically run all tests in those areas.
+- Run the full test suite only at my explicit request or after I explicitly approve an explanation of why it is necessary. General fix approval, historical reports or a skill/task mentioning a broad suite are not standing full-suite permission.
+- Do not repeat passing tests/static checks unless a later change could affect them, a failure appears or an unresolved concern warrants it. Formatting-only edits do not automatically require another behavioral test run.
+- Diagnose one failure using the smallest relevant case. After its fix, rerun that case; broaden only when supported by evidence and authorization. Avoid long unattended hangs and repeated broad runs.
+- Batch independent inspections, reuse still-valid findings and avoid unnecessary tools or unrelated polishing. Stop once the approved fix and necessary checks are complete.
+- Keep the chat report brief: change, reason, actual results and important untested limits. Put detailed evidence in the linked fix/phase report when needed. Never hide failures, weaken assertions or claim full coverage from focused checks.
+
+All existing approval, security, data-preservation and build/device restrictions remain in force. Historical logs below stay unchanged and do not instruct future test selection.
+
 ## 6. Error Information
 
 Analyze the error information provided below. Use all relevant context, but do not assume that the supplied information is complete.
@@ -708,3 +722,122 @@ Status: implemented, final verified delivery acceptance pending. Owner phone out
 
 Final compatibility review: the first parent-validation guard would have blocked an explicitly orphaned booked refund after permitted expense deletion. It now preserves that signed self-contained evidence and review flag without inventing the deleted payment or revaluing money; existing orphan evidence cannot be rewritten. Update and fresh-bootstrap-to-another-local-space-ID regressions pass. Full suite was rerun afterward: 1,384 passed / one existing skipped, exit 0. Analysis remains clear, formatting remains 619 files / zero changes, and the debug APK was rebuilt afterward (45.7s). Current artifact hash above and full delivery report were updated. No agent phone actions were performed.
 
+
+
+## 2026-10-27 - Feature 019 Phase 1 prerequisite findings
+
+Scope/authorization: owner approved Phase 1 prerequisites, compatibility evidence, source baselines and reporting only. Existing reports and logs above are preserved. No phone/app database, dependencies, generated source or security policy was changed.
+
+Problem 1: configured FEATURE_SPEC already names specs/019-unified-onboarding, but the literal example command still named specs/018-financial-core-audit and current notes repeated the old selection. Reproduce by reading Phase-Builder-Agent.md configuration/example and .specify/feature.json. Expected: all current selectors/examples name 019. Actual before correction: config/selector 019, example 018. Resolution: corrected the example and current notes under explicit approval; prerequisite discovery resolves 019. Historical approval observations remain intact. No error log or app runtime reproduction applies.
+
+Problem 2: optional-security planning does not establish Constitution V authentication protection for every unprotected/no-identity profile. Static reproduction: compare spec.md FR-027 and security assumptions with Constitution V and lib/features/identity/presentation/app_lock_gate.dart's documented inert no-identity/unprotected path. Expected: sensitive data requires successful native authentication. Actual planning gap: no universally enforced native-only boundary is specified for the optional/no-app-PIN path. Status: unresolved; review-correction-proposal.md was prepared at the owner's request, not applied or implemented. Phase 1 only records the blocker; affected application implementation must not treat the old constitutional PASS as clearance. No phone authentication or runtime attack was attempted.
+
+Compatibility watch item: locked Isar/generator 3.1.0+1 and analyzer 5.13.0 predate Dart 3.13.5; their legacy null-safe SDK upper bounds are relaxed under Dart's documented compatibility rule. This is not a newly reproduced build failure. Future generation needs targeted verification and historical-output protection; no package upgrade or generation was run. Earlier branding punctuation defects and artwork fidelity/halo review remain separate pending items, not silently repaired here.
+
+Phase 1 records: specs/019-unified-onboarding/phase-01-report.md and baselines/phase-01-20261027/verification.json. Current status: delivery prepared, verified-work owner acceptance pending; task checkboxes remain unchecked. Phone/study outcomes and later phases remain unperformed.
+
+
+## 2026-10-27 - Feature 019 Phase 2 foundation and verification
+
+Approved scope: T005-T014 after Stage A review. Added typed local progress, nullable AppSettings metadata, transaction-fresh singleton patches and additive migration 32. No phone action, package upgrade, financial-formula change, production authentication edit, new screen or branding integration.
+
+Confirmed settings risk and correction: old getOrCreate/setTransferToggle read outside the write transaction, so future progress/decimal writes could be lost through stale whole-row puts. Static reproduction: inspect those old read/put boundaries. Expected: each update preserves fields it does not own. New onboarding_settings_test.dart exercises concurrent create, transfer/decimal/progress interleaving, one-winner revisions, stale flow/owner rejection, caller rollback and malformed-state preservation. Corrected reads/patches share the write transaction. No financial draft is logged or automatically cleared.
+
+Migration reproduction: reopen a genuine pre-onboarding AppSettings native schema stamped 31, then run migration twice and reopen again. Expected: original toggle/decimal/timestamps preserved, progress null, policy preserveExisting and version 32. Actual after implementation matches. Established-empty stores remain established. Only genuinely empty version-zero stores receive unifiedPending, decided before legacy seeds; existing category/security/metadata/preferences block fresh eligibility. Unknown future markers are preserved without granting eligibility. Tests are test/core/database/onboarding_migration_test.dart; no normal-phone database was inspected or changed.
+
+Verification failures repaired: first red tests compiled before APIs/output existed; initial new native tests needed timezone-aware timestamp assertions and recursive cleanup confined to their checked temporary directories. First expanded regression run had 65 pass/8 fail from six missing AppSettings registrations and two expected-version-31 assertions. First full run had 1,390 pass/20 fail/one existing skip: remaining missing settings registrations plus duplicate LockSetting registration after completing the shared medical harness. Updated affected test schemas/consumers and version assertions while retaining actual production migration and old-schema/money/evidence checks. No assertion or security gate was weakened.
+
+Model review corrections: dates compare calendar days rather than timezone instants; saved metadata timestamps compare instants, including local/UTC equivalents. Committed owner/month cannot be dropped or reassigned by progress patches. Income names retain the existing nonempty rule, avoiding an accidental new profile-name length cap. Payload decoding checks UTF-8 size/depth before parsing and rejects unknown fields with generic non-echoing errors.
+
+Generator/format tooling: targeted build_runner succeeded with the existing analyzer-language-3.1 / SDK-language-3.13 warning; no suggested upgrade was executed. Only original AppSettings.g.dart changed and one historical settings output was added; all 40 unrelated original generated outputs remain byte-identical, including six historical test outputs. No restore was necessary. Initial sandboxed Flutter stalled and Dart formatting hit its outside-workspace telemetry file; approved escalated runs completed. Initial analysis's 16 brace-style infos were corrected in source without changing lint rules.
+
+Final evidence: 80 targeted regressions passed before the added calendar-day case; full regression rerun 1,411 passed/one pre-existing Medical recorded-plan skip, exit 0. Final focused tests 27 passed after the income-name compatibility adjustment. Final full analysis no issues; read-only format audit 625 files/zero changes. Logs, exact command/result ordering and preservation details are in specs/019-unified-onboarding/phase-02-report.md and verification/phase-02/. APK/phone/authentication/user-study checks were not run. Phase 2 is delivered for acceptance; T005-T014 remain unchecked. The separate security-policy conflict/proposal and artwork fidelity review remain unresolved, not repaired or waived here.
+
+
+Final Phase 2 source review also added the invalid-version-stamp regression: malformed/noncanonical version metadata is not proof of a fresh installation. The final full suite after all source corrections passed 1,412 tests with one pre-existing skip; all 28 new foundation tests are included. Full analysis passed with no issues and read-only formatting remained 625 files/zero changes. Current evidence is verification/phase-02/full-regression-delivery.log, analysis-complete.log and format-complete.log; earlier logged results remain historical. No Phase 3, APK or phone action occurred.
+
+## 2026-10-27 - Feature 019 Phase 3 financial slice
+
+Authorization: owner-approved T015-T028 plan only. Preserved all prior logs above. No phone records, schema, dependencies, auth/security policy or app artwork changed. The new financial flow/category-read policy share one gate that remains false in production.
+
+Confirmed issue: the legacy setup widget's post-frame auto-fill ran even when the isolated financial host was selected. Reproduce with onboarding_financial_steps_test.dart and an overridden new-flow gate without global IsarHelper initialization. Expected: only the new host's explicitly supplied repositories run. Actual: StateError, IsarHelper.init() has not run before IsarHelper.instance. Fixed the legacy callback to return when the new host is selected or the widget is unmounted, and recheck mounted after its await. Production false-gate behavior remains unchanged. All four light/dark small/large-text host cases then passed with real disposable saves.
+
+Test-harness correction: the first widget test tapped an off-screen Edit month & income link. Reproduce the initial financial-attempt-1.log case. Expected: scroll before tapping. Added ensureVisible; did not change application assertions. Initial red compilation preceded implementation. All failures remain in verification/phase-03 logs.
+
+Financial integrity checks: audit, source and checkpoint fault injection must roll back profile/month/sources/categories and audit history atomically. Ten fresh-store/retry trials and ten lost-response retries must retain one owner/month/source and unchanged creation audit count. Ordinary providers for HUF/USD/CAD/EUR must read opening 100,000 and actual Salary 500,000 as bank 600,000 and Free to spend 500,000. These tests passed. Source zero values remain records; No income creates none. Orphan personal data and missing committed targets are refused rather than guessed/recreated.
+
+Uncertain-save wording corrected during source review: a response can be lost after a successful commit, so generic failure must not say that nothing was saved. It now says the save could not be confirmed and entries remain available for safe retry. The added controller regression simulates this exact condition and simultaneous submission; results are in full-regression-final.log.
+
+Seven static-analysis style findings were corrected without disabling lints. Preview font/icon squares were test-host loading artifacts, corrected by explicitly loading existing bundled fonts/Material Icons; production assets are unchanged. Six actual light/dark Flutter screenshots were regenerated. First full regression: 1,453 passed/one pre-existing skip. Final post-review results, exact scope preservation and owner walkthrough: specs/019-unified-onboarding/phase-03-report.md and verification/phase-03/. No APK, native phone, performance benchmark or user study was run. Phase 3 acceptance is pending; later tasks remain unstarted. The independent native-auth policy and artwork fidelity gates remain unresolved.
+
+Final Phase 3 verification after all source changes: full suite **1,454 passed / one pre-existing skip**, focused suite **42 passed**, analysis **no issues**, read-only formatting **637 files / zero changes**. Source hashes confirm exactly five modified and twelve new Dart paths; all 42 generated files and protected dependencies/assets/native/security/router inputs are unchanged. Logs: full-regression-final.log, financial-final.log, analysis-delivery.log and format-delivery.log under verification/phase-03. The lost-response controller test passes. Delivery is paused for owner acceptance; T015-T028 remain unchecked.
+
+
+## 2026-10-27 - Feature 019 Phase 4 recovery and automation
+
+Approved scope: T029-T040 after Stage A and the owner's choices for automatic saving/status, fixed currency after confirmation and safe existing-profile recovery access. Prior reports/logs above remain intact. No phone data, dependencies, generated code, native authentication policy, router activation or artwork changed.
+
+Confirmed risks and corrections: new financial edits previously existed only in memory; resume could snap the selected month forward; sweep/seal processing had no unfinished-owner guard. Added debounced serialized draft writes, consistent recovery classification and explicit per-owner checks before/inside writes. Reproduction/evidence uses onboarding_concurrency_test.dart and onboarding_automation_test.dart against disposable native stores. Expected: saved entries/month survive, a pending owner receives no vault money/opening-history writes or pending-only seals, while established owners keep ordinary processing. Final tests match, including malformed JSON with an independent owner marker.
+
+Preparation race: ensureDefaultServiceTypes checked for existing rows outside its write transaction, allowing overlapping retries to insert duplicates. Moved check/insert into one owner/context-scoped transaction. Fault injection and concurrent preparation tests preserve one financial group and six fresh default directory types. No Medical expense/payment formula changed.
+
+Correction safety: committed targets remain intact while an unfinished correction is stored in the existing bounded envelope. Confirmation requires digest/revision validation; ID reuse, audited additions/removals and checkpoint changes are atomic. Failed checkpoint injection rolls back all financial/audit changes. Occupied months and existing expenses block amendments. Changed inputs cannot reuse an old digest on a lost-response retry. Invalid raw date-order edits may persist only as unreviewed drafts, while parsed/committed evidence and financial confirmation remain strict. Existing validation assertions were retained.
+
+Verification failures and fixes: initial red tests preceded missing APIs. Category and recovery extension imports were missing in early attempts. One new profile fixture lacked currency; an expense fixture lacked required category/budget IDs. Initial seal regressions exposed an overbroad guard excluding ownerless legacy fixtures; narrowed exclusion to explicitly pending owners, preserving legacy eligibility. A test-script apostrophe became a question mark; fixed the test literal and regenerated real light/dark previews. Analyzer brace/import findings were corrected without lint suppression. All failed/intermediate logs remain under specs/019-unified-onboarding/verification/phase-04.
+
+Final evidence: full-regression-final.log 1,482 passed / one pre-existing skip; focused-final.log 28 passed; analysis-final.log no issues; format-final.log 647 files / zero changes. Preservation confirms ten modified/ten new Dart paths, no missing baseline files and all 42 generated outputs/dependencies/assets/Android/authentication/router inputs unchanged. Two recovery PNGs were generated and inspected. Final direct month-snap assertions were checked in the focused suite, then analysis/formatting rerun.
+
+Status: Phase 4 implemented/verified, awaiting owner acceptance. T029-T040 remain unchecked; Phase 5 is unstarted. Production gate remains false. No APK/build, phone/native-auth, performance measurement or user study was run. The separate native-auth policy and artwork fidelity gates remain unresolved. See phase-04-report.md for exact files, risks and the available preview-based owner review; do not clear phone data or activate the gated flow for this slice.
+
+
+## 2026-10-27 - Feature 019 Phase 5 security planning refinement
+
+Owner-approved documentation changes now distinguish mandatory phone authentication from optional extra app-PIN enrollment, cover sensitive entry/restoration and legacy no-PIN users, and require app-PIN entry/confirmation followed by native success before saving/enabling. Full actual-status/explanation/recovery UI is planned. The earlier planning-policy conflict is resolved in the documents; actual code gaps remain unimplemented/unverified, not waived or repaired by this approval.
+
+Added T099-T101 within Phase 5 without renumbering old tasks. Inventory: 101 tasks, 40 accepted and 61 unchecked. Expanded Phase 5 has 13 tasks and awaits explicit execution approval of specs/019-unified-onboarding/phase-05-implementation-plan.md. All old checkmarks and accepted task descriptions are preserved. Documentation consistency and protected-source hash checks passed. No application/security/PIN setting, schema/dependency/generated output, production gate, app test, build or phone action changed or ran. Previous runtime evidence remains historical and is not evidence of the new native-only boundary.
+
+
+## 2026-10-27 - Feature 019 Phase 5: personal-only authentication and stale session corrections
+
+Authorization: expanded Phase 5 T041-T050 plus T099-T101 was explicitly approved after the policy planning refinement. This entry preserves prior issue/approval history.
+
+Problems/reproduction: a personal profile with no sharing identity could pass its correct app PIN but still fail because unlock demanded a nonexistent sharing key; a pending key load could complete after lock while key state was null; old no-PIN/consent behavior allowed private content without required native verification; enrollment wrote protection before native verification. Expected: mandatory native success, correct configured PIN, strict real sharing keys, no stale result or premature protection label.
+
+Corrections: one transient owner/flow/generation-bound native session, single-flight prompts, existing gate extended before sensitive child construction, explicit identity-absent personal unlock, real-key-or-null sharing behavior, lifecycle invalidation and native-before-PIN-persistence. Security UI reads actual verifier/setting; partial writes require explicit existing recovery rather than replacement. Setup-flow identity survives first save but replacement closes access. Security metadata checkpoints reconcile the controller revision and do not grant authentication.
+
+Verification issues retained in logs: initial missing APIs, fixtures that supplied keys without identities, obsolete open-first-frame expectations, Riverpod outdated-ref retry, simulated test-clock Isar I/O, a closed singleton leaking between newly combined tests, and analyzer formatting/import/protected-state findings. Identity-present fixtures are now explicit; genuine absence tests use no fake key. Financial component assertions are preserved and actual gated entry has separate no-construction tests. Fixes passed without suppressed lints, skipped new tests or reduced required-factor assertions.
+
+Final status: full regression 1,510 passed / one existing Medical skip; focused 26 passed; static analysis no issues; formatting 657 files / zero changes. Source preservation: 27 baseline files modified within scope (including two comment clarifications), ten new Dart files, no missing baseline file, all 42 generated outputs unchanged. Schema 32, dependencies/assets/Android configuration and false onboarding rollout remain intact. Two real test renders inspected. No known remaining automated failure in the delivered scope. Native phone/keystore/lifecycle outcomes and full Phase 6 integration remain unverified. No phone/build/install/Git action occurred. Owner acceptance is pending and Phase 5 tasks remain unchecked. See specs/019-unified-onboarding/phase-05-report.md for exact evidence and review steps.
+
+
+## 2026-10-27 - Feature 019 Phase 6 guided flow and handoff
+
+Authorization: owner approved T051-T060 after selecting all six recommendations. Production onboarding activation is separately gated. The owner subsequently requested minimal final testing.
+
+Confirmed implementation issue: after using Back from the month to Profile, the guided stage and financial controller page could disagree. Reproduce in the isolated guided host: Profile -> First month -> Back -> Continue. Expected: retained profile values, proper month/review progression and one financial save. Initial result: the wrong coordinator page prevented expected review progression. Fixed by aligning the financial page before saving the guided navigation checkpoint. The final full-path tests retain Back/value/review assertions.
+
+Completion and ownership: added repeat-safe, validated completion/pruning; explicit Dashboard action; actual verifier/setting check; pending personal owner/month binding and stale shared-selection clearing. A stale native-session callback during a financial transaction rolls back its writes. Temporary month protection is owner-specific and released only on matching Dashboard arrival. Examples create no money/identity/space; personal setup adds no paired-journal entity. Income/opening guidance uses actual records and distinguishes unavailable reads from zero/missing sources.
+
+Intermediate verification issues: missing imports/const syntax, scroll-to-control interaction, a pending test clock, a lost-response mock's authorization signature and analyzer braces. Widget Isar streams could stall under the simulated clock; controlled UI streams and awaited callbacks isolate the UI while actual disposable financial/preparation/completion transactions remain tested. These fake-clock hangs are not a demonstrated phone defect. Synchronous fresh-introduction reads were also replaced by the existing asynchronous startup classifier. Failed/interrupted logs are retained under specs/019-unified-onboarding/verification/phase-06; no required tests were disabled and no financial/security assertions weakened.
+
+Final status: all 17 owner-requested focused tests passed; earlier broader run 330 passed; analysis no issues; formatting 20 scoped Dart files / zero changes needed. No additional full-suite rerun, build/install, phone/native hardware or Git operation was performed. All 42 generated outputs/dependencies/assets/Android/schema 32 and the disabled production switch are preserved. No known failure remains in the final minimal checks; broader/device coverage is not claimed. See phase-06-report.md for exact files, evidence and the deferred test guide. T051-T060 await verified-work acceptance and remain unchecked; Phase 7 has not started.
+
+
+## Feature 019 Phase 7 verification - 2026-10-27
+
+Approved replay/existing-user lifecycle scope delivered. Initial expected regression failures resolved; six scoped analyzer import/style findings corrected. Final 26 focused tests passed and nine-file analysis/format clean. No remaining confirmed defect from these checks; native phone checks pending, no phone actions performed. Evidence/manual guide: specs/019-unified-onboarding/phase-07-report.md. Phase 7 awaits acceptance; onboarding disabled and Phase 8 unstarted.
+
+
+## Feature 019 Phase 8 findings - 2026-10-27
+
+Problem/reproduction: failed Continue on a blank name, collapsed invalid income amount or missing choice did not reveal/focus its control; explicit field announcements and source expand-state semantics were missing. Expected: reveal the first error, keep entries and provide an actionable correction. Fixed and focused-tested, including currency/date selectors. During the new 320-wide/200%-text replay test, stacked navigation initially occupied the full available height, hiding content; mainAxisSize.min now retains the chapter viewport. Retry repeats the actual failed step. Historical test logs also record corrected fixture timing/semantics-handle/noninteractive-wrapper assertions. Four scoped import/style findings resolved. Final 31 distinct focused checks passed; analysis/format clean. Evidence and reproduction/checklist: specs/019-unified-onboarding/phase-08-report.md. Status: implemented awaiting owner acceptance, phone checks pending, rollout disabled, no Phase 9.
+
+
+## Phase 9 arrow refinement - 2026-10-27
+
+Reported/confirmed issue: reconstructed raster arrow retains diffuse halo. Reproduction: view arrow-v3 and three new unselected revisions on contrasting backgrounds. Expected: clean solid alpha edge; actual: soft green aura remains despite three built-in image_gen calls. Status: raster variants not approved or integrated. A clearly labelled code-native vector recreation is prepared as an alternative for explicit fidelity review. Original sources and previous review are preserved. Browser preview encoding/viewport capture defects were corrected before final screenshots. Evidence: specs/019-unified-onboarding/phase-09-report.md and assets/branding/review-v2/review-notes.md.
+
+
+## Phase 9 implementation verification - 2026-10-27
+
+Expected: brand presentation never delays safety/authentication, missing assets remain usable, and enlarged Welcome controls remain reachable. Implemented static asset-failure stop, actual ready/error precedence and one-process lifecycle protection. Existing root integrity-error branch now receives its required themed MaterialApp context; its reset/data logic is unchanged. Focused fixture errors (lifecycle void API, imports/name collision, lazy ListView scrolling and non-brand ticker assertions) were corrected without disabling security/money assertions. Final 28 distinct focused checks passed; source analysis clean; exact native image dimensions/XML checked. Status: delivery awaits owner acceptance; no APK/native compile or phone results, no Phase 10. Details: specs/019-unified-onboarding/phase-09-report.md.

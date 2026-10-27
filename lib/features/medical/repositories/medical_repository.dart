@@ -742,20 +742,19 @@ class MedicalRepository {
     int profileId, {
     int? sharedSpaceId,
   }) async {
-    final existing = await _isar.medicalServiceTypes
-        .filter()
-        .group((q) => sharedSpaceId == null
-            ? q.profileIdEqualTo(profileId)
-            : q.sharedSpaceIdEqualTo(sharedSpaceId))
-        .count();
-    if (existing > 0) return;
-    final seed = MedicalServiceTypeDefaults.seed(
-      _directoryProfileId(profileId, sharedSpaceId),
-    );
-    for (final type in seed) {
-      type.sharedSpaceId = sharedSpaceId;
-    }
     await _isar.writeTxn(() async {
+      final existing = await _isar.medicalServiceTypes
+          .filter()
+          .group((q) => sharedSpaceId == null
+              ? q.profileIdEqualTo(profileId).sharedSpaceIdIsNull()
+              : q.sharedSpaceIdEqualTo(sharedSpaceId))
+          .count();
+      if (existing > 0) return;
+      final seed = MedicalServiceTypeDefaults.seed(
+          _directoryProfileId(profileId, sharedSpaceId));
+      for (final type in seed) {
+        type.sharedSpaceId = sharedSpaceId;
+      }
       await _isar.medicalServiceTypes.putAll(seed);
       for (final type in seed) {
         await _syncRecorder?.recordMedicalServiceType(type);

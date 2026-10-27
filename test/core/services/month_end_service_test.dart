@@ -1,3 +1,4 @@
+import 'package:budget_buddy/core/models/app_settings.dart';
 import 'package:budget_buddy/core/models/live_rate_set.dart';
 import '../../support/audit_test_support.dart';
 import 'package:budget_buddy/features/vault/models/vault_entry.dart';
@@ -93,6 +94,7 @@ void main() {
       VaultEntrySchema,
       AuditEventSchema,
       ChangeRecordSchema,
+      AppSettingsSchema,
       SchemaMigrationStampSchema
     ], directory: dir.path, name: 'month_end_${sequence++}');
     IsarHelper.instance = db;

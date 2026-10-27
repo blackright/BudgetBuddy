@@ -1,0 +1,7 @@
+
+const intro=document.querySelector('#intro'),status=document.querySelector('#status'),motion=document.querySelector('#motion');let timer;
+function finish(message){clearTimeout(timer);intro.classList.remove('playing');status.textContent=message}
+document.querySelector('#replay').onclick=()=>{finish('');if(motion.checked||matchMedia('(prefers-reduced-motion: reduce)').matches){status.textContent='Reduced motion: static artwork, no sequence delay.';return}void intro.offsetWidth;intro.classList.add('playing');status.textContent='Previewing overlapping motion; this is not app initialization progress.';timer=setTimeout(()=>finish('Sequence complete (1.2 seconds). Production handoff may happen earlier.'),1200)};
+document.querySelector('#ready').onclick=()=>finish('Ready: motion stopped immediately. Production would hand off to its existing guarded destination.');
+motion.onchange=()=>{intro.classList.toggle('static',motion.checked);finish(motion.checked?'Static artwork selected.':'Motion preview available.')};document.querySelector('#theme').onchange=e=>document.body.classList.toggle('dark',e.target.checked);
+document.querySelector('#continue').onclick=document.querySelector('#skip').onclick=()=>{status.textContent='Preview only: no navigation or data change.'};document.addEventListener('visibilitychange',()=>{if(document.hidden)finish('Preview paused; returning does not restart motion.')});window.addEventListener('pagehide',()=>clearTimeout(timer));

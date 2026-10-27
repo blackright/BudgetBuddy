@@ -6,6 +6,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'lock_providers.dart';
+import '../../identity/providers/device_auth_session.dart';
 
 /// Drives [LockController.noteLeftForeground] / [notePhoneLocked] /
 /// [noteResumed] from the app lifecycle and the Android screen on/off stream
@@ -20,6 +21,7 @@ class LockLifecycleObserver extends WidgetsBindingObserver {
     _subscription = _screenLockEvents.receiveBroadcastStream().listen((event) {
       final controller = _container.read(lockControllerProvider.notifier);
       if (event == 'locked') {
+        _container.read(deviceAuthSessionProvider.notifier).notePhoneLocked();
         controller.notePhoneLocked();
       }
     });
@@ -37,6 +39,7 @@ class LockLifecycleObserver extends WidgetsBindingObserver {
     final controller = _container.read(lockControllerProvider.notifier);
     switch (state) {
       case AppLifecycleState.resumed:
+        _container.read(deviceAuthSessionProvider.notifier).noteResumed();
         controller.noteResumed();
       case AppLifecycleState.paused:
       case AppLifecycleState.hidden:
@@ -44,6 +47,9 @@ class LockLifecycleObserver extends WidgetsBindingObserver {
         // Start the away window for any backgrounding. A real phone lock is
         // reported separately by the screen-lock event stream, which calls
         // notePhoneLocked() and sets the "always lock on resume" flag.
+        _container
+            .read(deviceAuthSessionProvider.notifier)
+            .noteLeftForeground();
         controller.noteLeftForeground();
       case AppLifecycleState.inactive:
         // Transient (app switcher, a call, a system dialog): do not start the

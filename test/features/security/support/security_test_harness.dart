@@ -40,6 +40,7 @@ import 'package:budget_buddy/features/security/repositories/lock_setting_janitor
 import 'package:budget_buddy/features/security/repositories/lock_setting_repository.dart';
 import 'package:budget_buddy/features/vault/models/savings_vault.dart';
 import 'package:isar/isar.dart';
+import 'package:budget_buddy/core/models/app_settings.dart';
 
 /// Shared Isar harness for the security tests (016).
 ///
@@ -85,6 +86,7 @@ class SecurityTestHarness {
     final directory = Directory.systemTemp.createTempSync('budget_buddy_sec_');
     final isar = await Isar.open(
       [
+        AppSettingsSchema,
         UserProfileSchema,
         AllocationSchema,
         AuditEventSchema,

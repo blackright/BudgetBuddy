@@ -1,4 +1,23 @@
 import 'package:isar/isar.dart';
+import '../../core/models/expense_template.dart';
+import '../models/category.dart';
+import '../models/month_rate_seal.dart';
+import '../models/live_rate_set.dart';
+import '../models/identity.dart';
+import '../models/consent_record.dart';
+import '../models/lock_setting.dart';
+import '../models/paired_peer.dart';
+import '../models/paired_context.dart';
+import '../models/pairing_token.dart';
+import '../models/income_source.dart';
+import '../models/month_end_run.dart';
+import '../models/allocation.dart';
+import '../models/transfer.dart';
+import '../models/merchant.dart';
+import '../models/expense_evidence_chunk.dart';
+import '../models/expense_purchase.dart';
+import '../models/audit_event.dart';
+import '../models/app_settings.dart';
 
 import '../models/currency_code.dart';
 import '../models/change_record.dart';
@@ -26,7 +45,7 @@ part 'schema_migrations.g.dart';
 
 /// Schema version this build expects. Bump whenever a numbered step is added to
 /// [_applySteps]; databases stamped at or above it are left untouched.
-const int schemaVersion = 31;
+const int schemaVersion = 32;
 
 const String schemaVersionKey = 'schema_version';
 
@@ -84,7 +103,21 @@ Future<void> runSchemaMigrations(Isar isar) async {
     final current = int.tryParse(stamp?.value ?? '') ?? 0;
     if (current >= schemaVersion) return;
 
+    // Decide freshness before historic steps seed service types or other rows.
+    final starterPolicy = current < 32
+        ? await _starterPolicyBeforeMigration(isar, current)
+        : null;
     await _applySteps(isar, current);
+    if (starterPolicy != null) {
+      final now = DateTime.now();
+      final settings = await isar.appSettings.get(1) ??
+          (AppSettings()
+            ..id = 1
+            ..createdAt = now
+            ..updatedAt = now);
+      settings.starterCategoryPolicy = starterPolicy;
+      await isar.appSettings.put(settings);
+    }
 
     await isar.schemaMigrationStamps.put(
       SchemaMigrationStamp()
@@ -92,6 +125,72 @@ Future<void> runSchemaMigrations(Isar isar) async {
         ..value = '$schemaVersion',
     );
   });
+}
+
+/// Local marker only. Unknown future markers are preserved conservatively and
+/// never turned into fresh-install permission. No historical money is repaired.
+Future<String> _starterPolicyBeforeMigration(Isar isar, int current) async {
+  final settings = await isar.appSettings.get(1);
+  final marker = settings?.starterCategoryPolicy;
+  if (marker != null) return marker;
+  if (current > 0 ||
+      (settings?.transferToggle ?? false) ||
+      settings?.decimalPreferences != null ||
+      settings?.onboardingStateJson != null) {
+    return StarterCategoryPolicy.preserveExisting.name;
+  }
+  final settingsCount = await isar.appSettings.count();
+  if (settingsCount > (settings == null ? 0 : 1)) {
+    return StarterCategoryPolicy.preserveExisting.name;
+  }
+  final stamps = await isar.schemaMigrationStamps.where().findAll();
+  if (stamps
+      .any((stamp) => stamp.key != schemaVersionKey || stamp.value != '0')) {
+    return StarterCategoryPolicy.preserveExisting.name;
+  }
+  // Every production user collection participates. Missing schema registration
+  // is an error, not proof of an empty store; tests must register real schemas.
+  final counts = <Future<int> Function()>[
+    () => isar.collection<UserProfile>().count(),
+    () => isar.collection<MonthlyBudget>().count(),
+    () => isar.collection<Expense>().count(),
+    () => isar.collection<ExpenseTemplate>().count(),
+    () => isar.collection<Reimbursement>().count(),
+    () => isar.collection<SavingsVault>().count(),
+    () => isar.collection<VaultEntry>().count(),
+    () => isar.collection<Category>().count(),
+    () => isar.collection<MedicalBill>().count(),
+    () => isar.collection<InsuranceProfile>().count(),
+    () => isar.collection<FamilyMember>().count(),
+    () => isar.collection<MedicalProvider>().count(),
+    () => isar.collection<MedicalServiceType>().count(),
+    () => isar.collection<MonthRateSeal>().count(),
+    () => isar.collection<LiveRateSet>().count(),
+    () => isar.collection<SharedSpace>().count(),
+    () => isar.collection<SharedMember>().count(),
+    () => isar.collection<Identity>().count(),
+    () => isar.collection<ConsentRecord>().count(),
+    () => isar.collection<PairedPeer>().count(),
+    () => isar.collection<PairedContext>().count(),
+    () => isar.collection<PairingToken>().count(),
+    () => isar.collection<ChangeRecord>().count(),
+    () => isar.collection<SyncCursor>().count(),
+    () => isar.collection<LockSetting>().count(),
+    () => isar.collection<IncomeSource>().count(),
+    () => isar.collection<BudgetProfile>().count(),
+    () => isar.collection<MonthEndRun>().count(),
+    () => isar.collection<DirectExpenseProfile>().count(),
+    () => isar.collection<Allocation>().count(),
+    () => isar.collection<Transfer>().count(),
+    () => isar.collection<Merchant>().count(),
+    () => isar.collection<ExpenseEvidenceChunk>().count(),
+    () => isar.collection<ExpensePurchase>().count(),
+    () => isar.collection<AuditEvent>().count(),
+  ];
+  for (final count in counts) {
+    if (await count() != 0) return StarterCategoryPolicy.preserveExisting.name;
+  }
+  return StarterCategoryPolicy.unifiedPending.name;
 }
 
 /// The numbered steps, in execution order. A later step may rely on fields an

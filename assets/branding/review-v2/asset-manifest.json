@@ -1,0 +1,113 @@
+{
+  "date": "2026-10-27",
+  "status": "Review only; visual acceptance pending",
+  "originals_match_downloads": true,
+  "wallet_coin_match_previous": true,
+  "raster_arrow_attempts": 3,
+  "selected_raster_arrow": null,
+  "proposed_arrow": "layers/arrow-vector-proposal.svg",
+  "png_alpha_note": "Original alpha unchanged for copied PNGs. Generated variants remain unselected due visible halo; no clean-alpha certification. Vector has no background or blur filter.",
+  "files": [
+    {
+      "path": "layers/arrow-vector-proposal.svg",
+      "bytes": 994,
+      "sha256": "a6a3ba3a4f09b43ab4cfa4c3759dd161f2cf526e9cca632328f9ce75397de3f6"
+    },
+    {
+      "path": "layers/coin-v1.png",
+      "bytes": 987202,
+      "sha256": "3fc0aa8a52527cb04c92486779daf75415adeb5cbaa7b145f86b23cd7bb0988b",
+      "width": 1244,
+      "height": 1264,
+      "depth": 8,
+      "colorType": 6
+    },
+    {
+      "path": "layers/wallet-v1.png",
+      "bytes": 970201,
+      "sha256": "5dc99ae77c47ccba5a0d5ab89b58c419cda1d1abbeaa0c0d714c8bf0753fe4cd",
+      "width": 1443,
+      "height": 1090,
+      "depth": 8,
+      "colorType": 6
+    },
+    {
+      "path": "previews/desktop-review.png",
+      "bytes": 1335998,
+      "sha256": "bcba8babd63d27a5193735544abd35fef158f7b0af6a6a332cd53c504a112f17",
+      "width": 1440,
+      "height": 3450,
+      "depth": 8,
+      "colorType": 2
+    },
+    {
+      "path": "previews/index.html",
+      "bytes": 13361,
+      "sha256": "487a10237d382365139957d923f3da354c4fce3a165db5d7343340c20f637bcb"
+    },
+    {
+      "path": "previews/mobile-large-text.png",
+      "bytes": 422582,
+      "sha256": "ccf90b0dc328ab2d83ac8b27d224e057de3a805b21c3dfcf685818fc1d54b36d",
+      "width": 360,
+      "height": 2250,
+      "depth": 8,
+      "colorType": 2
+    },
+    {
+      "path": "previews/preview-script-check.js",
+      "bytes": 4381,
+      "sha256": "324c4e41aeb5e4fdf21ffbd64de485af8ca1eb688dd08f1d0efe3ef6501983e2"
+    },
+    {
+      "path": "prompts.md",
+      "bytes": 3229,
+      "sha256": "6a6f1fe5b879a0b695316327e2389a94f41a0e170d1cf6424bba56732ecc8b96"
+    },
+    {
+      "path": "source/logo-original.png",
+      "bytes": 2579162,
+      "sha256": "0d31a72fa6377676b596c72a0010dd2655a81c9f0ba0d99eebe5e2af8c38f3e8",
+      "width": 1254,
+      "height": 1254,
+      "depth": 8,
+      "colorType": 6
+    },
+    {
+      "path": "source/splash-original.png",
+      "bytes": 1872014,
+      "sha256": "f9252b8a0842c75e779bf3755f7618e03891ce997fe0a27352c4ae7ce5b82434",
+      "width": 1024,
+      "height": 1536,
+      "depth": 8,
+      "colorType": 2
+    },
+    {
+      "path": "variants/arrow-v4-halo-not-selected.png",
+      "bytes": 1053468,
+      "sha256": "ef77c137961d026dadeae6db3e3a90a4c50eda4ca56d0cbf6c2cf77aade76965",
+      "width": 1536,
+      "height": 1024,
+      "depth": 8,
+      "colorType": 6
+    },
+    {
+      "path": "variants/arrow-v5-halo-not-selected.png",
+      "bytes": 1106206,
+      "sha256": "f8ef6973e3166cb9b789208786cc05d1eece1d5a930392ec30890fb408cf8d44",
+      "width": 1536,
+      "height": 1024,
+      "depth": 8,
+      "colorType": 6
+    },
+    {
+      "path": "variants/arrow-v6-halo-not-selected.png",
+      "bytes": 1136522,
+      "sha256": "2bb5853bb503a23d4fbe10f3354cdb65717164a52fec4f3339e3e859c4d5cd2e",
+      "width": 1536,
+      "height": 1024,
+      "depth": 8,
+      "colorType": 6
+    }
+  ]
+}

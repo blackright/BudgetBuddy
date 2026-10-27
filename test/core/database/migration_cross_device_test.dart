@@ -31,7 +31,7 @@ void main() {
       harness = await MedicalTestHarness.create();
 
       expect(await readSchemaVersion(harness.isar), schemaVersion);
-      expect(schemaVersion, 31);
+      expect(schemaVersion, 32);
       expect(await harness.schemaStamps(), hasLength(1));
 
       // The seven new collections exist and start empty.

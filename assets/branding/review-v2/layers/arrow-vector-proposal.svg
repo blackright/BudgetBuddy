@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="640" viewBox="0 0 1024 640" role="img" aria-label="Proposed clean green growth arrow recreation">
+<defs><linearGradient id="face" x1="0" y1="1" x2="1" y2="0"><stop stop-color="#32d66b"/><stop offset=".54" stop-color="#74e64d"/><stop offset="1" stop-color="#b0f345"/></linearGradient><linearGradient id="side" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#07994f"/><stop offset="1" stop-color="#067d4a"/></linearGradient></defs>
+<path fill="url(#side)" transform="translate(0 24)" d="M95 415 C326 492 580 392 760 201 L713 171 Q694 155 718 143 L900 64 Q930 49 926 82 L911 277 Q909 310 886 291 L840 256 C624 510 374 579 102 497 Q72 488 69 455 Q65 429 95 415 Z"/>
+<path fill="url(#face)" stroke="#7cdb57" stroke-width="2" stroke-linejoin="round" d="M95 415 C326 492 580 392 760 201 L713 171 Q694 155 718 143 L900 64 Q930 49 926 82 L911 277 Q909 310 886 291 L840 256 C624 510 374 579 102 497 Q72 488 69 455 Q65 429 95 415 Z"/>
+</svg>

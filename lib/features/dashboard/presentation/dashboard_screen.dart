@@ -1,3 +1,6 @@
+import '../../budget_setup/providers/setup_handoff_provider.dart';
+import '../../budget_setup/providers/onboarding_rollout_provider.dart';
+import 'widgets/onboarding_guidance_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -34,6 +37,18 @@ class DashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final activeBudget = ref.watch(activeBudgetProvider).value;
     final profile = ref.watch(activeProfileProvider).valueOrNull;
+    final handoff = ref.watch(setupHandoffProvider);
+    if (setupHandoffArrived(handoff,
+        profileId: profile?.id,
+        isShared: ref.watch(activeSpaceIdProvider) != null,
+        budgetId: activeBudget?.id,
+        yearMonth: ref.watch(selectedYearMonthProvider))) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (context.mounted && ref.read(setupHandoffProvider) == handoff) {
+          ref.read(setupHandoffProvider.notifier).state = null;
+        }
+      });
+    }
     final canEdit = ref.watch(activeContextCanEditProvider);
     final activeSpaceId = ref.watch(activeSpaceIdProvider);
     final display =
@@ -100,7 +115,9 @@ class DashboardScreen extends ConsumerWidget {
                 child: ListView(
                   padding: const EdgeInsets.all(16),
                   children: [
-                    MonthIncompleteBanner(currencySymbol: symbol),
+                    if (!ref.watch(unifiedOnboardingEnabledProvider) ||
+                        !ref.watch(onboardingGuidanceEligibleProvider))
+                      MonthIncompleteBanner(currencySymbol: symbol),
                     MonthSummaryCard(
                       currency: display,
                       // US8: insurance returns came from medical bills; expense
@@ -112,6 +129,9 @@ class DashboardScreen extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(height: 12),
+                    if (ref.watch(unifiedOnboardingEnabledProvider) &&
+                        activeSpaceId == null)
+                      const OnboardingGuidanceCard(),
                     const AllocationCard(),
                     if (activeSpaceId == null) ...[
                       const SizedBox(height: 12),
