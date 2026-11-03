@@ -48,23 +48,23 @@ void main() {
 
   tearDown(() => h.close());
 
-  AllocationOperationsService service() =>
-      AllocationOperationsService(h.isar,
-          actorId: 1, clock: () => DateTime.utc(2026, 10, 20));
+  AllocationOperationsService service() => AllocationOperationsService(h.isar,
+      actorId: 1, clock: () => DateTime.utc(2026, 10, 20));
 
   Future<int> free() async => (await ContinuousBalanceService(h.isar,
-          clock: () => DateTime.utc(2026, 10, 20))
-      .balance(profileId: 1, yearMonth: '2026-10'))
+              clock: () => DateTime.utc(2026, 10, 20))
+          .balance(profileId: 1, yearMonth: '2026-10'))
       .freeToUseMinor;
 
-  Future<BudgetProfile> profile() async =>
-      (await h.isar.budgetProfiles.filter().syncGuidEqualTo('car').findFirst())!;
+  Future<BudgetProfile> profile() async => (await h.isar.budgetProfiles
+      .filter()
+      .syncGuidEqualTo('car')
+      .findFirst())!;
 
   test('reserve lowers free-to-use and creates a signed delta without income',
       () async {
     final before = await free();
-    await service().reserve(
-        profileId: 1, yearMonth: '2026-10', amount: 100000);
+    await service().reserve(profileId: 1, yearMonth: '2026-10', amount: 100000);
 
     final row = await profile();
     expect(row.allocation, 100000);
@@ -77,8 +77,7 @@ void main() {
   });
 
   test('release raises free-to-use and writes no income', () async {
-    await service().reserve(
-        profileId: 1, yearMonth: '2026-10', amount: 100000);
+    await service().reserve(profileId: 1, yearMonth: '2026-10', amount: 100000);
     final before = await free();
     await service().release(
         profileId: 1, yearMonth: '2026-10', amount: 50000, reason: 'Done');
@@ -93,8 +92,7 @@ void main() {
 
   test('reserve above free-to-use is rejected without writes', () async {
     await expectLater(
-        service().reserve(
-            profileId: 1, yearMonth: '2026-10', amount: 200001),
+        service().reserve(profileId: 1, yearMonth: '2026-10', amount: 200001),
         throwsA(isA<AllocationException>()
             .having((e) => e.code, 'code', 'insufficientFreeFunds')));
     expect((await profile()).allocation, 0);
@@ -102,11 +100,9 @@ void main() {
   });
 
   test('release above the remaining envelope is rejected', () async {
-    await service().reserve(
-        profileId: 1, yearMonth: '2026-10', amount: 50000);
+    await service().reserve(profileId: 1, yearMonth: '2026-10', amount: 50000);
     await expectLater(
-        service().release(
-            profileId: 1, yearMonth: '2026-10', amount: 50001),
+        service().release(profileId: 1, yearMonth: '2026-10', amount: 50001),
         throwsA(isA<AllocationException>()
             .having((e) => e.code, 'code', 'allocationTooLarge')));
     expect((await profile()).allocation, 50000);
@@ -131,8 +127,7 @@ void main() {
 
   test('a signed correction keeps the original deltas and reason audit',
       () async {
-    await service().reserve(
-        profileId: 1, yearMonth: '2026-10', amount: 50000);
+    await service().reserve(profileId: 1, yearMonth: '2026-10', amount: 50000);
     await service().correct(
         profileId: 1,
         yearMonth: '2026-10',
@@ -152,8 +147,7 @@ void main() {
   });
 
   test('a correction below zero is rejected without writes', () async {
-    await service().reserve(
-        profileId: 1, yearMonth: '2026-10', amount: 10000);
+    await service().reserve(profileId: 1, yearMonth: '2026-10', amount: 10000);
     await expectLater(
         service().correct(
             profileId: 1,

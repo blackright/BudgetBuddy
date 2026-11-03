@@ -15,7 +15,8 @@ class SalaryCycleService {
   /// Adjusts a nominal payday forward to the next working day.
   /// [isWorkingDay] returns true if the date is a working day, false if not,
   /// null if coverage is missing (in which case the nominal date is returned).
-  static DateTime adjustForward(DateTime nominal, bool? Function(DateTime) isWorkingDay) {
+  static DateTime adjustForward(
+      DateTime nominal, bool? Function(DateTime) isWorkingDay) {
     var current = nominal;
     for (var i = 0; i < 30; i++) {
       final working = isWorkingDay(current);

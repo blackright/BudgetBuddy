@@ -23,11 +23,10 @@ void main() {
       overrides: [
         activeBudgetProvider.overrideWith((ref) => Stream.value(null)),
         selectedYearMonthProvider.overrideWith((ref) => '2026-01'),
-        activeProfileProvider.overrideWith(
-            (ref) => Stream.value(UserProfile()
-              ..id = 1
-              ..name = 'Test'
-              ..primaryCurrency = PrimaryCurrency.huf)),
+        activeProfileProvider.overrideWith((ref) => Stream.value(UserProfile()
+          ..id = 1
+          ..name = 'Test'
+          ..primaryCurrency = PrimaryCurrency.huf)),
         activeProfileIdProvider.overrideWith((ref) => 1),
         activeSpaceProvider.overrideWith((ref) => Stream.value(null)),
         medicalDisplayCurrencyProvider.overrideWithValue(CurrencyCode.huf),
@@ -58,7 +57,9 @@ void main() {
                 ..relation = 'Child',
             ])),
         medicalServiceTypesProvider.overrideWith((ref) => Stream.value([
-              MedicalServiceType()..id = 1..name = 'Radiology',
+              MedicalServiceType()
+                ..id = 1
+                ..name = 'Radiology',
               MedicalServiceType()
                 ..id = 2
                 ..name = 'Surgery'
@@ -66,8 +67,8 @@ void main() {
             ])),
         medicalDirectoryProvider.overrideWithValue(
             const MedicalDirectory(members: [], providers: [])),
-        insuranceProfileProvider.overrideWith(
-            (ref) => Stream.value(InsuranceProfile()..defaultPatientPercent = 20)),
+        insuranceProfileProvider.overrideWith((ref) =>
+            Stream.value(InsuranceProfile()..defaultPatientPercent = 20)),
       ],
       child: const MaterialApp(home: MedicalDashboard()),
     ));
@@ -108,8 +109,7 @@ void main() {
     expect(find.textContaining('deductible'), findsNothing);
   });
 
-  testWidgets('directory and defaults fit 320px and 200% text',
-      (tester) async {
+  testWidgets('directory and defaults fit 320px and 200% text', (tester) async {
     tester.view.physicalSize = const Size(320, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -117,11 +117,10 @@ void main() {
       overrides: [
         activeBudgetProvider.overrideWith((ref) => Stream.value(null)),
         selectedYearMonthProvider.overrideWith((ref) => '2026-01'),
-        activeProfileProvider.overrideWith(
-            (ref) => Stream.value(UserProfile()
-              ..id = 1
-              ..name = 'Test'
-              ..primaryCurrency = PrimaryCurrency.huf)),
+        activeProfileProvider.overrideWith((ref) => Stream.value(UserProfile()
+          ..id = 1
+          ..name = 'Test'
+          ..primaryCurrency = PrimaryCurrency.huf)),
         activeProfileIdProvider.overrideWith((ref) => 1),
         activeSpaceProvider.overrideWith((ref) => Stream.value(null)),
         medicalDisplayCurrencyProvider.overrideWithValue(CurrencyCode.huf),
@@ -152,12 +151,14 @@ void main() {
                 ..relation = 'Child',
             ])),
         medicalServiceTypesProvider.overrideWith((ref) => Stream.value([
-              MedicalServiceType()..id = 1..name = 'Radiology',
+              MedicalServiceType()
+                ..id = 1
+                ..name = 'Radiology',
             ])),
         medicalDirectoryProvider.overrideWithValue(
             const MedicalDirectory(members: [], providers: [])),
-        insuranceProfileProvider.overrideWith(
-            (ref) => Stream.value(InsuranceProfile()..defaultPatientPercent = 20)),
+        insuranceProfileProvider.overrideWith((ref) =>
+            Stream.value(InsuranceProfile()..defaultPatientPercent = 20)),
       ],
       child: MaterialApp(
         builder: (context, child) => MediaQuery(

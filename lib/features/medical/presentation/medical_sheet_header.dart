@@ -36,8 +36,7 @@ class MedicalSheetHeader extends StatelessWidget {
                   Text(
                     subtitle!,
                     style: TextStyle(
-                        fontSize: 13,
-                        color: MedicalTheme.subtleText(context)),
+                        fontSize: 13, color: MedicalTheme.subtleText(context)),
                   ),
                 ],
               ],
@@ -49,8 +48,7 @@ class MedicalSheetHeader extends StatelessWidget {
             tooltip: 'Close',
             onPressed: onClose,
             icon: const Icon(Icons.close),
-            style: IconButton.styleFrom(
-                minimumSize: const Size(48, 48)),
+            style: IconButton.styleFrom(minimumSize: const Size(48, 48)),
           ),
       ],
     );

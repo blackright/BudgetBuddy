@@ -73,7 +73,8 @@ void main() {
     expect(state.headline, 'Claim not sent');
     expect(state.primaryAction, MedicalBillAction.markAsSent);
   });
-  test('D1 decision without submission enables guarded incoming navigation', () {
+  test('D1 decision without submission enables guarded incoming navigation',
+      () {
     final state = resolve(facts(approved: 7500));
     expect(state.primaryAction, MedicalBillAction.reviewIncomingMoney);
     expect(state.actionEnabled, true);
@@ -194,8 +195,9 @@ void main() {
     expect(state.estimatedFinalCost?.minorUnits, 0);
   });
   test('legacy direct evidence still shows no invented cost so far', () {
-    final state = resolve(
-        facts(method: MedicalPaymentMethod.insurerPaid, legacyState: MedicalBillState.paid));
+    final state = resolve(facts(
+        method: MedicalPaymentMethod.insurerPaid,
+        legacyState: MedicalBillState.paid));
     expect(state.headline, 'Needs review');
     expect(state.costSoFar, isNull);
   });

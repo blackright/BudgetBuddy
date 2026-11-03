@@ -51,9 +51,7 @@ void main() {
   });
 
   test('the carry happens once; a later subject still locks', () async {
-    await c
-        .read(deviceAuthSessionProvider.notifier)
-        .require(reason: 'Verify');
+    await c.read(deviceAuthSessionProvider.notifier).require(reason: 'Verify');
     await moveTo(const NativeAccessBinding(key: 'p1'));
     expect(snapshot().authenticated, isTrue);
 
@@ -64,9 +62,7 @@ void main() {
   });
 
   test('a replaced setup flow is a new subject', () async {
-    await c
-        .read(deviceAuthSessionProvider.notifier)
-        .require(reason: 'Verify');
+    await c.read(deviceAuthSessionProvider.notifier).require(reason: 'Verify');
 
     await moveTo(const NativeAccessBinding(key: 'setup:flow-two'));
 
@@ -74,13 +70,10 @@ void main() {
   });
 
   test('an unresolved subject holds the grant but refuses to prompt', () async {
-    await c
-        .read(deviceAuthSessionProvider.notifier)
-        .require(reason: 'Verify');
+    await c.read(deviceAuthSessionProvider.notifier).require(reason: 'Verify');
     final calls = auth.authenticateCalls;
 
-    await moveTo(
-        const NativeAccessBinding(key: 'resolving', resolved: false));
+    await moveTo(const NativeAccessBinding(key: 'resolving', resolved: false));
 
     expect(
         await c
@@ -98,9 +91,7 @@ void main() {
   });
 
   test('identity replacement under the same key locks', () async {
-    await c
-        .read(deviceAuthSessionProvider.notifier)
-        .require(reason: 'Verify');
+    await c.read(deviceAuthSessionProvider.notifier).require(reason: 'Verify');
     await moveTo(const NativeAccessBinding(key: 'p1'));
     expect(snapshot().authenticated, isTrue);
 

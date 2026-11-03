@@ -84,8 +84,7 @@ class MonthCarryService {
       for (final row in destinationRows)
         if (row.familyGuid.isNotEmpty) row.familyGuid,
     };
-    final audit =
-        AuditRepository(db, recorder: recorder, actorId: actorId);
+    final audit = AuditRepository(db, recorder: recorder, actorId: actorId);
     final now = clock().toUtc();
     final currency = owner.primaryCurrency.code.code;
     var created = 0;

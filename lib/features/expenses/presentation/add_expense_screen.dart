@@ -890,9 +890,10 @@ class _DestinationLine extends StatelessWidget {
     final warning = isMain || isDirect || exhausted || borrow > 0;
     final tone = isMain ? scheme.error : (profileColor ?? scheme.primary);
     final name = profileName ?? (isDirect ? 'Direct profile' : 'Budget');
-    final covered = remainingMinor != null && amountMinorInContext > remainingMinor!
-        ? remainingMinor!
-        : amountMinorInContext;
+    final covered =
+        remainingMinor != null && amountMinorInContext > remainingMinor!
+            ? remainingMinor!
+            : amountMinorInContext;
     final text = isMain
         ? 'Paid from free-to-use (no budget)'
         : isDirect

@@ -142,14 +142,14 @@ void main() {
 
     await expectLater(attempt(profileId: f.ownerId + 1),
         throwsA(isA<MedicalWithholdingException>()));
-    await expectLater(attempt(currency: 'usd'),
-        throwsA(isA<MedicalWithholdingException>()));
-    await expectLater(attempt(amount: 3000),
-        throwsA(isA<MedicalWithholdingException>()));
+    await expectLater(
+        attempt(currency: 'usd'), throwsA(isA<MedicalWithholdingException>()));
+    await expectLater(
+        attempt(amount: 3000), throwsA(isA<MedicalWithholdingException>()));
     await expectLater(attempt(receiptGuid: 'missing'),
         throwsA(isA<MedicalWithholdingException>()));
-    await expectLater(attempt(access: false),
-        throwsA(isA<MedicalWithholdingException>()));
+    await expectLater(
+        attempt(access: false), throwsA(isA<MedicalWithholdingException>()));
   });
 
   test('identical natural-key retry returns one match and one settlement',
@@ -198,7 +198,8 @@ void main() {
     );
     final rows = await db.medicalSettlements.where().findAll();
     expect(rows.length, 2);
-    expect(activeSettlements(rows).where(
-        (e) => e.kind.name == 'shareSettlement'), isEmpty);
+    expect(
+        activeSettlements(rows).where((e) => e.kind.name == 'shareSettlement'),
+        isEmpty);
   });
 }

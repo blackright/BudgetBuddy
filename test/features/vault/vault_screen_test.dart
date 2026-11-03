@@ -328,8 +328,8 @@ void main() {
       await open(tester);
       await tester.scrollUntilVisible(
           find.text('2026-09 • Earlier automatic savings Ft 0'), 180);
-      await tester.ensureVisible(
-          find.text('2026-09 • Earlier automatic savings Ft 0'));
+      await tester
+          .ensureVisible(find.text('2026-09 • Earlier automatic savings Ft 0'));
       await tester.pump();
       await tester.tap(find.text('2026-09 • Earlier automatic savings Ft 0'));
       await settle(tester);
@@ -389,8 +389,8 @@ void main() {
       Future<void> putDeposit(
           String key, int amount, String yearMonth, String target) async {
         await h.isar.writeTxn(() async {
-          final before = (await h.isar.savingsVaults.where().findFirst())!
-              .totalMinor;
+          final before =
+              (await h.isar.savingsVaults.where().findFirst())!.totalMinor;
           await h.isar.vaultEntrys.put(VaultEntry()
             ..operationKey = key
             ..profileId = 1
@@ -429,8 +429,7 @@ void main() {
       expect(find.text('Planned for 2026-10'), findsOneWidget);
       expect(find.text('Planned for 2027-01'), findsOneWidget);
       expect(find.textContaining('due now'), findsOneWidget);
-      expect(
-          find.descendant(of: planned, matching: find.text('Withdraw')),
+      expect(find.descendant(of: planned, matching: find.text('Withdraw')),
           findsOneWidget);
       // A reminder never moves money on its own.
       expect((await VaultRepository(h.isar).getVault(1))!.totalMinor, 1050000);

@@ -390,9 +390,10 @@ class _CheckSavingsButtonState extends ConsumerState<_CheckSavingsButton> {
                   showFinancialFeedback(
                     context,
                     result.message,
-                    kind: result.pausedReason != null || result.skipped.isNotEmpty
-                        ? FinancialFeedbackKind.warning
-                        : FinancialFeedbackKind.success,
+                    kind:
+                        result.pausedReason != null || result.skipped.isNotEmpty
+                            ? FinancialFeedbackKind.warning
+                            : FinancialFeedbackKind.success,
                   );
                 }
               } catch (_) {

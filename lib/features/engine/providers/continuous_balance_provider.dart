@@ -72,7 +72,7 @@ final continuousBalanceProvider = StreamProvider.family<ContinuousBalance,
   await for (final _ in signals.stream) {
     queued = false;
     if (!alive) return;
-    yield await db.txn(() => service.balance(
-        profileId: key.profileId, yearMonth: key.yearMonth));
+    yield await db.txn(() =>
+        service.balance(profileId: key.profileId, yearMonth: key.yearMonth));
   }
 });

@@ -124,8 +124,8 @@ void main() {
         ..recordedAt = DateTime.utc(2026, 10, 20)
         ..currency = 'huf'
         ..amountMinor = 2000
-        ..expenseGuid = (await h.db.expenses.get(bill.linkedExpenseId!))!
-            .syncGuid
+        ..expenseGuid =
+            (await h.db.expenses.get(bill.linkedExpenseId!))!.syncGuid
         ..withholdingMatchGuid = 'match-reference'
         ..operationIdentity = 'settlement:one'
         ..inputFingerprint = 'fingerprint-one';

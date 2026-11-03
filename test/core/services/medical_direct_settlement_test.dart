@@ -75,7 +75,8 @@ void main() {
   MedicalSettlementService service() =>
       MedicalSettlementService(db, clock: () => now);
 
-  test('provider and separate share are independent, one cash booking', () async {
+  test('provider and separate share are independent, one cash booking',
+      () async {
     final fixture = await seed();
     final s = service();
     final provider = await s.recordProviderSettlement(
@@ -101,7 +102,8 @@ void main() {
     expect(share.amountMinor, 2000);
     expect(await db.expenses.count(), 1);
     expect((await db.expenses.get(fixture.expense.id))!.amount, 2000);
-    final active = activeSettlements(await s.eventsForBill(fixture.bill.syncGuid));
+    final active =
+        activeSettlements(await s.eventsForBill(fixture.bill.syncGuid));
     expect(active.length, 2);
   });
 

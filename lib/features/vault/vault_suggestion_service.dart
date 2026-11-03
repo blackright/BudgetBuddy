@@ -140,8 +140,8 @@ class VaultSuggestionService {
       }
       if (await _alreadySaved(month)) continue;
       try {
-        final funds = await db.txn(
-            () => readPersonalMonthFunds(db, profileId, month, registry));
+        final funds = await db
+            .txn(() => readPersonalMonthFunds(db, profileId, month, registry));
         final available = funds['available'] ?? 0;
         if (available <= 0) continue;
         final owner = await db.userProfiles.get(profileId);
@@ -218,11 +218,10 @@ List<PendingAction> activeVaultDepositSuggestions(
 ) =>
     actions
         .where((action) =>
-            action.actionType == vaultDepositSuggestedType &&
-            action.isActive)
+            action.actionType == vaultDepositSuggestedType && action.isActive)
         .toList()
-      ..sort((a, b) =>
-          (a.expectedMonth ?? '').compareTo(b.expectedMonth ?? ''));
+      ..sort(
+          (a, b) => (a.expectedMonth ?? '').compareTo(b.expectedMonth ?? ''));
 
 /// Deposits that carry a target withdrawal month and have not been reversed or
 /// already withdrawn. Pure derivation over immutable Vault history.

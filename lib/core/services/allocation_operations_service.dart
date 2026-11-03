@@ -22,7 +22,8 @@ class AllocationException implements Exception {
 /// Both operations are one transaction with a signed [Allocation] delta and an
 /// audit event. The original history rows are never edited.
 class AllocationOperationsService {
-  AllocationOperationsService(this.db, {this.actorId, DateTime Function()? clock})
+  AllocationOperationsService(this.db,
+      {this.actorId, DateTime Function()? clock})
       : clock = clock ?? DateTime.now;
 
   final Isar db;
@@ -59,14 +60,9 @@ class AllocationOperationsService {
       _write('correct', profileId, yearMonth, amount, operationKey,
           reason: reason, isAccessCurrent: isAccessCurrent);
 
-  Future<void> _write(
-      String kind,
-      int profileId,
-      String yearMonth,
-      int amount,
+  Future<void> _write(String kind, int profileId, String yearMonth, int amount,
       String? operationKey,
-      {String? reason,
-      bool Function()? isAccessCurrent}) async {
+      {String? reason, bool Function()? isAccessCurrent}) async {
     if (kind == 'correct' ? amount == 0 : amount <= 0) {
       throw const AllocationException('invalidAmount');
     }
@@ -92,14 +88,11 @@ class AllocationOperationsService {
           ? null
           : 'allocation.$kind:${profile.profileId}:$yearMonth:$operationKey';
       if (key != null) {
-        final existing = await db.allocations
-            .filter()
-            .syncGuidEqualTo(key)
-            .findFirst();
+        final existing =
+            await db.allocations.filter().syncGuidEqualTo(key).findFirst();
         if (existing != null) return;
       }
-      final audit =
-          AuditRepository(db, actorId: actorId ?? profile.profileId);
+      final audit = AuditRepository(db, actorId: actorId ?? profile.profileId);
       final before = profile.allocation;
       if (kind == 'reserve') {
         final balance = await ContinuousBalanceService(db,
@@ -143,7 +136,8 @@ class AllocationOperationsService {
       await audit.put(db.budgetProfiles, profile,
           id: profile.id, type: 'BudgetProfile');
       final delta = Allocation()
-        ..syncGuid = key ?? 'allocation.$kind:${profile.syncGuid}:${clock().microsecondsSinceEpoch}'
+        ..syncGuid = key ??
+            'allocation.$kind:${profile.syncGuid}:${clock().microsecondsSinceEpoch}'
         ..profileId = profile.profileId
         ..yearMonth = yearMonth
         ..budgetProfileId = profile.id
@@ -157,7 +151,9 @@ class AllocationOperationsService {
           action: 'allocation.$kind',
           objectType: 'BudgetProfile',
           objectGuid: profile.syncGuid,
-          before: {'allocationMinor': before},
+          before: {
+            'allocationMinor': before
+          },
           after: {
             'allocationMinor': profile.allocation,
             'deltaMinor': profile.allocation - before,

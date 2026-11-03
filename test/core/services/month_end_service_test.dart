@@ -248,9 +248,9 @@ void main() {
           .ensureCarryInTxn(profileId: 1, yearMonth: '2026-10');
     });
     final carried = (await db.budgetProfiles
-            .filter()
-            .yearMonthEqualTo('2026-10')
-            .findFirst())!;
+        .filter()
+        .yearMonthEqualTo('2026-10')
+        .findFirst())!;
     expect(carried.defaultAllocationMinor, 100000);
     expect(carried.allocation, 120000);
     expect(carried.monthEndOriginGuid, startsWith('auto-carry:'));
@@ -261,9 +261,9 @@ void main() {
     final run = await service().confirm(report, choices: choices);
 
     final adopted = (await db.budgetProfiles
-            .filter()
-            .syncGuidEqualTo(carried.syncGuid)
-            .findFirst())!;
+        .filter()
+        .syncGuidEqualTo(carried.syncGuid)
+        .findFirst())!;
     expect(adopted.allocation, 120000);
     expect(adopted.monthEndOriginGuid, run.syncGuid);
     expect(await db.allocations.count(), 1,

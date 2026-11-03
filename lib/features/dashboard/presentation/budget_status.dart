@@ -9,7 +9,8 @@ import '../../../core/services/continuous_balance_service.dart';
 /// - **Yellow** — 80% to 99% used
 /// - **Orange** — exactly 100% used
 /// - **Red** — over 100% used (the profile is over budget)
-extension BudgetStatusColors on BudgetStatus {  Color get color {
+extension BudgetStatusColors on BudgetStatus {
+  Color get color {
     switch (this) {
       case BudgetStatus.green:
         return const Color(0xFF2E7D32);

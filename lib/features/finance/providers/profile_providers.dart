@@ -262,7 +262,8 @@ class ProfileActions {
           operationKey: operationKey,
           note: note);
 
-  Future<void> saveDirect(DirectExpenseProfile profile) async {    final context = _ref.read(budgetContextProvider);
+  Future<void> saveDirect(DirectExpenseProfile profile) async {
+    final context = _ref.read(budgetContextProvider);
     if (context.isShared) {
       profile.sharedSpaceId = context.spaceId;
       profile.profileId = null;

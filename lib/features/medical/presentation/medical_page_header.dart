@@ -17,11 +17,11 @@ class MedicalPageHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final subtle = TextStyle(
-        fontSize: 12, color: MedicalTheme.subtleText(context));
+    final subtle =
+        TextStyle(fontSize: 12, color: MedicalTheme.subtleText(context));
     return Padding(
-      padding: const EdgeInsets.fromLTRB(MedicalTheme.screenGutter, 8,
-          MedicalTheme.screenGutter, 4),
+      padding: const EdgeInsets.fromLTRB(
+          MedicalTheme.screenGutter, 8, MedicalTheme.screenGutter, 4),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [

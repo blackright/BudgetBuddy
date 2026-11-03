@@ -56,8 +56,8 @@ void main() {
       isAccessCurrent: () => true);
 
   Future<int> free() async => (await ContinuousBalanceService(h.isar,
-          clock: () => DateTime.utc(2026, 10, 20))
-      .balance(profileId: 1, yearMonth: '2026-10'))
+              clock: () => DateTime.utc(2026, 10, 20))
+          .balance(profileId: 1, yearMonth: '2026-10'))
       .freeToUseMinor;
 
   test('move to Vault keeps free-to-use unchanged and raises the Vault',
@@ -71,9 +71,9 @@ void main() {
         note: 'Car savings');
 
     final profile = (await h.isar.budgetProfiles
-            .filter()
-            .syncGuidEqualTo('car')
-            .findFirst())!;
+        .filter()
+        .syncGuidEqualTo('car')
+        .findFirst())!;
     final vault = (await h.isar.savingsVaults.where().findFirst())!;
     expect(profile.allocation, 50000);
     expect(vault.totalMinor, 50000);
@@ -96,7 +96,10 @@ void main() {
             operationKey: 'too-much'),
         throwsA(isA<AllocationTransferException>()));
     expect(
-        (await h.isar.budgetProfiles.filter().syncGuidEqualTo('car').findFirst())!
+        (await h.isar.budgetProfiles
+                .filter()
+                .syncGuidEqualTo('car')
+                .findFirst())!
             .allocation,
         100000);
     expect(await h.isar.allocations.count(), 0);
@@ -121,7 +124,10 @@ void main() {
             operationKey: 'currency'),
         throwsA(isA<AllocationTransferException>()));
     expect(
-        (await h.isar.budgetProfiles.filter().syncGuidEqualTo('car').findFirst())!
+        (await h.isar.budgetProfiles
+                .filter()
+                .syncGuidEqualTo('car')
+                .findFirst())!
             .allocation,
         100000);
     expect(await h.isar.allocations.count(), 0);
@@ -141,7 +147,10 @@ void main() {
         operationKey: 'once');
 
     expect(
-        (await h.isar.budgetProfiles.filter().syncGuidEqualTo('car').findFirst())!
+        (await h.isar.budgetProfiles
+                .filter()
+                .syncGuidEqualTo('car')
+                .findFirst())!
             .allocation,
         50000);
     expect(await h.isar.vaultEntrys.filter().kindEqualTo('deposit').count(), 1);

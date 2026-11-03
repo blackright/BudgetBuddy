@@ -125,10 +125,8 @@ class VaultTransferService {
     if (profileId != actorId) {
       _fail('This vault belongs to another profile.');
     }
-    var vault = await db.savingsVaults
-        .filter()
-        .profileIdEqualTo(profileId)
-        .findFirst();
+    var vault =
+        await db.savingsVaults.filter().profileIdEqualTo(profileId).findFirst();
     if (vault == null) {
       final owner = await db.userProfiles.get(profileId);
       if (owner == null) {
@@ -159,15 +157,15 @@ class VaultTransferService {
   }
 
   Future<VaultTransferPreview> preview(
-          {required String kind,
-          required int amount,
-          required String requestId,
-          String note = '',
-          String? reverses,
-          String? targetWithdrawalMonth,
-          String? completesActionType,
-          String? completesRecordRef,
-          String? completesCycleOrMonth}) async {
+      {required String kind,
+      required int amount,
+      required String requestId,
+      String note = '',
+      String? reverses,
+      String? targetWithdrawalMonth,
+      String? completesActionType,
+      String? completesRecordRef,
+      String? completesCycleOrMonth}) async {
     await _ensureVaultBeforeRead();
     return db.txn(() async {
       final state = await _read();
@@ -199,13 +197,8 @@ class VaultTransferService {
     });
   }
 
-  Future<int> _validate(
-      VaultTransferReadiness state,
-      String kind,
-      int amount,
-      String note,
-      String? reverses,
-      String? targetWithdrawalMonth) async {
+  Future<int> _validate(VaultTransferReadiness state, String kind, int amount,
+      String note, String? reverses, String? targetWithdrawalMonth) async {
     if (!validVaultAmount(amount) ||
         amount == 0 ||
         note.trim().length > 120 ||
@@ -249,8 +242,7 @@ class VaultTransferService {
       if (kind != 'deposit') {
         _fail('Only a deposit can plan a withdrawal.');
       }
-      if (!RegExp(r'^\d{4}-(0[1-9]|1[0-2])$')
-          .hasMatch(targetWithdrawalMonth)) {
+      if (!RegExp(r'^\d{4}-(0[1-9]|1[0-2])$').hasMatch(targetWithdrawalMonth)) {
         _fail('Choose a valid target withdrawal month.');
       }
       if (targetWithdrawalMonth.compareTo(state.month) < 0) {

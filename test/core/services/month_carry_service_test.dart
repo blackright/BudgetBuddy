@@ -61,9 +61,9 @@ void main() {
 
     expect(created, 1);
     final destination = (await h.isar.budgetProfiles
-            .filter()
-            .yearMonthEqualTo('2026-11')
-            .findFirst())!;
+        .filter()
+        .yearMonthEqualTo('2026-11')
+        .findFirst())!;
     expect(destination.familyGuid, 'family-car');
     expect(destination.name, 'Car maintenance');
     expect(destination.defaultAllocationMinor, 20000);
@@ -82,9 +82,9 @@ void main() {
     await service().ensureCarry(profileId: 1, yearMonth: '2026-11');
 
     final destination = (await h.isar.budgetProfiles
-            .filter()
-            .yearMonthEqualTo('2026-11')
-            .findFirst())!;
+        .filter()
+        .yearMonthEqualTo('2026-11')
+        .findFirst())!;
     expect(destination.allocation, 30000);
     expect((await h.isar.allocations.where().findFirst())!.amount, 30000);
   });
@@ -94,11 +94,13 @@ void main() {
     await seedSource(
         familyGuid: '', allocation: 50000, defaultAllocation: 50000);
 
+    expect(await service().ensureCarry(profileId: 1, yearMonth: '2026-11'), 1);
+    expect(await service().ensureCarry(profileId: 1, yearMonth: '2026-11'), 0);
     expect(
-        await service().ensureCarry(profileId: 1, yearMonth: '2026-11'), 1);
-    expect(
-        await service().ensureCarry(profileId: 1, yearMonth: '2026-11'), 0);
-    expect(await h.isar.budgetProfiles.filter().yearMonthEqualTo('2026-11').count(),
+        await h.isar.budgetProfiles
+            .filter()
+            .yearMonthEqualTo('2026-11')
+            .count(),
         1);
     expect(await h.isar.allocations.count(), 1);
   });
@@ -120,10 +122,13 @@ void main() {
         ..hasConflict = true);
     });
 
-    await expectLater(
-        service().ensureCarry(profileId: 1, yearMonth: '2026-11'),
+    await expectLater(service().ensureCarry(profileId: 1, yearMonth: '2026-11'),
         throwsA(isA<MonthCarryException>()));
-    expect(await h.isar.budgetProfiles.filter().yearMonthEqualTo('2026-11').count(),
+    expect(
+        await h.isar.budgetProfiles
+            .filter()
+            .yearMonthEqualTo('2026-11')
+            .count(),
         0);
     expect(await h.isar.allocations.count(), 0);
   });
@@ -142,9 +147,12 @@ void main() {
         ..updatedAt = DateTime.utc(2026));
     });
 
+    expect(await service().ensureCarry(profileId: 1, yearMonth: '2026-11'), 0);
     expect(
-        await service().ensureCarry(profileId: 1, yearMonth: '2026-11'), 0);
-    expect(await h.isar.budgetProfiles.filter().yearMonthEqualTo('2026-11').count(),
+        await h.isar.budgetProfiles
+            .filter()
+            .yearMonthEqualTo('2026-11')
+            .count(),
         1);
     expect(await h.isar.allocations.count(), 0);
   });

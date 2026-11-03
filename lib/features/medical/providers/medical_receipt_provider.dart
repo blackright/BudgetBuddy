@@ -243,9 +243,8 @@ final medicalInboxProvider =
   final resolver = ref.watch(medicalBillStateResolverProvider);
   final now = ref.watch(clockProvider);
   final directory = ref.watch(medicalDirectoryProvider);
-  final serviceTypes =
-      ref.watch(medicalServiceTypesProvider).valueOrNull ??
-          const <MedicalServiceType>[];
+  final serviceTypes = ref.watch(medicalServiceTypesProvider).valueOrNull ??
+      const <MedicalServiceType>[];
   final serviceNames = {for (final type in serviceTypes) type.id: type.name};
   final display = ref.watch(medicalDisplayCurrencyProvider);
   final table = ref.watch(rateRegistryProvider).tableFor(
@@ -291,6 +290,7 @@ MedicalReadiness _billReadiness(MedicalHistoryBatch batch, int billId) {
       : batch.blockers;
   return medicalViewReadiness(value);
 }
+
 final medicalReceiptHistoryProvider = StreamProvider.autoDispose
     .family<MedicalReceiptHistory, int>((ref, billId) async* {
   final context = ref.watch(budgetContextProvider);

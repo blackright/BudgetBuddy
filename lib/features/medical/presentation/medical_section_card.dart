@@ -25,7 +25,9 @@ class MedicalSectionCard extends StatelessWidget {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(MedicalTheme.cardRadius),
         side: BorderSide(
-            color: Theme.of(context).colorScheme.outlineVariant
+            color: Theme.of(context)
+                .colorScheme
+                .outlineVariant
                 .withValues(alpha: 0.55)),
       ),
       child: Padding(

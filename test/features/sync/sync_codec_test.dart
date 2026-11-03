@@ -207,8 +207,10 @@ void main() {
             reason: '${codec.entityType} should resolve');
       }
       expect(codecForEntityType('NotAThing'), isNull);
-      expect(syncCodecs.map((codec) => codec.entityType),
-          containsAll(['BudgetProfile', 'MonthEndRun', 'MedicalSettlementEvent']));
+      expect(
+          syncCodecs.map((codec) => codec.entityType),
+          containsAll(
+              ['BudgetProfile', 'MonthEndRun', 'MedicalSettlementEvent']));
       expect(syncCodecs, hasLength(20));
     });
   });

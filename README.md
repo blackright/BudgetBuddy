@@ -37,8 +37,16 @@ keeps them separate.
 ### Income and salary
 
 - Recurring or one-time income sources
+- Explicit current-period choices: **I already received it**, **I expect it later**
+  or **Start from the next period**
+- Usual receipt day and next income period captured during setup
+- Existing sources without a decision show **Current period not configured**
+- Old unconfirmed periods are migrated to an explicit setup action, not treated
+  as expected income
 - Expected income that becomes available only after confirmation
 - Salary confirmation with actual amount, receipt date and salary period
+- Opening-balance review before the first receipt, with a clear repair path when
+  the month boundary is missing
 - Corrections that keep the original receipt and its history
 
 ### Expenses and allocations
@@ -138,11 +146,25 @@ flutter analyze
 flutter test
 ```
 
+The `test/` folder is intentionally committed. It is the project's regression
+suite and the CI workflow runs it, so **do not add `test/` to `.gitignore`**.
+
+Focused suites used while working on income activation:
+
+```bash
+flutter test test/features/finance
+flutter test test/features/budget_setup
+flutter test test/features/pending_actions
+flutter test test/core/services
+```
+
 The project also includes a CI workflow that checks formatting, analysis and the
 test suite.
 
 Some database upgrade tests require a complete Isar schema fixture and are kept
-separate from the normal unit and widget suites.
+separate from the normal unit and widget suites. Their existing
+`Missing TypeSchema in Isar.open` failures are documented in the delivery report
+and are not income-activation regressions.
 
 ## Privacy
 
@@ -153,10 +175,11 @@ asks for them.
 
 ## Project Status
 
-BudgetBuddy is under active development. The current release includes salary and
-income confirmation, continuous balances, allocation carry-forward, the Vault,
-Pending Actions, medical reimbursements and shared spaces. Final device
-verification is ongoing for the latest release.
+BudgetBuddy is under active development. The current release includes explicit
+income-period activation, onboarding activation and starting-position review,
+salary and income confirmation, continuous balances, allocation carry-forward,
+the Vault, Pending Actions, medical reimbursements and shared spaces. Final
+device verification is ongoing for the latest release.
 
 ## License
 

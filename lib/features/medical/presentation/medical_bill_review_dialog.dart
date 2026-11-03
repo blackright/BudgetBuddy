@@ -35,15 +35,14 @@ Widget guardMedicalReview(
     ref.watch(selectedYearMonthProvider);
     if (!access()) {
       return AlertDialog(
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: const Text('Access changed'),
           content:
               const Text('Unlock the correct profile and reopen this review.'),
           actions: [
             TextButton(
-                style: TextButton.styleFrom(
-                    minimumSize: const Size(48, 48)),
+                style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
                 onPressed: () => Navigator.pop(dialog),
                 child: const Text('Close'))
           ]);
@@ -70,8 +69,8 @@ class _MedicalReasonDialogState extends State<_MedicalReasonDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Text(widget.title),
           content: Form(
               key: form,
@@ -87,13 +86,11 @@ class _MedicalReasonDialogState extends State<_MedicalReasonDialog> {
                       (text ?? '').trim().isEmpty ? 'Enter a reason.' : null)),
           actions: [
             TextButton(
-                style: TextButton.styleFrom(
-                    minimumSize: const Size(48, 48)),
+                style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
                 onPressed: () => Navigator.pop(context),
                 child: const Text('Keep unchanged')),
             FilledButton(
-                style: FilledButton.styleFrom(
-                    minimumSize: const Size(48, 48)),
+                style: FilledButton.styleFrom(minimumSize: const Size(48, 48)),
                 onPressed: () {
                   if (form.currentState!.validate()) {
                     Navigator.pop(context, controller.text.trim());

@@ -43,8 +43,7 @@ List<MedicalSettlementEvent> activeSettlements(
 /// commands only retain evidence, so they never create a second expense, refund
 /// or approval. Legacy rows without evidence are refused rather than guessed.
 class MedicalSettlementService {
-  MedicalSettlementService(this.db,
-      {this.recorder, DateTime Function()? clock})
+  MedicalSettlementService(this.db, {this.recorder, DateTime Function()? clock})
       : clock = clock ?? DateTime.now;
   final Isar db;
   final SyncRecorder? recorder;
@@ -96,7 +95,8 @@ class MedicalSettlementService {
 
       final rows = await _events(bill.syncGuid);
       final active = activeSettlements(rows)
-          .where((e) => e.kind == MedicalSettlementKind.insurerProviderSettlement)
+          .where(
+              (e) => e.kind == MedicalSettlementKind.insurerProviderSettlement)
           .toList();
       final current = active.isEmpty ? null : active.last;
       if (current != null && current.confirmed) {
@@ -126,8 +126,7 @@ class MedicalSettlementService {
         ..actorId = actorId
         ..operationIdentity = identity
         ..inputFingerprint = fingerprint;
-      event.id = await AuditRepository(db,
-              recorder: recorder, actorId: actorId)
+      event.id = await AuditRepository(db, recorder: recorder, actorId: actorId)
           .put(db.medicalSettlements, event,
               id: event.id, type: 'MedicalSettlementEvent', derived: false);
       AppLogger.medicalSettlement(
@@ -181,7 +180,8 @@ class MedicalSettlementService {
         effectiveDate.toUtc().toIso8601String(),
         currency,
       ]);
-      final identity = 'medical-settlement:share:${bill.syncGuid}:$operationKey';
+      final identity =
+          'medical-settlement:share:${bill.syncGuid}:$operationKey';
       final replay = await _replay(identity, fingerprint);
       if (replay != null) return replay;
 
@@ -210,8 +210,7 @@ class MedicalSettlementService {
         ..actorId = actorId
         ..operationIdentity = identity
         ..inputFingerprint = fingerprint;
-      event.id = await AuditRepository(db,
-              recorder: recorder, actorId: actorId)
+      event.id = await AuditRepository(db, recorder: recorder, actorId: actorId)
           .put(db.medicalSettlements, event,
               id: event.id, type: 'MedicalSettlementEvent', derived: false);
       AppLogger.medicalSettlement(
@@ -267,7 +266,8 @@ class MedicalSettlementService {
         reason.trim(),
         medicalBillBasis(bill),
       ]);
-      final identity = 'medical-settlement:close:${bill.syncGuid}:$operationKey';
+      final identity =
+          'medical-settlement:close:${bill.syncGuid}:$operationKey';
       final replay = await _replay(identity, fingerprint);
       if (replay != null) return replay;
       if (active.any((e) => e.kind == MedicalSettlementKind.closure)) {
@@ -290,8 +290,7 @@ class MedicalSettlementService {
         ..actorId = actorId
         ..operationIdentity = identity
         ..inputFingerprint = fingerprint;
-      event.id = await AuditRepository(db,
-              recorder: recorder, actorId: actorId)
+      event.id = await AuditRepository(db, recorder: recorder, actorId: actorId)
           .put(db.medicalSettlements, event,
               id: event.id, type: 'MedicalSettlementEvent', derived: false);
       AppLogger.medicalSettlement(
@@ -340,7 +339,8 @@ class MedicalSettlementService {
         MedicalSettlementKind.reversal.name,
         reason.trim(),
       ]);
-      final identity = 'medical-settlement:reverse:${original.syncGuid}:$operationKey';
+      final identity =
+          'medical-settlement:reverse:${original.syncGuid}:$operationKey';
       final replay = await _replay(identity, fingerprint);
       if (replay != null) return replay;
       if (await _isReversed(original.syncGuid)) {
@@ -363,8 +363,7 @@ class MedicalSettlementService {
         ..actorId = actorId
         ..operationIdentity = identity
         ..inputFingerprint = fingerprint;
-      event.id = await AuditRepository(db,
-              recorder: recorder, actorId: actorId)
+      event.id = await AuditRepository(db, recorder: recorder, actorId: actorId)
           .put(db.medicalSettlements, event,
               id: event.id, type: 'MedicalSettlementEvent', derived: false);
       return event;
@@ -423,10 +422,7 @@ class MedicalSettlementService {
   }
 
   Future<List<MedicalSettlementEvent>> _events(String billGuid) =>
-      db.medicalSettlements
-          .filter()
-          .billGuidEqualTo(billGuid)
-          .findAll();
+      db.medicalSettlements.filter().billGuidEqualTo(billGuid).findAll();
 
   Future<bool> _hasClosure(String billGuid) async =>
       activeSettlements(await _events(billGuid))

@@ -75,14 +75,15 @@ final resolvedIncomeProvider = Provider<ResolvedIncome>((ref) {
     return ResolvedIncome(amount: major, usesOverride: false);
   }
   final actualAsync = ref.watch(actualIncomeLedgerProvider);
-  if (actualAsync.hasError) throw const FormatException('Confirmed income needs review.');
+  if (actualAsync.hasError)
+    throw const FormatException('Confirmed income needs review.');
   final actual = actualAsync.valueOrNull;
   if (actual != null &&
       (actual.groups.any((g) =>
               g.group.destinationMonth == context.yearMonth ||
               g.cycleMonth == context.yearMonth) ||
           actual.corrections.any((c) => c.cashMonth == context.yearMonth))) {
-    return ResolvedIncome(amount: aggregatedMajor,usesOverride:false);
+    return ResolvedIncome(amount: aggregatedMajor, usesOverride: false);
   }
   if (month?.netSalaryOverride != null) {
     return ResolvedIncome.resolve(
@@ -113,13 +114,11 @@ final incomeSourcesTotalProvider = Provider<double>((ref) {
   // Select the accounting currency before summing minor units. Without this,
   // mixed sources became zero and foreign-only cents were relabelled as HUF.
   final actualAsync = ref.watch(actualIncomeLedgerProvider);
-  if (actualAsync.hasError) throw const FormatException('Confirmed income needs review.');
+  if (actualAsync.hasError)
+    throw const FormatException('Confirmed income needs review.');
   final actual = actualAsync.valueOrNull;
   final confirmed = IncomeReceiptLedger.incomeForMonth(
-      actual?.groups ?? const [],
-      sources,
-      context.yearMonth,
-      currency,
+      actual?.groups ?? const [], sources, context.yearMonth, currency,
       corrections: actual?.corrections ?? const []);
   if (confirmed != null) return confirmed / currency.minorUnitsPerMajor;
   final totalMinor = const IncomeAggregationService()
@@ -133,8 +132,9 @@ final expectedIncomeMinorProvider = Provider<int>((ref) {
   final context = ref.watch(budgetContextProvider);
   if (context.isShared) return 0;
   final sources = ref.watch(incomeSourcesProvider).value ?? const [];
-  final currency = ref.watch(activeProfileProvider).value?.primaryCurrency.code ??
-      CurrencyCode.huf;
+  final currency =
+      ref.watch(activeProfileProvider).value?.primaryCurrency.code ??
+          CurrencyCode.huf;
   return const IncomeAggregationService()
       .monthlyTotal(sources, context.yearMonth, currency: currency);
 });

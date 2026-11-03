@@ -193,8 +193,7 @@ void main() {
         isAccessCurrent: () => true);
     final october = await ContinuousBalanceService(f.h.db)
         .balance(profileId: f.h.ownerId, yearMonth: '2026-10');
-    await SalaryReceiptService(f.h.db,
-            clock: () => DateTime.utc(2026, 11, 5))
+    await SalaryReceiptService(f.h.db, clock: () => DateTime.utc(2026, 11, 5))
         .correct(
             actorId: f.h.ownerId,
             groupGuid: group.guid,
@@ -234,7 +233,8 @@ void main() {
     expect(result.reviewReason, isNotNull);
   });
 
-  test('legacy month-end lines supply the allocation when no profile rows exist',
+  test(
+      'legacy month-end lines supply the allocation when no profile rows exist',
       () async {
     await seedProfile();
     await seedOpening('2026-10', 1000);

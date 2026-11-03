@@ -151,7 +151,6 @@ void main() {
       expect(await harness.isar.expenses.count(), before['expenses']);
     });
 
-
     test('watchMonth emits the provisioned month', () async {
       await seedProfile();
       await repository.ensureMonth('2026-04');

@@ -75,10 +75,8 @@ class AllocationTransferService {
         final ownerId = owner.id;
         final currency = owner.primaryCurrency.code;
         final key = 'vault:$ownerId:allocation:$operationKey';
-        final old = await db.vaultEntrys
-            .filter()
-            .operationKeyEqualTo(key)
-            .findFirst();
+        final old =
+            await db.vaultEntrys.filter().operationKeyEqualTo(key).findFirst();
         if (old != null) {
           if (old.profileId != ownerId ||
               old.kind != 'deposit' ||
@@ -105,8 +103,10 @@ class AllocationTransferService {
         if (budget == null || !budget.openingBalanceConfirmed) {
           throw const AllocationTransferException('missingOpening');
         }
-        final seal =
-            await db.monthRateSeals.filter().yearMonthEqualTo(month).findFirst();
+        final seal = await db.monthRateSeals
+            .filter()
+            .yearMonthEqualTo(month)
+            .findFirst();
         if (seal != null && seal.status != SealStatus.open) {
           throw const AllocationTransferException('sealedMonth');
         }
@@ -151,7 +151,8 @@ class AllocationTransferService {
         await audit.put(db.budgetProfiles, profile,
             id: profile.id, type: 'BudgetProfile');
         final delta = Allocation()
-          ..syncGuid = 'allocation.moveToVault:${profile.syncGuid}:$operationKey'
+          ..syncGuid =
+              'allocation.moveToVault:${profile.syncGuid}:$operationKey'
           ..profileId = ownerId
           ..yearMonth = month
           ..budgetProfileId = profile.id
@@ -159,7 +160,8 @@ class AllocationTransferService {
           ..currency = currency.code
           ..date = now
           ..createdAt = now;
-        await audit.put(db.allocations, delta, id: delta.id, type: 'Allocation');
+        await audit.put(db.allocations, delta,
+            id: delta.id, type: 'Allocation');
         final vaultBefore = vault.totalMinor;
         final entry = VaultEntry()
           ..profileId = ownerId
@@ -197,7 +199,9 @@ class AllocationTransferService {
             action: 'allocation.moveToVault',
             objectType: 'BudgetProfile',
             objectGuid: profile.syncGuid,
-            before: {'allocationMinor': before},
+            before: {
+              'allocationMinor': before
+            },
             after: {
               'allocationMinor': profile.allocation,
               'amountMinor': amount,

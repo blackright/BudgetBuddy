@@ -265,7 +265,8 @@ void main() {
       final c = containerFor(clock: () => DateTime(2026, 10, 23));
       await c.read(sweepServiceProvider).executeSweepCheck();
 
-      final action = (await harness.isar.pendingActions.where().findAll()).single;
+      final action =
+          (await harness.isar.pendingActions.where().findAll()).single;
       expect(action.expectedAmountMinor, 70 * code.minorUnitsPerMajor);
       expect(action.currency, primary.name);
       expect(await harness.isar.vaultEntrys.count(), 0);
@@ -400,8 +401,7 @@ void main() {
     expect(result.skipped, ['2026-09']);
     expect(await harness.isar.pendingActions.count(), 0);
     expect(await harness.isar.vaultEntrys.count(), 0);
-    expect(
-        await harness.isar.savingsVaults.where().findAll(), isEmpty);
+    expect(await harness.isar.savingsVaults.where().findAll(), isEmpty);
   });
 }
 

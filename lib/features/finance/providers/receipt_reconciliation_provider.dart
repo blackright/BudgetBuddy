@@ -97,7 +97,9 @@ final receiptReconciliationProvider =
     db.vaultEntrys.watchLazy(),
     db.savingsVaults.watchLazy(),
     db.periodFundingAssignments.watchLazy(),
-    db.incomeReceiptGroups.watchLazy(), db.moneyReceipts.watchLazy(), db.receiptRevisions.watchLazy(),
+    db.incomeReceiptGroups.watchLazy(),
+    db.moneyReceipts.watchLazy(),
+    db.receiptRevisions.watchLazy(),
   ];
   for (final stream in streams) {
     subscriptions.add(stream.listen((_) {

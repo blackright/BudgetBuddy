@@ -274,8 +274,7 @@ void main() {
           monthlyExpensesProvider.overrideWith((ref) => Stream.value([])),
           monthlyOriginReimbursementsProvider
               .overrideWith((ref) => Stream.value([])),
-          monthlyReimbursementsProvider
-              .overrideWith((ref) => Stream.value([])),
+          monthlyReimbursementsProvider.overrideWith((ref) => Stream.value([])),
           reimbursementTargetExpensesProvider
               .overrideWith((ref) => Stream.value([])),
           resolvedIncomeProvider.overrideWithValue(

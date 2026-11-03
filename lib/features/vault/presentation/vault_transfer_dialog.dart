@@ -176,8 +176,7 @@ class _VaultTransferDialogState extends ConsumerState<VaultTransferDialog> {
           requestId: _request,
           note: _note.text,
           reverses: widget.original?.operationKey,
-          targetWithdrawalMonth:
-              widget.kind == 'deposit' ? _targetMonth : null,
+          targetWithdrawalMonth: widget.kind == 'deposit' ? _targetMonth : null,
           completesActionType: widget.completesActionType,
           completesRecordRef: widget.completesRecordRef,
           completesCycleOrMonth: widget.completesCycleOrMonth);
@@ -310,8 +309,7 @@ class _VaultTransferDialogState extends ConsumerState<VaultTransferDialog> {
                   Text(
                       'Monthly reserve: ${formatMinorUnits(preview.state.reserve, preview.state.currency)} -> ${formatMinorUnits(preview.reserveAfter, preview.state.currency)}'),
                   if (preview.targetWithdrawalMonth != null)
-                    Text(
-                        'Planned withdrawal: ${preview.targetWithdrawalMonth} '
+                    Text('Planned withdrawal: ${preview.targetWithdrawalMonth} '
                         '(reminder only)'),
                   if (preview.note.isNotEmpty) Text(preview.note),
                   const Text(

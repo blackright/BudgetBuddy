@@ -68,8 +68,8 @@ class MedicalBillFacts {
         history?.settlements ?? const <MedicalSettlementEvent>[]);
     final providerRows = active.where(
         (e) => e.kind == MedicalSettlementKind.insurerProviderSettlement);
-    final shareRows = active
-        .where((e) => e.kind == MedicalSettlementKind.shareSettlement);
+    final shareRows =
+        active.where((e) => e.kind == MedicalSettlementKind.shareSettlement);
     final hasClosure =
         active.any((e) => e.kind == MedicalSettlementKind.closure);
     final withholding = history?.withholdingMatches ?? const [];

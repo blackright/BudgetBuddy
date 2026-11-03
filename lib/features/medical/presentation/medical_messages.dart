@@ -1,4 +1,4 @@
-﻿import '../../../core/services/medical_receipt_service.dart';
+import '../../../core/services/medical_receipt_service.dart';
 import '../../../core/services/medical_settlement_service.dart';
 import '../../../core/services/medical_withholding_service.dart';
 import '../../../core/services/receipt_snapshot_repository.dart';
@@ -58,16 +58,13 @@ String medicalReceiptMessage(Object error) =>
         'This fact is already recorded. Refresh the bill to see it.',
       'partialUnsupported' =>
         'This release records one full share payment. Partial or mixed evidence stays Needs review.',
-      'overmatched' =>
-        'The amount is more than the eligible share.',
-      'zeroShare' =>
-        'There is no share to record for this bill.',
+      'overmatched' => 'The amount is more than the eligible share.',
+      'zeroShare' => 'There is no share to record for this bill.',
       'currencyMismatch' ||
       'receiptNotFound' ||
       'staleEligibility' =>
         'Choose a current salary receipt in the bill\'s currency and refresh the eligible share.',
-      'futureDate' =>
-        'Choose a date that is not in the future.',
+      'futureDate' => 'Choose a date that is not in the future.',
       'stalePreview' ||
       'duplicateMismatch' =>
         'Information changed. Refresh the claim and review it again.',
@@ -106,8 +103,10 @@ String medicalReceiptMessage(Object error) =>
       'invalidMoney' =>
         'Check the receipt amount, date and currency. Nothing was recorded.',
       'duplicateReceipt' => 'This receipt is already recorded for the claim.',
-      'closureNeedsReview' => 'Record the provider payment and final insurance reply, then review any changed information before closing.',
-      'moneyStillMissing' => 'Money is still outstanding. Record the receipt or explicitly accept a final shortfall.',
+      'closureNeedsReview' =>
+        'Record the provider payment and final insurance reply, then review any changed information before closing.',
+      'moneyStillMissing' =>
+        'Money is still outstanding. Record the receipt or explicitly accept a final shortfall.',
       'invalidOperation' =>
         'This request could not be matched to the saved claim action. Refresh the claim and try again.',
       'noChange' => 'Nothing changed, so there was nothing to save.',
@@ -123,4 +122,3 @@ String medicalReceiptMessage(Object error) =>
       _ =>
         'Could not save or verify this claim. No new money was added. Please retry.',
     };
-

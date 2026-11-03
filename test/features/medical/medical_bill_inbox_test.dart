@@ -354,7 +354,6 @@ void main() {
     expect(inbox.amountsNeedReview, true);
     expect(inbox.approvedStillToReceiveMinor, 8000);
     expect(inbox.allBillsCount, 4);
-    expect(
-        inbox.items.any((item) => item.state.headline == 'Closed'), true);
+    expect(inbox.items.any((item) => item.state.headline == 'Closed'), true);
   });
 }

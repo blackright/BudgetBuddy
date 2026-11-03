@@ -64,13 +64,9 @@ class MedicalWithholdingService {
       }
     }
 
-    final bill = await db.medicalBills
-        .filter()
-        .syncGuidEqualTo(billGuid)
-        .findFirst();
-    if (bill == null ||
-        bill.profileId == null ||
-        bill.profileId != profileId) {
+    final bill =
+        await db.medicalBills.filter().syncGuidEqualTo(billGuid).findFirst();
+    if (bill == null || bill.profileId == null || bill.profileId != profileId) {
       throw const MedicalWithholdingException('wrongOwner');
     }
     if (bill.sharedSpaceId != null) {
@@ -83,8 +79,8 @@ class MedicalWithholdingService {
     if (billCurrency != null && billCurrency.code != currency) {
       throw const MedicalWithholdingException('currencyMismatch');
     }
-    final receipt = await db.incomeReceiptGroups
-        .getByGuid(salaryReceiptGroupGuid);
+    final receipt =
+        await db.incomeReceiptGroups.getByGuid(salaryReceiptGroupGuid);
     if (receipt == null ||
         receipt.profileId == null ||
         receipt.profileId != profileId) {
@@ -190,8 +186,9 @@ class MedicalWithholdingService {
           .any((e) => e.kind == MedicalSettlementKind.shareSettlement)) {
         throw const MedicalWithholdingException('alreadySettled');
       }
-      match.id = await AuditRepository(db, recorder: recorder, actorId: profileId)
-          .put(db.medicalWithholdingMatchs, match,
+      match.id =
+          await AuditRepository(db, recorder: recorder, actorId: profileId).put(
+              db.medicalWithholdingMatchs, match,
               id: match.id, type: 'MedicalWithholdingMatch', derived: false);
       await _writeSettlement(
           bill: bill, match: match, actorId: profileId, now: now);

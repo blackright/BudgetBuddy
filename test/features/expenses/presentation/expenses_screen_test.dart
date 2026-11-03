@@ -194,7 +194,8 @@ void main() {
 
   // T030: bulk entry is a first-class, always-visible action instead of a
   // hidden menu item. It stays reachable at narrow widths and large text.
-  testWidgets('editable context shows a visible bulk entry that opens its route',
+  testWidgets(
+      'editable context shows a visible bulk entry that opens its route',
       (WidgetTester tester) async {
     late MedicalTestHarness harness;
     late UserProfile profile;
@@ -210,8 +211,7 @@ void main() {
       GoRoute(path: '/', builder: (_, __) => const ExpensesScreen()),
       GoRoute(
           path: '/bulk_entry',
-          builder: (_, __) =>
-              const Scaffold(body: Text('Bulk entry route'))),
+          builder: (_, __) => const Scaffold(body: Text('Bulk entry route'))),
     ]);
     addTearDown(router.dispose);
     await pumpExpenses(tester,
@@ -247,8 +247,7 @@ void main() {
       GoRoute(path: '/', builder: (_, __) => const ExpensesScreen()),
       GoRoute(
           path: '/bulk_entry',
-          builder: (_, __) =>
-              const Scaffold(body: Text('Bulk entry route'))),
+          builder: (_, __) => const Scaffold(body: Text('Bulk entry route'))),
     ]);
     addTearDown(router.dispose);
     await pumpExpenses(tester,
@@ -286,8 +285,7 @@ void main() {
       GoRoute(path: '/', builder: (_, __) => const ExpensesScreen()),
       GoRoute(
           path: '/bulk_entry',
-          builder: (_, __) =>
-              const Scaffold(body: Text('Bulk entry route'))),
+          builder: (_, __) => const Scaffold(body: Text('Bulk entry route'))),
     ]);
     addTearDown(router.dispose);
     await pumpExpenses(tester,

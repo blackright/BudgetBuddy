@@ -73,8 +73,7 @@ void main() {
         activeProfileProvider.overrideWith((ref) => Stream.value(null)),
         pendingActionsSynthesisProvider.overrideWith((ref) async {}),
         pendingActionsProvider.overrideWith((ref) => Stream.value(rows)),
-        pendingActionServiceProvider
-            .overrideWith((ref) => recordingService),
+        pendingActionServiceProvider.overrideWith((ref) => recordingService),
       ],
       child: MaterialApp.router(
         routerConfig: router,

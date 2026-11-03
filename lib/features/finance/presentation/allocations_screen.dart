@@ -516,7 +516,8 @@ class _BudgetProfileRow extends ConsumerWidget {
                   ),
                 if (canEdit && state.remaining > 0)
                   TextButton.icon(
-                    onPressed: () => _moveToVault(context, ref, state.remaining),
+                    onPressed: () =>
+                        _moveToVault(context, ref, state.remaining),
                     icon: const Icon(Icons.savings_outlined, size: 16),
                     label: const Text('Move to Vault'),
                   ),
@@ -533,8 +534,8 @@ class _BudgetProfileRow extends ConsumerWidget {
                 child: Text(
                   'Carried ${formatMinorUnits(_carriedMinor ?? 0, contextCurrency)} '
                   'from ${_carriedFrom!}',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant),
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                 ),
               ),
             if (history.any((row) =>
@@ -544,8 +545,8 @@ class _BudgetProfileRow extends ConsumerWidget {
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(
                   'Corrected ${_correctionLabel(history)} · reason in audit history',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant),
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                 ),
               ),
             Padding(
@@ -775,7 +776,8 @@ class _BudgetProfileRow extends ConsumerWidget {
           TextField(
             controller: amount,
             decoration: InputDecoration(
-              labelText: 'Corrected allocation (${contextCurrency.code.toUpperCase()})',
+              labelText:
+                  'Corrected allocation (${contextCurrency.code.toUpperCase()})',
             ),
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             inputFormatters: const [ThousandsSeparatorInputFormatter()],
@@ -798,8 +800,9 @@ class _BudgetProfileRow extends ConsumerWidget {
               final delta = newAllocation - profile.allocation;
               if (delta == 0 || reason.text.trim().isEmpty) return;
               final saved = await runFinancialAction(context,
-                  action: () =>
-                      ref.read(profileActionsProvider).correctAllocation(
+                  action: () => ref
+                      .read(profileActionsProvider)
+                      .correctAllocation(
                           profile: profile,
                           amount: delta,
                           reason: reason.text,

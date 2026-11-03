@@ -62,8 +62,7 @@ final vaultTransferServiceProvider = Provider<VaultTransferService>((ref) {
 });
 
 /// Read-only discovery of finished months with money left to review.
-final vaultSuggestionServiceProvider =
-    Provider<VaultSuggestionService>((ref) {
+final vaultSuggestionServiceProvider = Provider<VaultSuggestionService>((ref) {
   final context = ref.watch(budgetContextProvider);
   final actor = ref.watch(activeProfileProvider).valueOrNull?.id;
   if (context.isShared || actor == null || context.profileId != actor) {

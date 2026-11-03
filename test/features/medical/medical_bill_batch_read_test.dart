@@ -244,7 +244,8 @@ void main() {
     expect(MedicalBillFacts.fromHistory(bill, null).providerPaid, isNull);
   });
   test('shared viewer reads legacy facts only; revoked member is refused',
-      () async {    final private = await seed();
+      () async {
+    final private = await seed();
     final space = SharedSpace()
       ..name = 'Fixture space'
       ..currency = PrimaryCurrency.huf
@@ -292,12 +293,11 @@ void main() {
     final october = await seed();
     await seed(owner: h.ownerId + 50);
     final inbox = await service.historyInboxBatch(
-        context: ContextRef.personal(
-            profileId: h.ownerId, yearMonth: '2026-11'),
+        context:
+            ContextRef.personal(profileId: h.ownerId, yearMonth: '2026-11'),
         actorId: h.ownerId,
         isAccessCurrent: () => true);
-    expect(inbox.bills.map((b) => b.id).toSet(),
-        {september.id, october.id});
+    expect(inbox.bills.map((b) => b.id).toSet(), {september.id, october.id});
     expect(inbox.blockersByBill.containsKey(september.id), true);
     expect(inbox.blockersByBill[september.id],
         contains(ReceiptBlocker.missingMonth));

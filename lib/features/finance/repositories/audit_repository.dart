@@ -151,11 +151,16 @@ class AuditRepository {
     if (space == null && profile == null) {
       throw StateError('Cannot audit a financial record without its owner.');
     }
-    if(type=='IncomeReceiptGroup' && after!=null) {
-      final group=await isar.incomeReceiptGroups.get(row['id'] as int);
-      if(group==null)throw StateError('The recorded bank credit is missing.');
-      final ledger=await IncomeReceiptLedger.read(isar,group);
-      after={...after,'salaryMinor':ledger.salaryMinor,'medicalMinor':ledger.medicalMinor};
+    if (type == 'IncomeReceiptGroup' && after != null) {
+      final group = await isar.incomeReceiptGroups.get(row['id'] as int);
+      if (group == null)
+        throw StateError('The recorded bank credit is missing.');
+      final ledger = await IncomeReceiptLedger.read(isar, group);
+      after = {
+        ...after,
+        'salaryMinor': ledger.salaryMinor,
+        'medicalMinor': ledger.medicalMinor
+      };
     }
     // Spending/count are derived caches. Refreshing a screen is not an action.
     if (['BudgetProfile', 'DirectExpenseProfile'].contains(type) &&
@@ -210,9 +215,11 @@ class AuditRepository {
                     ? 'allocation.update'
                     : '$prefix.${before == null ? 'create' : after == null ? 'delete' : 'update'}'),
         objectType: type,
-        objectGuid:
-            (row['syncGuid'] ?? row['guid'] ?? row['operationKey'] ?? '$type:${row['id']}')
-                .toString(),
+        objectGuid: (row['syncGuid'] ??
+                row['guid'] ??
+                row['operationKey'] ??
+                '$type:${row['id']}')
+            .toString(),
         objectId: row['id'] as int?,
         before: before,
         after: after);

@@ -142,8 +142,9 @@ class MonthSummaryCard extends ConsumerWidget {
                 ),
                 const Divider(height: 28),
                 _SummaryLine(
-                  label:
-                      summary.expectedIncome > 0 ? 'Confirmed income' : 'Income',
+                  label: summary.expectedIncome > 0
+                      ? 'Confirmed income'
+                      : 'Income',
                   value: _money(summary.income),
                   valueKey: const Key('incomeLine'),
                   color: MedicalTheme.semantic(context, MedicalTheme.moneyIn),

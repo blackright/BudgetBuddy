@@ -107,10 +107,12 @@ class ReceiptSnapshotRepository {
     sources['transfers'] = await _rows(db.transfers, monthly);
     sources['incomeSources'] = await _rows(db.incomeSources, owner);
     if (!context.isShared) {
-      sources['incomeGroups'] = await _rows(db.incomeReceiptGroups, [_eq('profileId',context.profileId)]);
+      sources['incomeGroups'] = await _rows(
+          db.incomeReceiptGroups, [_eq('profileId', context.profileId)]);
       sources['incomeComponents'] = await _rows(db.moneyReceipts, owner);
       sources['incomeRevisions'] = await _rows(db.receiptRevisions, owner);
-      sources['salaryCycles'] = await _rows(db.salaryCycles, [_eq('profileId',context.profileId)]);
+      sources['salaryCycles'] =
+          await _rows(db.salaryCycles, [_eq('profileId', context.profileId)]);
     }
     sources['medicalBills'] = await _rows(db.medicalBills, monthly);
     sources['seals'] =

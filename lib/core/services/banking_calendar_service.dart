@@ -8,15 +8,35 @@ import '../models/banking_calendar_coverage.dart';
 /// coverage — the service reports 'partial' status when only these are used.
 class _BundledHolidays {
   static const Map<String, Set<String>> fixed = {
-    'HU': {'01-01', '03-15', '05-01', '08-20', '10-23', '11-01', '12-25', '12-26'},
-    'UG': {'01-01', '01-26', '03-08', '05-01', '06-03', '06-09', '10-09', '12-25', '12-26'},
+    'HU': {
+      '01-01',
+      '03-15',
+      '05-01',
+      '08-20',
+      '10-23',
+      '11-01',
+      '12-25',
+      '12-26'
+    },
+    'UG': {
+      '01-01',
+      '01-26',
+      '03-08',
+      '05-01',
+      '06-03',
+      '06-09',
+      '10-09',
+      '12-25',
+      '12-26'
+    },
     'CA': {'01-01', '07-01', '11-11', '12-25', '12-26'},
     'US': {'01-01', '07-04', '11-11', '12-25'},
     'CD': {'01-01', '01-04', '05-01', '06-30', '08-01', '11-17', '12-25'},
   };
 
   static bool isHoliday(DateTime date, String countryCode) {
-    final key = '${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+    final key =
+        '${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
     return fixed[countryCode]?.contains(key) ?? false;
   }
 }

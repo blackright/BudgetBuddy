@@ -439,11 +439,9 @@ void main() {
       expect(
           await harness.isar.savingsVaults.buildQuery<dynamic>().exportJson(),
           beforeVaults);
-      expect(
-          await harness.isar.vaultEntrys.buildQuery<dynamic>().exportJson(),
+      expect(await harness.isar.vaultEntrys.buildQuery<dynamic>().exportJson(),
           beforeEntries);
-      expect(
-          await harness.isar.allocations.buildQuery<dynamic>().exportJson(),
+      expect(await harness.isar.allocations.buildQuery<dynamic>().exportJson(),
           beforeAllocations);
       expect(await harness.isar.monthEndRuns.buildQuery<dynamic>().exportJson(),
           beforeRuns);

@@ -224,8 +224,7 @@ class MonthFinanceRepository {
           ).balance(profileId: context.profileKey, yearMonth: previousMonth);
           if (balance.status == BalanceChainStatus.intact) {
             final profile = await _isar.userProfiles.get(context.profileKey);
-            final currency =
-                profile?.primaryCurrency.code ?? CurrencyCode.huf;
+            final currency = profile?.primaryCurrency.code ?? CurrencyCode.huf;
             opening = balance.closingMinor / currency.minorUnitsPerMajor;
             openingConfirmed = true;
             previousBalance = balance;
@@ -246,8 +245,8 @@ class MonthFinanceRepository {
     } else {
       budget.profileId = context.profileKey;
     }
-    final audit =
-        AuditRepository(_isar, recorder: _syncRecorder, actorId: _actingProfileId);
+    final audit = AuditRepository(_isar,
+        recorder: _syncRecorder, actorId: _actingProfileId);
     budget.id = await audit.put(_isar.monthlyBudgets, budget,
         id: budget.id, type: 'MonthlyBudget');
     final carried = previousBalance;
@@ -256,8 +255,7 @@ class MonthFinanceRepository {
           profileId: context.profileKey,
           action: 'balance.opening.autoCarry',
           objectType: 'MonthlyBudget',
-          objectGuid:
-              'personal:${context.profileKey}:${context.yearMonth}',
+          objectGuid: 'personal:${context.profileKey}:${context.yearMonth}',
           after: {
             'previousMonth': carried.yearMonth,
             'closingMinor': carried.closingMinor,
@@ -425,11 +423,22 @@ class MonthFinanceRepository {
     }
     final profile = await _isar.userProfiles.get(context.profileId!);
     if (profile != null) {
-      final actual = await IncomeReceiptLedger.forOwner(_isar,context.profileId!);
-      final corrections = await SalaryCorrection.forOwner(_isar, context.profileId!);
-      final sources = await _isar.incomeSources.filter().profileIdEqualTo(context.profileId!).sharedSpaceIdIsNull().findAll();
-      final confirmed = IncomeReceiptLedger.incomeForMonth(actual,sources,context.yearMonth,profile.primaryCurrency.code, corrections: corrections);
-      if (confirmed != null) return ResolvedIncome(amount:confirmed / profile.primaryCurrency.code.minorUnitsPerMajor,usesOverride:false);
+      final actual =
+          await IncomeReceiptLedger.forOwner(_isar, context.profileId!);
+      final corrections =
+          await SalaryCorrection.forOwner(_isar, context.profileId!);
+      final sources = await _isar.incomeSources
+          .filter()
+          .profileIdEqualTo(context.profileId!)
+          .sharedSpaceIdIsNull()
+          .findAll();
+      final confirmed = IncomeReceiptLedger.incomeForMonth(
+          actual, sources, context.yearMonth, profile.primaryCurrency.code,
+          corrections: corrections);
+      if (confirmed != null)
+        return ResolvedIncome(
+            amount: confirmed / profile.primaryCurrency.code.minorUnitsPerMajor,
+            usesOverride: false);
     }
     return ResolvedIncome.resolve(
       override: month?.netSalaryOverride,

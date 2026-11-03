@@ -86,8 +86,7 @@ Future<Map<String, int>> readPersonalMonthFunds(
     convert(m.minorUnits, m.currency);
   }
   var paid = 0, returned = 0, unused = 0, allocated = 0;
-  final withheldExpenseIds =
-      await _salaryWithheldExpenseIds(db, actor, month);
+  final withheldExpenseIds = await _salaryWithheldExpenseIds(db, actor, month);
   for (final e in expenses) {
     if (withheldExpenseIds.contains(e.id)) continue;
     if ({

@@ -41,7 +41,8 @@ class SalaryReminderService {
           current.weekday != DateTime.sunday) {
         for (final kind in ['morning', 'evening']) {
           final hour = kind == 'morning' ? 10 : 20;
-          final scheduled = DateTime(current.year, current.month, current.day, hour);
+          final scheduled =
+              DateTime(current.year, current.month, current.day, hour);
           final slot = DesiredSalaryReminder()
             ..profileId = profileId
             ..cycleGuid = cycleGuid

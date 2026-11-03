@@ -95,7 +95,8 @@ class PendingAction {
   static const terminalStatuses = {'completed', 'dismissed', 'cancelled'};
 
   @ignore
-  bool get isActive => status == 'pending' || status == 'due' || status == 'overdue';
+  bool get isActive =>
+      status == 'pending' || status == 'due' || status == 'overdue';
 
   @ignore
   bool get isUnread => notificationReadAt == null && isActive;
@@ -105,8 +106,7 @@ class PendingAction {
 
   /// Mirrors the persistence validation in `PendingActionService.upsert`.
   @ignore
-  bool get hasValidOwnership =>
-      (profileId != null) != (sharedSpaceId != null);
+  bool get hasValidOwnership => (profileId != null) != (sharedSpaceId != null);
 
   @ignore
   bool get hasValidFields =>

@@ -149,8 +149,7 @@ void main() {
     expect(result.message, contains('2 finished months'));
     final actions = await harness.isar.pendingActions.where().findAll();
     expect(actions, hasLength(2));
-    final september =
-        actions.singleWhere((a) => a.expectedMonth == '2026-09');
+    final september = actions.singleWhere((a) => a.expectedMonth == '2026-09');
     expect(september.actionType, vaultDepositSuggestedType);
     expect(september.recordRef, '1:2026-09');
     expect(september.dedupeKey, 'vault.depositSuggested|1:2026-09|2026-09');
@@ -219,18 +218,26 @@ void main() {
 
   test('planned withdrawals are derived from deposits with a target month',
       () async {
-    await seedDeposit('dep-late', amountMinor: 3000, yearMonth: '2026-09',
-        targetMonth: '2027-01', vaultBefore: 0);
-    await seedDeposit('dep-next', amountMinor: 2000, yearMonth: '2026-09',
-        targetMonth: '2026-12', vaultBefore: 3000);
-    await seedDeposit('dep-due', amountMinor: 1000, yearMonth: '2026-09',
-        targetMonth: '2026-10', vaultBefore: 5000);
-    await seedDeposit('dep-none', amountMinor: 500, yearMonth: '2026-09',
-        vaultBefore: 6000);
+    await seedDeposit('dep-late',
+        amountMinor: 3000,
+        yearMonth: '2026-09',
+        targetMonth: '2027-01',
+        vaultBefore: 0);
+    await seedDeposit('dep-next',
+        amountMinor: 2000,
+        yearMonth: '2026-09',
+        targetMonth: '2026-12',
+        vaultBefore: 3000);
+    await seedDeposit('dep-due',
+        amountMinor: 1000,
+        yearMonth: '2026-09',
+        targetMonth: '2026-10',
+        vaultBefore: 5000);
+    await seedDeposit('dep-none',
+        amountMinor: 500, yearMonth: '2026-09', vaultBefore: 6000);
 
     final history = await harness.isar.vaultEntrys.where().findAll();
-    final planned =
-        plannedWithdrawalsFrom(history: history, actions: const []);
+    final planned = plannedWithdrawalsFrom(history: history, actions: const []);
 
     expect(planned.map((p) => p.deposit.operationKey).toList(),
         ['dep-due', 'dep-next', 'dep-late']);
@@ -242,17 +249,23 @@ void main() {
 
   test('a reversed deposit and a completed withdrawal action stop the reminder',
       () async {
-    await seedDeposit('keep', amountMinor: 3000, yearMonth: '2026-09',
-        targetMonth: '2027-01');
-    await seedDeposit('reversed', amountMinor: 2000, yearMonth: '2026-09',
-        targetMonth: '2026-11', vaultBefore: 3000);
+    await seedDeposit('keep',
+        amountMinor: 3000, yearMonth: '2026-09', targetMonth: '2027-01');
+    await seedDeposit('reversed',
+        amountMinor: 2000,
+        yearMonth: '2026-09',
+        targetMonth: '2026-11',
+        vaultBefore: 3000);
     final reversed = (await harness.isar.vaultEntrys
-            .filter()
-            .operationKeyEqualTo('reversed')
-            .findFirst())!;
+        .filter()
+        .operationKeyEqualTo('reversed')
+        .findFirst())!;
     await seedReversal('undo', reversed);
-    await seedDeposit('withdrawn', amountMinor: 1000, yearMonth: '2026-09',
-        targetMonth: '2026-10', vaultBefore: 5000);
+    await seedDeposit('withdrawn',
+        amountMinor: 1000,
+        yearMonth: '2026-09',
+        targetMonth: '2026-10',
+        vaultBefore: 5000);
     await harness.isar.writeTxn(() async {
       await harness.isar.pendingActions.put(PendingAction()
         ..profileId = 1
@@ -270,8 +283,7 @@ void main() {
 
     final history = await harness.isar.vaultEntrys.where().findAll();
     final actions = await harness.isar.pendingActions.where().findAll();
-    final planned =
-        plannedWithdrawalsFrom(history: history, actions: actions);
+    final planned = plannedWithdrawalsFrom(history: history, actions: actions);
 
     expect(planned.map((p) => p.deposit.operationKey).toList(), ['keep']);
   });

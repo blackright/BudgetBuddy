@@ -78,7 +78,8 @@ void main() {
         throwsA(isA<MedicalReceiptException>()
             .having((e) => e.code, 'code', 'missingMonth')));
   });
-  test('a month whose opening money is unconfirmed is refused as '
+  test(
+      'a month whose opening money is unconfirmed is refused as '
       'missingOpeningReview', () async {
     await approve();
     await h.db.writeTxn(() async {

@@ -88,9 +88,9 @@ final monthSummaryProvider = Provider<MonthSummary>((ref) {
   final cashReimbursements = mergeCreditedReimbursements(reimbursements,
       ref.watch(monthlyCashReimbursementsProvider).value ?? const []);
 
-  final usesReviewedBank = reimbursements
-          .any((r) => r.medicalReceiptJson != null) ||
-      (ref.watch(actualIncomeLedgerProvider).valueOrNull?.isEmpty == false);
+  final usesReviewedBank =
+      reimbursements.any((r) => r.medicalReceiptJson != null) ||
+          (ref.watch(actualIncomeLedgerProvider).valueOrNull?.isEmpty == false);
   final reviewed = usesReviewedBank
       ? ref.watch(receiptReconciliationProvider).valueOrNull
       : null;
@@ -162,15 +162,18 @@ final monthSummaryProvider = Provider<MonthSummary>((ref) {
         : toDisplay(
                 Money(
                     freeToSpend(
-                            income:
-                                Money.fromMajor(income.amount, source).minorUnits,
+                            income: Money.fromMajor(income.amount, source)
+                                .minorUnits,
                             paid: cashPaidMinor,
                             returned: cashReturnedMinor,
                             unused: totalSetAsideMinor,
-                            carry:
-                                ref.watch(monthEndBalanceProvider).carryShortfall,
-                            incoming: ref.watch(monthEndBalanceProvider).incoming,
-                            released: ref.watch(monthEndBalanceProvider).released,
+                            carry: ref
+                                .watch(monthEndBalanceProvider)
+                                .carryShortfall,
+                            incoming:
+                                ref.watch(monthEndBalanceProvider).incoming,
+                            released:
+                                ref.watch(monthEndBalanceProvider).released,
                             transfers: ref.watch(monthlyVaultCreditProvider))
                         .toInt(),
                     source),
@@ -182,13 +185,12 @@ final monthSummaryProvider = Provider<MonthSummary>((ref) {
         : toDisplay(Money(cashPaidMinor, source), display, table).majorValue,
     cashMoneyReturned: continuousActive
         ? 0
-        : toDisplay(Money(cashReturnedMinor, source), display, table).majorValue,
+        : toDisplay(Money(cashReturnedMinor, source), display, table)
+            .majorValue,
     vaultTransfers: continuousActive
         ? displayMinor(vaultMinor)
-        : toDisplay(
-                Money(ref.watch(monthlyVaultCreditProvider), source),
-                display,
-                table)
+        : toDisplay(Money(ref.watch(monthlyVaultCreditProvider), source),
+                display, table)
             .majorValue,
     yearMonth: yearMonth,
     income: continuousActive
@@ -205,10 +207,8 @@ final monthSummaryProvider = Provider<MonthSummary>((ref) {
     openingBalance: continuousActive
         ? displayMinor(continuous.openingMinor)
         : month != null && month.openingBalanceConfirmed
-            ? toDisplay(
-                    Money.fromMajor(month.baseAvailableAmount, source),
-                    display,
-                    table)
+            ? toDisplay(Money.fromMajor(month.baseAvailableAmount, source),
+                    display, table)
                 .majorValue
             : null,
     targetPaidAmounts: targetPaidAmounts,
@@ -227,30 +227,25 @@ final monthSummaryProvider = Provider<MonthSummary>((ref) {
     carryOver: continuousActive
         ? 0
         : toDisplay(
-                Money(ref.watch(monthEndBalanceProvider).carryShortfall, source),
+                Money(
+                    ref.watch(monthEndBalanceProvider).carryShortfall, source),
                 display,
                 table)
             .majorValue,
     carriedIn: continuousActive
         ? 0
-        : toDisplay(
-                Money(ref.watch(monthEndBalanceProvider).incoming, source),
-                display,
-                table)
+        : toDisplay(Money(ref.watch(monthEndBalanceProvider).incoming, source),
+                display, table)
             .majorValue,
     releasedAtMonthEnd: continuousActive
         ? 0
-        : toDisplay(
-                Money(ref.watch(monthEndBalanceProvider).released, source),
-                display,
-                table)
+        : toDisplay(Money(ref.watch(monthEndBalanceProvider).released, source),
+                display, table)
             .majorValue,
     actualSalaryFunding: Money(actualSalaryFunding.toInt(), source).majorValue,
     expectedIncome: continuousActive
-        ? toDisplay(
-                Money(ref.watch(expectedIncomeMinorProvider), source),
-                display,
-                table)
+        ? toDisplay(Money(ref.watch(expectedIncomeMinorProvider), source),
+                display, table)
             .majorValue
         : 0,
   );

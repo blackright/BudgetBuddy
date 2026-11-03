@@ -474,7 +474,8 @@ void main() {
     expect(validVaultSignedAmount(entry.amountMinor), isTrue);
   });
 
-  test('later suggestion includes monthly transfer credit once and moves no money',
+  test(
+      'later suggestion includes monthly transfer credit once and moves no money',
       () async {
     await service.confirm(
         await service.preview(kind: 'deposit', amount: 10000, requestId: 'in'));
@@ -787,7 +788,8 @@ void main() {
       });
     });
 
-    test('first deposit creates the Vault and a zero opening entry without a sweep',
+    test(
+        'first deposit creates the Vault and a zero opening entry without a sweep',
         () async {
       expect(await h.isar.savingsVaults.count(), 0);
       expect(await h.isar.vaultEntrys.count(), 0);
@@ -820,8 +822,8 @@ void main() {
       // Replaying the same request returns the same entry, not a second write.
       await service.confirm(preview);
       expect(await h.isar.vaultEntrys.count(), 2);
-      expect((await h.isar.savingsVaults.where().findFirst())!.totalMinor,
-          10000);
+      expect(
+          (await h.isar.savingsVaults.where().findFirst())!.totalMinor, 10000);
 
       await expectLater(
           service.preview(

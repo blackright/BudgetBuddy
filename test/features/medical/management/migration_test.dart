@@ -105,8 +105,7 @@ void main() {
     final waitingRow = (await harness.isar.medicalBills.get(waiting.bill.id))!;
     expect(waitingRow.insuranceRequestStatus,
         MedicalInsuranceRequestStatus.submitted);
-    expect(waitingRow.submissionDate?.toUtc(),
-        DateTime.utc(2026, 1, 10));
+    expect(waitingRow.submissionDate?.toUtc(), DateTime.utc(2026, 1, 10));
 
     final finishedRow =
         (await harness.isar.medicalBills.get(finished.bill.id))!;

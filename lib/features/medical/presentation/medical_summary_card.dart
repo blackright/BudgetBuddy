@@ -31,12 +31,12 @@ class MedicalSummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final subtle = TextStyle(
-        fontSize: 12, color: MedicalTheme.subtleText(context));
+    final subtle =
+        TextStyle(fontSize: 12, color: MedicalTheme.subtleText(context));
     final attention = MedicalTheme.semantic(context, MedicalTheme.moneyOut);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(MedicalTheme.screenGutter, 8,
-          MedicalTheme.screenGutter, 4),
+      padding: const EdgeInsets.fromLTRB(
+          MedicalTheme.screenGutter, 8, MedicalTheme.screenGutter, 4),
       child: Card(
         key: const Key('medicalInboxSummary'),
         elevation: 0,
@@ -44,7 +44,9 @@ class MedicalSummaryCard extends StatelessWidget {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(MedicalTheme.cardRadius),
           side: BorderSide(
-              color: Theme.of(context).colorScheme.outlineVariant
+              color: Theme.of(context)
+                  .colorScheme
+                  .outlineVariant
                   .withValues(alpha: 0.55)),
         ),
         child: Padding(

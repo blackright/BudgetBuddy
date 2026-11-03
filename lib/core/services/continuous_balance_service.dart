@@ -122,7 +122,9 @@ class ContinuousBalanceService {
       final earlier = byMonth.keys.any((m) => m.compareTo(yearMonth) < 0);
       return _empty(
           yearMonth,
-          earlier ? BalanceChainStatus.legacyGap : BalanceChainStatus.firstMonth,
+          earlier
+              ? BalanceChainStatus.legacyGap
+              : BalanceChainStatus.firstMonth,
           reviewReason: earlier
               ? 'An earlier month has no confirmed opening balance.'
               : 'Confirm this profile\'s opening balance.');
@@ -163,7 +165,8 @@ class ContinuousBalanceService {
           chain.contains(run.destinationMonth));
       if (conflict.any((run) => run.hasConflict || !run.applied)) {
         return _empty(yearMonth, BalanceChainStatus.needsReview,
-            reviewReason: 'A month-end settlement conflicts or is not applied.');
+            reviewReason:
+                'A month-end settlement conflicts or is not applied.');
       }
       var opening = anchorMinor;
       for (final month in chain) {
@@ -205,11 +208,8 @@ class ContinuousBalanceService {
     }
   }
 
-  String? _anchorAtOrBefore(
-      Map<String, MonthlyBudget> rows, String yearMonth) {
-    final months = rows.keys
-        .where((m) => m.compareTo(yearMonth) <= 0)
-        .toList()
+  String? _anchorAtOrBefore(Map<String, MonthlyBudget> rows, String yearMonth) {
+    final months = rows.keys.where((m) => m.compareTo(yearMonth) <= 0).toList()
       ..sort();
     for (final month in months) {
       if (rows[month]!.openingBalanceConfirmed) return month;
@@ -243,20 +243,17 @@ class ContinuousBalanceService {
         .profileIdEqualTo(profileId)
         .sharedSpaceIdIsNull()
         .findAll();
-    final vault = await db.savingsVaults
-        .filter()
-        .profileIdEqualTo(profileId)
-        .findFirst();
-    final vaultEntries = await db.vaultEntrys
-        .filter()
-        .profileIdEqualTo(profileId)
-        .findAll();
+    final vault =
+        await db.savingsVaults.filter().profileIdEqualTo(profileId).findFirst();
+    final vaultEntries =
+        await db.vaultEntrys.filter().profileIdEqualTo(profileId).findAll();
     final withholding = await _salaryWithheldExpenseIds(profileId);
     final ledger = await IncomeReceiptLedger.forOwner(db, profileId);
     final corrections = await SalaryCorrection.forOwner(db, profileId);
     final componentGuids = <String>{
       for (final row in ledger)
-        if (row.group.profileId == profileId) ...row.group.componentReceiptGuids,
+        if (row.group.profileId == profileId)
+          ...row.group.componentReceiptGuids,
     };
     if (vault != null && vault.currency.toLowerCase() != currency.code) {
       throw const _NeedsReview('The Savings Vault currency needs review.');
@@ -330,7 +327,8 @@ class ContinuousBalanceService {
       if (!_countsAsSpending(expense.status)) continue;
       final cashMonth = expense.cashYearMonth ?? expense.yearMonth;
       if (cashMonth != month) continue;
-      total = sumFinancialMinor([total, _convertExpense(expense, currency, month)]);
+      total =
+          sumFinancialMinor([total, _convertExpense(expense, currency, month)]);
     }
     total = sumFinancialMinor(
         [total, -monthlyVaultCredit(facts.vaultEntries, month, currency)]);
@@ -359,8 +357,8 @@ class ContinuousBalanceService {
         convertReimbursement: (r) => _convertRefund(r, currency, month),
         excludedExpenseIds: facts.salaryWithheldExpenseIds,
       );
-      total = sumFinancialMinor(
-          [total, math.max(0, profile.allocation - spent)]);
+      total =
+          sumFinancialMinor([total, math.max(0, profile.allocation - spent)]);
     }
     return total;
   }
@@ -396,8 +394,7 @@ class ContinuousBalanceService {
             unused: math.max(0, allocation - spent),
             carried: _convertRun(run, carried, currency),
             released: _convertRun(run, releasedMinor, currency));
-        unusedTotal =
-            sumFinancialMinor([unusedTotal, reservation.unused]);
+        unusedTotal = sumFinancialMinor([unusedTotal, reservation.unused]);
         released = sumFinancialMinor([released, reservation.releasedCredit]);
         carry = sumFinancialMinor([carry, reservation.carryShortfall]);
       }
