@@ -64,6 +64,13 @@ Map<String, dynamic>? transferDetails(VaultEntry entry) {
                 BigInt.from(data['freeAfter'] as int))) {
       return null;
     }
+    final target = data['targetWithdrawalMonth'];
+    if (target != null &&
+        (target is! String ||
+            entry.kind != 'deposit' ||
+            !RegExp(r'^\d{4}-(0[1-9]|1[0-2])$').hasMatch(target))) {
+      return null;
+    }
     return data;
   } on FormatException {
     return null;

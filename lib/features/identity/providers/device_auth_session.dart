@@ -1,4 +1,3 @@
-import '../../budget_setup/providers/onboarding_rollout_provider.dart';
 import '../../budget_setup/providers/onboarding_readiness_provider.dart';
 import '../../budget_setup/domain/onboarding_startup.dart';
 import 'dart:async';
@@ -54,18 +53,16 @@ final nativeAccessBindingProvider = Provider<NativeAccessBinding>((ref) {
       space.hasError) {
     return const NativeAccessBinding(key: 'resolving', resolved: false);
   }
-  if (ref.watch(unifiedOnboardingEnabledProvider)) {
-    final startup = ref.watch(onboardingStartupProvider);
-    final pending = startup.valueOrNull;
-    final owner = pending?.state?.committed?.profileId;
-    if (startup.hasError ||
-        (pending?.kind == StartupKind.resumeSetup &&
-            owner != null &&
-            (space.valueOrNull != null ||
-                ref.watch(activeSpaceIdProvider) != null ||
-                ref.watch(activeProfileProvider).valueOrNull?.id != owner))) {
-      return const NativeAccessBinding(key: 'resolving', resolved: false);
-    }
+  final startup = ref.watch(onboardingStartupProvider);
+  final pending = startup.valueOrNull;
+  final owner = pending?.state?.committed?.profileId;
+  if (startup.hasError ||
+      (pending?.kind == StartupKind.resumeSetup &&
+          owner != null &&
+          (space.valueOrNull != null ||
+              ref.watch(activeSpaceIdProvider) != null ||
+              ref.watch(activeProfileProvider).valueOrNull?.id != owner))) {
+    return const NativeAccessBinding(key: 'resolving', resolved: false);
   }
   if (subject != null) {
     return NativeAccessBinding(
@@ -106,18 +103,30 @@ class DeviceAuthSession extends Notifier<NativeAuthSnapshot> {
   String _contextToken = '';
   NativeAccessBinding _binding =
       const NativeAccessBinding(key: 'resolving', resolved: false);
+
+  /// The exact binding token the current grant was issued for, or `null` when
+  /// the session holds no grant. Kept separate from [_binding] because an
+  /// unresolved binding must not discard a grant the user already paid for.
+  String? _grantedToken;
   Future<bool>? _flight;
   int? _awaySince;
   bool _phoneLocked = false;
   @override
   NativeAuthSnapshot build() {
     _binding = ref.read(nativeAccessBindingProvider);
+    _grantedToken = null;
     ref.listen(nativeAccessBindingProvider, (previous, next) {
       if (_contextToken == next.token) return;
       _binding = next;
       _contextToken = next.token;
       _awaySince = null;
       _phoneLocked = false;
+      // While the subject is unresolved `require()` refuses on its own, so the
+      // grant can survive a stream reload without exposing anything.
+      if (!next.resolved) return;
+      // The same principal resolving again is not a new subject.
+      if (next.token == _grantedToken) return;
+      if (_adoptSetupProfile(next)) return;
       lock();
     });
     _contextToken = _binding.token;
@@ -143,10 +152,28 @@ class DeviceAuthSession extends Notifier<NativeAuthSnapshot> {
 
   void lock() {
     _generation++;
+    _grantedToken = null;
     if (_alive) {
       state = NativeAuthSnapshot(
           generation: _generation, binding: _binding, busy: _flight != null);
     }
+  }
+
+  /// The first profile a setup flow creates is the same principal: the flow has
+  /// just been completed by the person who unlocked. Carry that grant once and
+  /// re-anchor it, so the new subject is protected from here on.
+  ///
+  /// A `setup:` binding only exists while no profile and no space exist, so the
+  /// first resolved `p<id>` after it can only be the profile this setup created
+  /// — this can never hand a grant to somebody else's data.
+  bool _adoptSetupProfile(NativeAccessBinding next) {
+    final granted = _grantedToken;
+    if (!state.authenticated || granted == null) return false;
+    if (!granted.startsWith('setup:') || !next.key.startsWith('p')) {
+      return false;
+    }
+    _grantedToken = next.token;
+    return true;
   }
 
   Future<bool> require({required String reason, bool force = false}) {
@@ -183,12 +210,16 @@ class DeviceAuthSession extends Notifier<NativeAuthSnapshot> {
       return false;
     } finally {
       _flight = null;
+      // An unresolved subject cannot hold a grant: the prompt may have finished
+      // while the streams were reloading.
+      final granted = success && _binding.resolved;
+      if (granted) _grantedToken = _binding.token;
       if (_alive) {
         state = NativeAuthSnapshot(
             generation: _generation,
             binding: _binding,
-            authenticated: success && isCurrent(epoch),
-            message: success ? null : message);
+            authenticated: granted,
+            message: granted ? null : message);
       }
     }
   }

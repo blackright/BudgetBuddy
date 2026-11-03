@@ -1,13 +1,16 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/models/currency_code.dart';
+import '../../../core/models/pending_action.dart';
 
 import '../../../core/providers/active_profile_provider.dart';
 import '../../../core/providers/budget_context_provider.dart';
 import '../../../core/database/isar_helper.dart';
+import '../../pending_actions/providers/pending_actions_providers.dart';
 import '../models/vault_entry.dart';
 import '../models/savings_vault.dart';
 import '../repositories/vault_repository.dart';
 import '../vault_recovery_service.dart';
+import '../vault_suggestion_service.dart';
 import '../vault_transfer_service.dart';
 import '../vault_transfer_ledger.dart';
 import '../../engine/providers/rate_registry_provider.dart';
@@ -53,7 +56,62 @@ final vaultTransferServiceProvider = Provider<VaultTransferService>((ref) {
           alive &&
           !ref.read(budgetContextProvider).isShared &&
           ref.read(budgetContextProvider).profileId == actor &&
-          ref.read(activeProfileProvider).valueOrNull?.id == actor);
+          ref.read(activeProfileProvider).valueOrNull?.id == actor,
+      actions: ref.watch(pendingActionServiceProvider),
+      clock: ref.watch(vaultClockProvider));
+});
+
+/// Read-only discovery of finished months with money left to review.
+final vaultSuggestionServiceProvider =
+    Provider<VaultSuggestionService>((ref) {
+  final context = ref.watch(budgetContextProvider);
+  final actor = ref.watch(activeProfileProvider).valueOrNull?.id;
+  if (context.isShared || actor == null || context.profileId != actor) {
+    throw const VaultTransferException('Select the owning personal profile.');
+  }
+  return VaultSuggestionService(
+    IsarHelper.instance,
+    profileId: actor,
+    registry: ref.watch(rateRegistryProvider),
+    actions: ref.watch(pendingActionServiceProvider),
+    clock: ref.watch(vaultClockProvider),
+  );
+});
+
+/// Manual "Check savings" entry point. It never moves money.
+final vaultSuggestionCheckProvider =
+    Provider<Future<VaultSuggestionResult> Function()>((ref) {
+  final service = ref.watch(vaultSuggestionServiceProvider);
+  return service.check;
+});
+
+/// Active deposit suggestions for the owning personal profile.
+final vaultDepositSuggestionsProvider =
+    StreamProvider.autoDispose<List<PendingAction>>((ref) {
+  final context = ref.watch(budgetContextProvider);
+  if (context.isShared ||
+      IsarHelper.maybeInstance == null ||
+      context.profileId == null) {
+    return Stream.value(const <PendingAction>[]);
+  }
+  return ref
+      .watch(pendingActionServiceProvider)
+      .watch(profileId: context.profileId, sharedSpaceId: null)
+      .map(activeVaultDepositSuggestions);
+});
+
+/// Planned withdrawals derived from immutable Vault history. A target month is
+/// a reminder only, so this never reserves or moves money.
+final plannedVaultWithdrawalsProvider =
+    Provider.autoDispose<List<PlannedVaultWithdrawal>>((ref) {
+  final context = ref.watch(budgetContextProvider);
+  if (context.isShared) return const [];
+  final history = ref.watch(vaultHistoryProvider).valueOrNull ?? const [];
+  final actions = ref.watch(pendingActionsProvider).valueOrNull ?? const [];
+  return plannedWithdrawalsFrom(
+    history: history,
+    actions: actions,
+  );
 });
 
 /// Source-month credit, separate from income/spending/opening funds.

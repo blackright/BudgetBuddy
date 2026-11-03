@@ -7,7 +7,6 @@ import 'package:go_router/go_router.dart';
 import '../providers/active_profile_provider.dart';
 import '../../features/budget_setup/domain/onboarding_startup.dart';
 import '../../features/budget_setup/providers/onboarding_readiness_provider.dart';
-import '../../features/budget_setup/providers/onboarding_rollout_provider.dart';
 import '../../features/budget_setup/providers/setup_handoff_provider.dart';
 import 'app_router.dart';
 
@@ -31,7 +30,6 @@ class _StartupRefresh extends ChangeNotifier {
 }
 
 final routerProvider = Provider<GoRouter>((ref) {
-  if (!ref.watch(unifiedOnboardingEnabledProvider)) return goRouter;
   final refresh = _StartupRefresh();
   var alive = true;
   ref.listen(onboardingStartupProvider, (_, next) {

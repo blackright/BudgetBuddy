@@ -254,6 +254,48 @@ void main() {
 
       expect(container.read(monthSummaryProvider).openingBalance, isNull);
     });
+
+    test('shared spaces keep the legacy formula, not a continuous balance',
+        () async {
+      final container = ProviderContainer(
+        overrides: [
+          budgetContextProvider.overrideWithValue(
+              ContextRef.shared(spaceId: 1, yearMonth: yearMonth)),
+          budgetProfilesProvider.overrideWith((ref) => Stream.value([])),
+          contextExpensesProvider.overrideWithValue(const []),
+          selectedYearMonthProvider.overrideWith((ref) => yearMonth),
+          activeProfileProvider.overrideWith((ref) => Stream.value(user())),
+          activeBudgetProvider
+              .overrideWith((ref) => Stream.value(month(currency: null))),
+          monthFinanceProvider
+              .overrideWith((ref) => Stream.value(month(currency: null))),
+          rateRegistryProvider.overrideWithValue(
+              RateTableRegistry(sealedTables: {yearMonth: table()})),
+          monthlyExpensesProvider.overrideWith((ref) => Stream.value([])),
+          monthlyOriginReimbursementsProvider
+              .overrideWith((ref) => Stream.value([])),
+          monthlyReimbursementsProvider
+              .overrideWith((ref) => Stream.value([])),
+          reimbursementTargetExpensesProvider
+              .overrideWith((ref) => Stream.value([])),
+          resolvedIncomeProvider.overrideWithValue(
+              const ResolvedIncome(amount: 690000, usesOverride: false)),
+        ],
+      );
+      addTearDown(container.dispose);
+      await container.read(activeProfileProvider.future);
+      await container.read(activeBudgetProvider.future);
+      await container.read(monthFinanceProvider.future);
+      await container.read(monthlyExpensesProvider.future);
+      await container.read(monthlyOriginReimbursementsProvider.future);
+
+      final summary = container.read(monthSummaryProvider);
+
+      // No continuous provider is consulted for a shared month.
+      expect(summary.income, 690000.0);
+      expect(summary.kept, 690000.0);
+      expect(summary.moneyInBank, 1035000.0);
+    });
   });
 
   /// US8: the summary classifies each return by its *target's* kind, resolved

@@ -18,8 +18,9 @@ import 'widgets/security_setup_step.dart';
 final _showSetupSecurityProvider =
     StateProvider.family<bool, int>((ref, owner) => false);
 
-/// Financial-slice host. Only the shared inactive rollout gate selects this;
-/// it does not add a route, bypass authentication or activate a new owner.
+/// Financial-slice host used by the focused setup tests. Production routes the
+/// same steps through [GuidedSetupScreen]; this host adds no route, bypass or
+/// second authentication path.
 class FinancialSetupScreen extends ConsumerWidget {
   const FinancialSetupScreen({super.key});
   Future<void> _reviewSaved(

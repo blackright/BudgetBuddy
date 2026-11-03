@@ -32,131 +32,136 @@ const ExpenseSchema = CollectionSchema(
       name: r'budgetProfileId',
       type: IsarType.long,
     ),
-    r'categoryId': PropertySchema(
+    r'cashYearMonth': PropertySchema(
       id: 3,
+      name: r'cashYearMonth',
+      type: IsarType.string,
+    ),
+    r'categoryId': PropertySchema(
+      id: 4,
       name: r'categoryId',
       type: IsarType.string,
     ),
     r'currency': PropertySchema(
-      id: 4,
+      id: 5,
       name: r'currency',
       type: IsarType.string,
     ),
     r'date': PropertySchema(
-      id: 5,
+      id: 6,
       name: r'date',
       type: IsarType.dateTime,
     ),
     r'financialProfileSyncGuid': PropertySchema(
-      id: 6,
+      id: 7,
       name: r'financialProfileSyncGuid',
       type: IsarType.string,
     ),
     r'financialProfileType': PropertySchema(
-      id: 7,
+      id: 8,
       name: r'financialProfileType',
       type: IsarType.string,
     ),
     r'fxHistoryJson': PropertySchema(
-      id: 8,
+      id: 9,
       name: r'fxHistoryJson',
       type: IsarType.string,
     ),
     r'guiltLevel': PropertySchema(
-      id: 9,
+      id: 10,
       name: r'guiltLevel',
       type: IsarType.byte,
       enumMap: _ExpenseguiltLevelEnumValueMap,
     ),
     r'isReimbursable': PropertySchema(
-      id: 10,
+      id: 11,
       name: r'isReimbursable',
       type: IsarType.bool,
     ),
     r'merchantName': PropertySchema(
-      id: 11,
+      id: 12,
       name: r'merchantName',
       type: IsarType.string,
     ),
     r'merchantSyncGuid': PropertySchema(
-      id: 12,
+      id: 13,
       name: r'merchantSyncGuid',
       type: IsarType.string,
     ),
     r'notes': PropertySchema(
-      id: 13,
+      id: 14,
       name: r'notes',
       type: IsarType.string,
     ),
     r'paidAt': PropertySchema(
-      id: 14,
+      id: 15,
       name: r'paidAt',
       type: IsarType.dateTime,
     ),
     r'paymentEvidenceJson': PropertySchema(
-      id: 15,
+      id: 16,
       name: r'paymentEvidenceJson',
       type: IsarType.string,
     ),
     r'paymentMethod': PropertySchema(
-      id: 16,
+      id: 17,
       name: r'paymentMethod',
       type: IsarType.string,
     ),
     r'profileId': PropertySchema(
-      id: 17,
+      id: 18,
       name: r'profileId',
       type: IsarType.long,
     ),
     r'purchaseEvidenceOwnerGuid': PropertySchema(
-      id: 18,
+      id: 19,
       name: r'purchaseEvidenceOwnerGuid',
       type: IsarType.string,
     ),
     r'purchaseSyncGuid': PropertySchema(
-      id: 19,
+      id: 20,
       name: r'purchaseSyncGuid',
       type: IsarType.string,
     ),
     r'receiptPath': PropertySchema(
-      id: 20,
+      id: 21,
       name: r'receiptPath',
       type: IsarType.string,
     ),
     r'sharedSpaceId': PropertySchema(
-      id: 21,
+      id: 22,
       name: r'sharedSpaceId',
       type: IsarType.long,
     ),
     r'status': PropertySchema(
-      id: 22,
+      id: 23,
       name: r'status',
       type: IsarType.byte,
       enumMap: _ExpensestatusEnumValueMap,
     ),
     r'syncGuid': PropertySchema(
-      id: 23,
+      id: 24,
       name: r'syncGuid',
       type: IsarType.string,
     ),
     r'tags': PropertySchema(
-      id: 24,
+      id: 25,
       name: r'tags',
       type: IsarType.stringList,
     ),
     r'title': PropertySchema(
-      id: 25,
+      id: 26,
       name: r'title',
       type: IsarType.string,
     ),
     r'type': PropertySchema(
-      id: 26,
+      id: 27,
       name: r'type',
       type: IsarType.byte,
       enumMap: _ExpensetypeEnumValueMap,
     ),
     r'yearMonth': PropertySchema(
-      id: 27,
+      id: 28,
       name: r'yearMonth',
       type: IsarType.string,
     )
@@ -219,6 +224,19 @@ const ExpenseSchema = CollectionSchema(
         )
       ],
     ),
+    r'cashYearMonth': IndexSchema(
+      id: -4209708077948699541,
+      name: r'cashYearMonth',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'cashYearMonth',
+          type: IndexType.hash,
+          caseSensitive: true,
+        )
+      ],
+    ),
     r'purchaseSyncGuid': IndexSchema(
       id: 1626566469356227250,
       name: r'purchaseSyncGuid',
@@ -260,6 +278,12 @@ int _expenseEstimateSize(
   Map<Type, List<int>> allOffsets,
 ) {
   var bytesCount = offsets.last;
+  {
+    final value = object.cashYearMonth;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
   bytesCount += 3 + object.categoryId.length * 3;
   bytesCount += 3 + object.currency.length * 3;
   {
@@ -350,31 +374,32 @@ void _expenseSerialize(
   writer.writeLong(offsets[0], object.amount);
   writer.writeLong(offsets[1], object.budgetId);
   writer.writeLong(offsets[2], object.budgetProfileId);
-  writer.writeString(offsets[3], object.categoryId);
-  writer.writeString(offsets[4], object.currency);
-  writer.writeDateTime(offsets[5], object.date);
-  writer.writeString(offsets[6], object.financialProfileSyncGuid);
-  writer.writeString(offsets[7], object.financialProfileType);
-  writer.writeString(offsets[8], object.fxHistoryJson);
-  writer.writeByte(offsets[9], object.guiltLevel.index);
-  writer.writeBool(offsets[10], object.isReimbursable);
-  writer.writeString(offsets[11], object.merchantName);
-  writer.writeString(offsets[12], object.merchantSyncGuid);
-  writer.writeString(offsets[13], object.notes);
-  writer.writeDateTime(offsets[14], object.paidAt);
-  writer.writeString(offsets[15], object.paymentEvidenceJson);
-  writer.writeString(offsets[16], object.paymentMethod);
-  writer.writeLong(offsets[17], object.profileId);
-  writer.writeString(offsets[18], object.purchaseEvidenceOwnerGuid);
-  writer.writeString(offsets[19], object.purchaseSyncGuid);
-  writer.writeString(offsets[20], object.receiptPath);
-  writer.writeLong(offsets[21], object.sharedSpaceId);
-  writer.writeByte(offsets[22], object.status.index);
-  writer.writeString(offsets[23], object.syncGuid);
-  writer.writeStringList(offsets[24], object.tags);
-  writer.writeString(offsets[25], object.title);
-  writer.writeByte(offsets[26], object.type.index);
-  writer.writeString(offsets[27], object.yearMonth);
+  writer.writeString(offsets[3], object.cashYearMonth);
+  writer.writeString(offsets[4], object.categoryId);
+  writer.writeString(offsets[5], object.currency);
+  writer.writeDateTime(offsets[6], object.date);
+  writer.writeString(offsets[7], object.financialProfileSyncGuid);
+  writer.writeString(offsets[8], object.financialProfileType);
+  writer.writeString(offsets[9], object.fxHistoryJson);
+  writer.writeByte(offsets[10], object.guiltLevel.index);
+  writer.writeBool(offsets[11], object.isReimbursable);
+  writer.writeString(offsets[12], object.merchantName);
+  writer.writeString(offsets[13], object.merchantSyncGuid);
+  writer.writeString(offsets[14], object.notes);
+  writer.writeDateTime(offsets[15], object.paidAt);
+  writer.writeString(offsets[16], object.paymentEvidenceJson);
+  writer.writeString(offsets[17], object.paymentMethod);
+  writer.writeLong(offsets[18], object.profileId);
+  writer.writeString(offsets[19], object.purchaseEvidenceOwnerGuid);
+  writer.writeString(offsets[20], object.purchaseSyncGuid);
+  writer.writeString(offsets[21], object.receiptPath);
+  writer.writeLong(offsets[22], object.sharedSpaceId);
+  writer.writeByte(offsets[23], object.status.index);
+  writer.writeString(offsets[24], object.syncGuid);
+  writer.writeStringList(offsets[25], object.tags);
+  writer.writeString(offsets[26], object.title);
+  writer.writeByte(offsets[27], object.type.index);
+  writer.writeString(offsets[28], object.yearMonth);
 }
 
 Expense _expenseDeserialize(
@@ -387,37 +412,38 @@ Expense _expenseDeserialize(
     amount: reader.readLong(offsets[0]),
     budgetId: reader.readLong(offsets[1]),
     budgetProfileId: reader.readLongOrNull(offsets[2]),
-    categoryId: reader.readString(offsets[3]),
-    currency: reader.readString(offsets[4]),
-    date: reader.readDateTime(offsets[5]),
-    financialProfileSyncGuid: reader.readStringOrNull(offsets[6]),
-    financialProfileType: reader.readStringOrNull(offsets[7]),
-    fxHistoryJson: reader.readStringOrNull(offsets[8]),
+    cashYearMonth: reader.readStringOrNull(offsets[3]),
+    categoryId: reader.readString(offsets[4]),
+    currency: reader.readString(offsets[5]),
+    date: reader.readDateTime(offsets[6]),
+    financialProfileSyncGuid: reader.readStringOrNull(offsets[7]),
+    financialProfileType: reader.readStringOrNull(offsets[8]),
+    fxHistoryJson: reader.readStringOrNull(offsets[9]),
     guiltLevel:
-        _ExpenseguiltLevelValueEnumMap[reader.readByteOrNull(offsets[9])] ??
+        _ExpenseguiltLevelValueEnumMap[reader.readByteOrNull(offsets[10])] ??
             GuiltLevel.essential,
     id: id,
-    isReimbursable: reader.readBoolOrNull(offsets[10]) ?? false,
-    merchantName: reader.readStringOrNull(offsets[11]),
-    merchantSyncGuid: reader.readStringOrNull(offsets[12]),
-    notes: reader.readStringOrNull(offsets[13]),
-    paidAt: reader.readDateTimeOrNull(offsets[14]),
-    paymentEvidenceJson: reader.readStringOrNull(offsets[15]),
-    paymentMethod: reader.readStringOrNull(offsets[16]),
-    profileId: reader.readLong(offsets[17]),
-    purchaseEvidenceOwnerGuid: reader.readStringOrNull(offsets[18]),
-    purchaseSyncGuid: reader.readStringOrNull(offsets[19]),
-    receiptPath: reader.readStringOrNull(offsets[20]),
-    sharedSpaceId: reader.readLongOrNull(offsets[21]),
-    status: _ExpensestatusValueEnumMap[reader.readByteOrNull(offsets[22])] ??
+    isReimbursable: reader.readBoolOrNull(offsets[11]) ?? false,
+    merchantName: reader.readStringOrNull(offsets[12]),
+    merchantSyncGuid: reader.readStringOrNull(offsets[13]),
+    notes: reader.readStringOrNull(offsets[14]),
+    paidAt: reader.readDateTimeOrNull(offsets[15]),
+    paymentEvidenceJson: reader.readStringOrNull(offsets[16]),
+    paymentMethod: reader.readStringOrNull(offsets[17]),
+    profileId: reader.readLong(offsets[18]),
+    purchaseEvidenceOwnerGuid: reader.readStringOrNull(offsets[19]),
+    purchaseSyncGuid: reader.readStringOrNull(offsets[20]),
+    receiptPath: reader.readStringOrNull(offsets[21]),
+    sharedSpaceId: reader.readLongOrNull(offsets[22]),
+    status: _ExpensestatusValueEnumMap[reader.readByteOrNull(offsets[23])] ??
         ExpenseStatus.paid,
-    title: reader.readString(offsets[25]),
-    type: _ExpensetypeValueEnumMap[reader.readByteOrNull(offsets[26])] ??
+    title: reader.readString(offsets[26]),
+    type: _ExpensetypeValueEnumMap[reader.readByteOrNull(offsets[27])] ??
         ExpenseType.standard,
-    yearMonth: reader.readString(offsets[27]),
+    yearMonth: reader.readString(offsets[28]),
   );
-  object.syncGuid = reader.readString(offsets[23]);
-  object.tags = reader.readStringList(offsets[24]) ?? [];
+  object.syncGuid = reader.readString(offsets[24]);
+  object.tags = reader.readStringList(offsets[25]) ?? [];
   return object;
 }
 
@@ -435,57 +461,59 @@ P _expenseDeserializeProp<P>(
     case 2:
       return (reader.readLongOrNull(offset)) as P;
     case 3:
-      return (reader.readString(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 4:
       return (reader.readString(offset)) as P;
     case 5:
-      return (reader.readDateTime(offset)) as P;
+      return (reader.readString(offset)) as P;
     case 6:
-      return (reader.readStringOrNull(offset)) as P;
+      return (reader.readDateTime(offset)) as P;
     case 7:
       return (reader.readStringOrNull(offset)) as P;
     case 8:
       return (reader.readStringOrNull(offset)) as P;
     case 9:
+      return (reader.readStringOrNull(offset)) as P;
+    case 10:
       return (_ExpenseguiltLevelValueEnumMap[reader.readByteOrNull(offset)] ??
           GuiltLevel.essential) as P;
-    case 10:
-      return (reader.readBoolOrNull(offset) ?? false) as P;
     case 11:
-      return (reader.readStringOrNull(offset)) as P;
+      return (reader.readBoolOrNull(offset) ?? false) as P;
     case 12:
       return (reader.readStringOrNull(offset)) as P;
     case 13:
       return (reader.readStringOrNull(offset)) as P;
     case 14:
-      return (reader.readDateTimeOrNull(offset)) as P;
-    case 15:
       return (reader.readStringOrNull(offset)) as P;
+    case 15:
+      return (reader.readDateTimeOrNull(offset)) as P;
     case 16:
       return (reader.readStringOrNull(offset)) as P;
     case 17:
-      return (reader.readLong(offset)) as P;
-    case 18:
       return (reader.readStringOrNull(offset)) as P;
+    case 18:
+      return (reader.readLong(offset)) as P;
     case 19:
       return (reader.readStringOrNull(offset)) as P;
     case 20:
       return (reader.readStringOrNull(offset)) as P;
     case 21:
-      return (reader.readLongOrNull(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 22:
+      return (reader.readLongOrNull(offset)) as P;
+    case 23:
       return (_ExpensestatusValueEnumMap[reader.readByteOrNull(offset)] ??
           ExpenseStatus.paid) as P;
-    case 23:
-      return (reader.readString(offset)) as P;
     case 24:
-      return (reader.readStringList(offset) ?? []) as P;
-    case 25:
       return (reader.readString(offset)) as P;
+    case 25:
+      return (reader.readStringList(offset) ?? []) as P;
     case 26:
+      return (reader.readString(offset)) as P;
+    case 27:
       return (_ExpensetypeValueEnumMap[reader.readByteOrNull(offset)] ??
           ExpenseType.standard) as P;
-    case 27:
+    case 28:
       return (reader.readString(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -925,6 +953,71 @@ extension ExpenseQueryWhere on QueryBuilder<Expense, Expense, QWhereClause> {
     });
   }
 
+  QueryBuilder<Expense, Expense, QAfterWhereClause> cashYearMonthIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'cashYearMonth',
+        value: [null],
+      ));
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterWhereClause> cashYearMonthIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'cashYearMonth',
+        lower: [null],
+        includeLower: false,
+        upper: [],
+      ));
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterWhereClause> cashYearMonthEqualTo(
+      String? cashYearMonth) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'cashYearMonth',
+        value: [cashYearMonth],
+      ));
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterWhereClause> cashYearMonthNotEqualTo(
+      String? cashYearMonth) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'cashYearMonth',
+              lower: [],
+              upper: [cashYearMonth],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'cashYearMonth',
+              lower: [cashYearMonth],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'cashYearMonth',
+              lower: [cashYearMonth],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'cashYearMonth',
+              lower: [],
+              upper: [cashYearMonth],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
+
   QueryBuilder<Expense, Expense, QAfterWhereClause> purchaseSyncGuidIsNull() {
     return QueryBuilder.apply(this, (query) {
       return query.addWhereClause(IndexWhereClause.equalTo(
@@ -1278,6 +1371,155 @@ extension ExpenseQueryFilter
         includeLower: includeLower,
         upper: upper,
         includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterFilterCondition> cashYearMonthIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'cashYearMonth',
+      ));
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterFilterCondition>
+      cashYearMonthIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'cashYearMonth',
+      ));
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterFilterCondition> cashYearMonthEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'cashYearMonth',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterFilterCondition>
+      cashYearMonthGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'cashYearMonth',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterFilterCondition> cashYearMonthLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'cashYearMonth',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterFilterCondition> cashYearMonthBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'cashYearMonth',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterFilterCondition> cashYearMonthStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'cashYearMonth',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterFilterCondition> cashYearMonthEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'cashYearMonth',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterFilterCondition> cashYearMonthContains(
+      String value,
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'cashYearMonth',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterFilterCondition> cashYearMonthMatches(
+      String pattern,
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'cashYearMonth',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterFilterCondition> cashYearMonthIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'cashYearMonth',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterFilterCondition>
+      cashYearMonthIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'cashYearMonth',
+        value: '',
       ));
     });
   }
@@ -4323,6 +4565,18 @@ extension ExpenseQuerySortBy on QueryBuilder<Expense, Expense, QSortBy> {
     });
   }
 
+  QueryBuilder<Expense, Expense, QAfterSortBy> sortByCashYearMonth() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'cashYearMonth', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterSortBy> sortByCashYearMonthDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'cashYearMonth', Sort.desc);
+    });
+  }
+
   QueryBuilder<Expense, Expense, QAfterSortBy> sortByCategoryId() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'categoryId', Sort.asc);
@@ -4655,6 +4909,18 @@ extension ExpenseQuerySortThenBy
     });
   }
 
+  QueryBuilder<Expense, Expense, QAfterSortBy> thenByCashYearMonth() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'cashYearMonth', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterSortBy> thenByCashYearMonthDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'cashYearMonth', Sort.desc);
+    });
+  }
+
   QueryBuilder<Expense, Expense, QAfterSortBy> thenByCategoryId() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'categoryId', Sort.asc);
@@ -4981,6 +5247,14 @@ extension ExpenseQueryWhereDistinct
     });
   }
 
+  QueryBuilder<Expense, Expense, QDistinct> distinctByCashYearMonth(
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'cashYearMonth',
+          caseSensitive: caseSensitive);
+    });
+  }
+
   QueryBuilder<Expense, Expense, QDistinct> distinctByCategoryId(
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
@@ -5179,6 +5453,12 @@ extension ExpenseQueryProperty
   QueryBuilder<Expense, int?, QQueryOperations> budgetProfileIdProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'budgetProfileId');
+    });
+  }
+
+  QueryBuilder<Expense, String?, QQueryOperations> cashYearMonthProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'cashYearMonth');
     });
   }
 

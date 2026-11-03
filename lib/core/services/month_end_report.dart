@@ -18,7 +18,8 @@ class MonthEndAmounts {
       required this.spent,
       required this.defaultAllocation,
       required this.rule,
-      this.destinationAllocation}) {
+      this.destinationAllocation,
+      this.alreadyCarried = false}) {
     if (allocation < 0 ||
         spent < 0 ||
         defaultAllocation < 0 ||
@@ -28,13 +29,18 @@ class MonthEndAmounts {
   }
   final int allocation, spent, defaultAllocation;
   final int? destinationAllocation;
+
+  /// True when the existing destination already contains this carry (an
+  /// auto-carried row). Its allocation is adopted as-is instead of adding carry.
+  final bool alreadyCarried;
   final MonthEndRule rule;
   int get unused => math.max(0, allocation - spent);
   int get overspent => math.max(0, spent - allocation);
   int get carried => rule == MonthEndRule.carryForward ? unused : 0;
   int get released => rule == MonthEndRule.reset ? unused : 0;
   int get nextAllocation {
-    final value = (destinationAllocation ?? defaultAllocation) + carried;
+    final value = (destinationAllocation ?? defaultAllocation) +
+        (alreadyCarried ? 0 : carried);
     if (value > 9007199254740991) {
       throw ArgumentError('Month-end allocation exceeds exact money range');
     }
@@ -91,6 +97,7 @@ class MonthEndLine {
         'rule': amounts.rule.name,
         'destinationAllocation': amounts.destinationAllocation,
         'nextAllocation': amounts.nextAllocation,
+        'alreadyCarried': amounts.alreadyCarried,
         'carried': amounts.carried,
         'released': amounts.released,
         'existingDestination': existingDestination,

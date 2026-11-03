@@ -48,170 +48,199 @@ class MonthSummaryCard extends ConsumerWidget {
 
     return Card(
       key: const Key('monthSummaryCard'),
-      elevation: 2,
+      elevation: 0,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(
+          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.18),
+        ),
+      ),
       child: InkWell(
         onTap: () => context.push('/month_summary_detail'),
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                children: [
-                  Flexible(
-                      child: Text(
-                    'Kept this month',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  )),
-                  const SizedBox(width: 6),
-                  // T152: tap-to-open dialog explaining the reserve (Tooltip
-                  // doesn't respond on mobile).
-                  IconButton(
-                    icon: const Icon(Icons.info_outline, size: 16),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                    onPressed: () => showDialog<void>(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        title: const Text('Free to spend'),
-                        content: const Text(
-                          'This is the money free to spend. Money set aside in '
-                          'your budget profiles is not counted here, so you '
-                          'don\'t accidentally spend it twice. If a budget '
-                          'profile overspends, it borrows from this money.',
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.of(context).pop(),
-                            child: const Text('OK'),
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                Theme.of(context).colorScheme.surface,
+              ],
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                        child: Text(
+                      'Kept this month',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    )),
+                    const SizedBox(width: 6),
+                    // T152: tap-to-open dialog explaining the reserve (Tooltip
+                    // doesn't respond on mobile).
+                    IconButton(
+                      icon: const Icon(Icons.info_outline, size: 16),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      onPressed: () => showDialog<void>(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: const Text('Free to spend'),
+                          content: const Text(
+                            'This is the money free to spend. Money set aside in '
+                            'your budget profiles is not counted here, so you '
+                            'don\'t accidentally spend it twice. If a budget '
+                            'profile overspends, it borrows from this money.',
                           ),
-                        ],
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.of(context).pop(),
+                              child: const Text('OK'),
+                            ),
+                          ],
+                        ),
+                      ),
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Center(
+                  child: Container(
+                    key: const Key('keptHero'),
+                    child: Text(
+                      _money(summary.kept),
+                      style: TextStyle(
+                        fontSize: 44,
+                        fontWeight: FontWeight.bold,
+                        color: MedicalTheme.semantic(
+                          context,
+                          summary.kept < 0
+                              ? MedicalTheme.moneyOut
+                              : MedicalTheme.moneyIn,
+                        ),
                       ),
                     ),
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Center(
-                child: Container(
-                  key: const Key('keptHero'),
+                ),
+                const SizedBox(height: 4),
+                Center(
                   child: Text(
-                    _money(summary.kept),
-                    style: TextStyle(
-                      fontSize: 44,
-                      fontWeight: FontWeight.bold,
-                      color: MedicalTheme.semantic(
-                        context,
-                        summary.kept < 0
-                            ? MedicalTheme.moneyOut
-                            : MedicalTheme.moneyIn,
-                      ),
-                    ),
+                    'after ${_money(summary.paymentsMade)} paid out'
+                    '${summary.moneyReturned > 0 ? ', ${_money(summary.moneyReturned)} returned' : ''}'
+                    '${summary.setAside > 0 ? ' and ${_money(summary.setAside)} set aside for your budgets' : ''}',
+                    style: Theme.of(context).textTheme.bodyMedium,
                   ),
                 ),
-              ),
-              const SizedBox(height: 4),
-              Center(
-                child: Text(
-                  'after ${_money(summary.paymentsMade)} paid out'
-                  '${summary.moneyReturned > 0 ? ', ${_money(summary.moneyReturned)} returned' : ''}'
-                  '${summary.setAside > 0 ? ' and ${_money(summary.setAside)} set aside for your budgets' : ''}',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-              ),
-              const Divider(height: 28),
-              _SummaryLine(
-                label: 'Income',
-                value: _money(summary.income),
-                valueKey: const Key('incomeLine'),
-                color: MedicalTheme.semantic(context, MedicalTheme.moneyIn),
-              ),
-              _SummaryLine(
-                label: 'Paid out',
-                value: _money(summary.paymentsMade),
-                valueKey: const Key('paymentsLine'),
-                color: MedicalTheme.semantic(context, MedicalTheme.moneyOut),
-              ),
-              _SummaryLine(
-                label: 'Planned',
-                value: _money(summary.planned),
-                valueKey: const Key('plannedLine'),
-                color: MedicalTheme.semantic(context, MedicalTheme.planned),
-              ),
-              _SummaryLine(
-                label: 'Returned',
-                value: _money(summary.moneyReturned),
-                valueKey: const Key('returnedLine'),
-                color: MedicalTheme.semantic(context, MedicalTheme.moneyIn),
-              ),
-              // T145: the money still sitting in profile envelopes.
-              if (summary.setAside > 0)
+                const Divider(height: 28),
                 _SummaryLine(
-                  label: 'Set aside for budgets',
-                  value: _money(summary.setAside),
-                  valueKey: const Key('setAsideLine'),
+                  label:
+                      summary.expectedIncome > 0 ? 'Confirmed income' : 'Income',
+                  value: _money(summary.income),
+                  valueKey: const Key('incomeLine'),
+                  color: MedicalTheme.semantic(context, MedicalTheme.moneyIn),
+                ),
+                if (summary.expectedIncome > 0)
+                  _SummaryLine(
+                    label: 'Expected salary',
+                    value: _money(summary.expectedIncome),
+                    valueKey: const Key('expectedIncomeLine'),
+                    color: MedicalTheme.semantic(context, MedicalTheme.bank),
+                  ),
+                _SummaryLine(
+                  label: 'Paid out',
+                  value: _money(summary.paymentsMade),
+                  valueKey: const Key('paymentsLine'),
                   color: MedicalTheme.semantic(context, MedicalTheme.moneyOut),
                 ),
-              if (summary.carryOver > 0)
                 _SummaryLine(
-                    label: 'Carry still reserved',
-                    value: _money(summary.carryOver),
-                    valueKey: const Key('monthEndCarryReservation'),
-                    color:
-                        MedicalTheme.semantic(context, MedicalTheme.moneyOut)),
-              if (summary.carriedIn > 0)
-                _SummaryLine(
-                    label: 'Carried in',
-                    valueKey: const Key('monthEndCarriedIn'),
-                    value: _money(summary.carriedIn),
-                    color:
-                        MedicalTheme.semantic(context, MedicalTheme.moneyIn)),
-              if (summary.releasedAtMonthEnd > 0)
-                _SummaryLine(
-                    label: 'Released at month-end',
-                    valueKey: const Key('monthEndReleased'),
-                    value: _money(summary.releasedAtMonthEnd),
-                    color:
-                        MedicalTheme.semantic(context, MedicalTheme.moneyIn)),
-              // T145/T151: how much has already been borrowed from the reserve.
-              if (borrowed > 0)
-                _SummaryLine(
-                  label: 'Borrowed so far',
-                  value: formatMinorUnits(borrowed, currency),
-                  valueKey: const Key('borrowedSoFarLine'),
-                  color: MedicalTheme.semantic(context, MedicalTheme.moneyOut),
+                  label: 'Planned',
+                  value: _money(summary.planned),
+                  valueKey: const Key('plannedLine'),
+                  color: MedicalTheme.semantic(context, MedicalTheme.planned),
                 ),
-              // US8: break the returned total into insurance vs expense returns,
-              // shown only when there is something to show.
-              if (summary.insuranceReturned > 0)
                 _SummaryLine(
-                  label: 'Insurance return',
-                  value: _money(summary.insuranceReturned),
-                  valueKey: const Key('insuranceReturnedLine'),
+                  label: 'Returned',
+                  value: _money(summary.moneyReturned),
+                  valueKey: const Key('returnedLine'),
                   color: MedicalTheme.semantic(context, MedicalTheme.moneyIn),
-                  indent: 12,
-                  onTap: onInsuranceReturnTap,
                 ),
-              if (summary.expenseReturned > 0)
-                _SummaryLine(
-                  label: 'Expense returns',
-                  value: _money(summary.expenseReturned),
-                  valueKey: const Key('expenseReturnsLine'),
-                  color: MedicalTheme.semantic(context, MedicalTheme.moneyIn),
-                  indent: 12,
-                  onTap: onExpenseReturnTap,
+                // T145: the money still sitting in profile envelopes.
+                if (summary.setAside > 0)
+                  _SummaryLine(
+                    label: 'Set aside for budgets',
+                    value: _money(summary.setAside),
+                    valueKey: const Key('setAsideLine'),
+                    color:
+                        MedicalTheme.semantic(context, MedicalTheme.moneyOut),
+                  ),
+                if (summary.carryOver > 0)
+                  _SummaryLine(
+                      label: 'Carry still reserved',
+                      value: _money(summary.carryOver),
+                      valueKey: const Key('monthEndCarryReservation'),
+                      color: MedicalTheme.semantic(
+                          context, MedicalTheme.moneyOut)),
+                if (summary.carriedIn > 0)
+                  _SummaryLine(
+                      label: 'Carried in',
+                      valueKey: const Key('monthEndCarriedIn'),
+                      value: _money(summary.carriedIn),
+                      color:
+                          MedicalTheme.semantic(context, MedicalTheme.moneyIn)),
+                if (summary.releasedAtMonthEnd > 0)
+                  _SummaryLine(
+                      label: 'Released at month-end',
+                      valueKey: const Key('monthEndReleased'),
+                      value: _money(summary.releasedAtMonthEnd),
+                      color:
+                          MedicalTheme.semantic(context, MedicalTheme.moneyIn)),
+                // T145/T151: how much has already been borrowed from the reserve.
+                if (borrowed > 0)
+                  _SummaryLine(
+                    label: 'Borrowed so far',
+                    value: formatMinorUnits(borrowed, currency),
+                    valueKey: const Key('borrowedSoFarLine'),
+                    color:
+                        MedicalTheme.semantic(context, MedicalTheme.moneyOut),
+                  ),
+                // US8: break the returned total into insurance vs expense returns,
+                // shown only when there is something to show.
+                if (summary.insuranceReturned > 0)
+                  _SummaryLine(
+                    label: 'Insurance return',
+                    value: _money(summary.insuranceReturned),
+                    valueKey: const Key('insuranceReturnedLine'),
+                    color: MedicalTheme.semantic(context, MedicalTheme.moneyIn),
+                    indent: 12,
+                    onTap: onInsuranceReturnTap,
+                  ),
+                if (summary.expenseReturned > 0)
+                  _SummaryLine(
+                    label: 'Expense returns',
+                    value: _money(summary.expenseReturned),
+                    valueKey: const Key('expenseReturnsLine'),
+                    color: MedicalTheme.semantic(context, MedicalTheme.moneyIn),
+                    indent: 12,
+                    onTap: onExpenseReturnTap,
+                  ),
+                ConversionFootnote(
+                  main: ref.watch(mainCurrencyProvider),
+                  display: currency,
+                  table: ref.watch(rateRegistryProvider).tableFor(
+                        ref.watch(selectedYearMonthProvider),
+                      ),
                 ),
-              ConversionFootnote(
-                main: ref.watch(mainCurrencyProvider),
-                display: currency,
-                table: ref.watch(rateRegistryProvider).tableFor(
-                      ref.watch(selectedYearMonthProvider),
-                    ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

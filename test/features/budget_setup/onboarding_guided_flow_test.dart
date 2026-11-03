@@ -7,6 +7,8 @@ import 'package:budget_buddy/core/database/isar_helper.dart';
 import 'package:budget_buddy/core/models/user_profile.dart';
 import 'package:budget_buddy/core/models/monthly_budget.dart';
 import 'package:budget_buddy/core/models/income_source.dart';
+import 'package:budget_buddy/core/models/salary_cycle.dart';
+import 'package:budget_buddy/core/models/currency_code.dart';
 import 'package:budget_buddy/core/models/change_record.dart';
 import 'package:budget_buddy/core/models/identity.dart';
 import 'package:budget_buddy/core/providers/active_profile_provider.dart';
@@ -17,9 +19,10 @@ import 'package:budget_buddy/core/routing/app_router.dart';
 import 'package:budget_buddy/features/budget_setup/presentation/guided_setup_screen.dart';
 import 'package:budget_buddy/features/budget_setup/providers/budget_setup_provider.dart';
 import 'package:budget_buddy/features/budget_setup/providers/setup_flow_provider.dart';
-import 'package:budget_buddy/features/budget_setup/providers/onboarding_rollout_provider.dart';
 import 'package:budget_buddy/features/budget_setup/repositories/onboarding_repository.dart';
 import 'package:budget_buddy/features/budget_setup/domain/onboarding_state.dart';
+import 'package:budget_buddy/features/budget_setup/domain/onboarding_starting_position.dart';
+import 'package:budget_buddy/features/finance/providers/income_source_providers.dart';
 import 'package:budget_buddy/features/identity/presentation/app_lock_gate.dart';
 import 'package:budget_buddy/features/identity/providers/device_auth_session.dart';
 import 'package:budget_buddy/features/identity/repositories/secret_store.dart';
@@ -36,7 +39,7 @@ final _recordedOwner = StateProvider<UserProfile?>((ref) => null);
 void main() {
   for (final noIncome in [false, true]) {
     testWidgets(
-        'seven-stage actual-router flow, noIncome=$noIncome, preserves real money',
+        'eight-stage actual-router flow, noIncome=$noIncome, preserves real money',
         (tester) async {
       late MedicalTestHarness h;
       await tester.runAsync(() async {
@@ -45,8 +48,17 @@ void main() {
       });
       final locks = InMemoryLockSettingsStore();
       final auth = FakeDeviceAuthenticator();
+      addTearDown(() async {
+        // Isar watchers start a read that completes on the real event loop.
+        // Drain any in-flight read so `close()` is not left waiting on it.
+        for (var i = 0; i < 3; i++) {
+          await tester.runAsync(
+              () => Future<void>.delayed(const Duration(milliseconds: 20)));
+          await tester.pump();
+        }
+        await h.close();
+      });
       final c = ProviderContainer(overrides: [
-        unifiedOnboardingEnabledProvider.overrideWithValue(true),
         setupFlowProvider.overrideWithValue('guided-flow'),
         onboardingStartupProvider.overrideWith(
             (ref) => Stream.value(OnboardingStartup(StartupKind.firstSetup))),
@@ -77,6 +89,27 @@ void main() {
                     : OnboardingIncomeChoice.sources),
             autoSave: true,
             repository: OnboardingRepository(h.isar))),
+        // This flow test exercises navigation. The activation widget and the
+        // starting-position loader have focused tests that use a real database.
+        onboardingActivationSourcesProvider
+            .overrideWith((ref, id) async => const <IncomeSource>[]),
+        salaryCyclesProvider.overrideWith((ref) async => const <SalaryCycle>[]),
+        onboardingStartingPositionProvider.overrideWith((ref, args) async =>
+            const OnboardingStartingPosition(
+                month: '2025-01',
+                currency: CurrencyCode.huf,
+                openingMinor: 100000,
+                confirmedMinor: 0,
+                pendingMinor: 0,
+                skippedMinor: 0,
+                unconfiguredMinor: 0,
+                cancelledMinor: 0,
+                confirmed: [],
+                pending: [],
+                skipped: [],
+                unconfigured: [],
+                future: [],
+                cancelled: [])),
       ]);
       await tester.runAsync(() async {
         await c.read(onboardingStartupProvider.future);
@@ -130,18 +163,18 @@ void main() {
               routerConfig: router,
               builder: (_, child) => AppLockGate(child: child!))));
       await tester.pumpAndSettle();
-      expect(find.text('Step 1 of 7'), findsOneWidget);
+      expect(find.text('Step 1 of 8'), findsOneWidget);
       await tap('Get started');
-      expect(find.text('Step 2 of 7'), findsOneWidget);
+      expect(find.text('Step 2 of 8'), findsOneWidget);
       await tap(
           noIncome ? 'Skip explanations' : 'Continue to phone verification');
       expect(find.text('BudgetBuddy is locked'), findsOneWidget);
       await tap('Unlock');
-      expect(find.text('Step 3 of 7'), findsOneWidget);
+      expect(find.text('Step 3 of 8'), findsOneWidget);
       await tap('Continue');
-      expect(find.text('Step 4 of 7'), findsOneWidget);
+      expect(find.text('Step 4 of 8'), findsOneWidget);
       await tap('Back');
-      expect(find.text('Step 3 of 7'), findsOneWidget);
+      expect(find.text('Step 3 of 8'), findsOneWidget);
       expect(c.read(financialSetupProvider).draft.profile.name, 'Jason');
       await tap('Continue');
       await tap('Continue');
@@ -157,13 +190,23 @@ void main() {
       });
       await tester.pumpAndSettle();
       if (find.text('Unlock').evaluate().isNotEmpty) await tap('Unlock');
-      expect(find.text('Step 5 of 7'), findsOneWidget);
+      // The harness records the new owner only after Save, so this step mounted
+      // before the profile was readable. Re-read it with the screen's own retry
+      // control; in production the active-profile stream supplies it.
+      if (find.text('Reload protection status').evaluate().isNotEmpty) {
+        await tap('Reload protection status');
+      }
+      expect(find.text('Step 5 of 8'), findsOneWidget);
       await tap('Prepare required records');
       await tap('Continue with phone authentication');
       await tap('Continue');
-      expect(find.text('Step 6 of 7'), findsOneWidget);
+      expect(find.text('Step 6 of 8'), findsOneWidget);
+      expect(find.text('Set up this month’s income'), findsOneWidget);
+      await tap('Continue');
+      expect(find.text('Step 7 of 8'), findsOneWidget);
       await tap(noIncome ? 'Skip explanations' : 'Continue');
-      expect(find.text('Step 7 of 7'), findsOneWidget);
+      expect(find.text('Step 8 of 8'), findsOneWidget);
+      expect(find.text('Your starting position'), findsOneWidget);
       await tester.runAsync(() async {
         expect(
             (await OnboardingRepository(h.isar).readStartupState())
@@ -194,10 +237,7 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
       router.dispose();
       c.dispose();
-      await tester.runAsync(() async {
-        await locks.dispose();
-        await h.close();
-      });
+      await locks.dispose();
     });
   }
 
@@ -207,11 +247,11 @@ void main() {
     var verifiedNext = 0;
     await tester.pumpWidget(MaterialApp(
         home: PublicSetupIntroduction(onContinue: () => verifiedNext++)));
-    expect(find.text('Step 1 of 7'), findsOneWidget);
+    expect(find.text('Step 1 of 8'), findsOneWidget);
     await tester.ensureVisible(find.text('Get started'));
     await tester.tap(find.text('Get started'));
     await tester.pumpAndSettle();
-    expect(find.text('Step 2 of 7'), findsOneWidget);
+    expect(find.text('Step 2 of 8'), findsOneWidget);
     await tester.tap(find.text('Opening money and income'));
     await tester.pumpAndSettle();
     expect(find.textContaining('Example'), findsWidgets);

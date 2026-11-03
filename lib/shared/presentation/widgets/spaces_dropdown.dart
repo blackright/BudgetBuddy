@@ -7,6 +7,8 @@ import '../../../core/services/context_navigation.dart';
 import '../../../features/spaces/presentation/space_switcher.dart';
 import '../providers/context_navigation_provider.dart';
 import '../financial_feedback.dart';
+import '../../../features/identity/providers/device_auth_session.dart';
+import '../../../features/pending_actions/providers/pending_actions_providers.dart';
 import 'profile_avatar.dart';
 
 class SpacesDropdown extends ConsumerWidget {
@@ -20,6 +22,10 @@ class SpacesDropdown extends ConsumerWidget {
         ? 'Personal · ${profile?.name ?? 'Loading…'}'
         : 'Shared · ${space?.displayName ?? 'Loading…'}';
     final dismissed = ref.watch(dismissedProfileNamePromptsProvider);
+    final authenticated = ref.watch(deviceAuthSessionProvider).authenticated;
+    final unread = authenticated
+        ? (ref.watch(pendingActionUnreadCountProvider).valueOrNull ?? 0)
+        : 0;
     final prompt = profile != null &&
         (profile.name.trim().isEmpty ||
             profile.name.trim().toLowerCase() == 'user') &&
@@ -81,6 +87,17 @@ class SpacesDropdown extends ConsumerWidget {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.labelLarge)),
+                if (authenticated)
+                  IconButton(
+                    key: const Key('pendingActionsBell'),
+                    tooltip: 'Pending actions',
+                    onPressed: () => context.push('/pending_actions'),
+                    icon: Badge(
+                      isLabelVisible: unread > 0,
+                      label: Text(unread > 99 ? '99+' : '$unread'),
+                      child: const Icon(Icons.notifications_outlined),
+                    ),
+                  ),
               ])),
           if (prompt)
             Padding(

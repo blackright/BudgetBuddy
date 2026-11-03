@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../core/models/currency_code.dart';
+import '../../../../shared/presentation/widgets/app_card.dart';
 import '../../../../shared/presentation/widgets/money_field.dart';
 
 class SetupSurface extends StatelessWidget {
@@ -7,24 +8,12 @@ class SetupSurface extends StatelessWidget {
   final Widget child;
   final bool highlight;
   @override
-  Widget build(BuildContext context) => Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-          color: highlight
-              ? Theme.of(context)
-                  .colorScheme
-                  .primaryContainer
-                  .withValues(alpha: .45)
-              : Theme.of(context).colorScheme.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(
-              color: Theme.of(context)
-                  .colorScheme
-                  .outlineVariant
-                  .withValues(alpha: .6))),
-      child: child);
+  Widget build(BuildContext context) => Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: AppCard(
+          padding: const EdgeInsets.all(20),
+          highlight: highlight,
+          child: child));
 }
 
 /// Controllers hold raw grouped text; exact parsing belongs to the domain,

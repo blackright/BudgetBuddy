@@ -17,6 +17,7 @@ class ExpenseCodec extends SyncCodec<Expense> {
         'syncGuid': value.syncGuid,
         'profileId': value.profileId,
         'yearMonth': value.yearMonth,
+        'cashYearMonth': value.cashYearMonth,
         'type': value.type.name,
         'financialProfileType': value.financialProfileType,
         'financialProfileSyncGuid': value.financialProfileSyncGuid,
@@ -75,5 +76,6 @@ class ExpenseCodec extends SyncCodec<Expense> {
         paidAt: decodeDate(json['paidAt']),
       ))
         ..tags = (json['tags'] as List? ?? []).cast<String>()
+        ..cashYearMonth = json['cashYearMonth'] as String?
         ..syncGuid = decodeGuid(json['syncGuid']);
 }

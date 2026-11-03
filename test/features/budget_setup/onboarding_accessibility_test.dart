@@ -28,13 +28,13 @@ void main() {
 
   for (final brightness in Brightness.values) {
     testWidgets(
-        'seven stages, review and retained error at 320 / 200%: $brightness',
+        'eight stages, review and retained error at 320 / 200%: $brightness',
         (tester) async {
       tester.view.physicalSize = const Size(320, 740);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
-      for (final stage in List.generate(7, (i) => i)) {
+      for (final stage in List.generate(8, (i) => i)) {
         await pumpStage(tester, LayoutController(stage),
             brightness: brightness);
         expect(tester.takeException(), isNull, reason: 'stage $stage');

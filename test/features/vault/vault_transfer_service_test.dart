@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:budget_buddy/core/models/user_profile.dart';
 import 'package:budget_buddy/core/models/income_source.dart';
 import 'package:budget_buddy/core/models/monthly_budget.dart';
+import 'package:budget_buddy/features/engine/providers/continuous_balance_provider.dart';
 import 'package:budget_buddy/features/engine/providers/rate_registry_provider.dart';
 import 'package:budget_buddy/features/vault/models/savings_vault.dart';
 import 'package:budget_buddy/features/vault/models/vault_entry.dart';
@@ -15,6 +16,7 @@ import 'package:budget_buddy/core/models/budget_profile.dart';
 import 'package:budget_buddy/core/models/expense.dart';
 import 'package:budget_buddy/core/models/month_end_run.dart';
 import 'package:budget_buddy/core/models/month_rate_seal.dart';
+import 'package:budget_buddy/core/models/pending_action.dart';
 import 'package:budget_buddy/core/database/isar_helper.dart';
 import 'package:budget_buddy/core/providers/active_profile_provider.dart';
 import 'package:budget_buddy/core/providers/budget_context_provider.dart';
@@ -472,7 +474,8 @@ void main() {
     expect(validVaultSignedAmount(entry.amountMinor), isTrue);
   });
 
-  test('later sweep includes monthly transfer credit once', () async {
+  test('later suggestion includes monthly transfer credit once and moves no money',
+      () async {
     await service.confirm(
         await service.preview(kind: 'deposit', amount: 10000, requestId: 'in'));
     await service.confirm(await service.preview(
@@ -491,12 +494,14 @@ void main() {
     await c.read(activeProfileProvider.future);
     final results = await Future.wait(List.generate(
         3, (_) => c.read(sweepServiceProvider).executeSweepCheck()));
-    expect(results.fold<int>(0, (sum, r) => sum + r.addedMinor), 94000);
+    expect(results.fold<int>(0, (sum, r) => sum + r.addedMinor), 0);
+    final suggestion = (await h.isar.pendingActions.where().findAll()).single;
+    expect(suggestion.expectedAmountMinor, 94000);
+    expect(suggestion.recordRef, '1:2026-10');
     final vault = (await h.isar.savingsVaults.where().findFirst())!;
-    expect(vault.totalMinor,
-        150000); // initial savings 50,000 + monthly income 100,000
+    expect(vault.totalMinor, 56000); // 50,000 saved + 10,000 in - 4,000 out
     expect(await vaultHistoryProblem(h.isar, vault), isNull);
-    expect(await h.isar.vaultEntrys.count(), 4);
+    expect(await h.isar.vaultEntrys.count(), 3);
   });
 
   test(
@@ -532,6 +537,14 @@ void main() {
     await c.read(monthlyExpensesProvider.future);
     await c.read(monthlyReimbursementsProvider.future);
     await c.read(monthlyOriginReimbursementsProvider.future);
+    const balanceKey = (profileId: 1, yearMonth: '2026-10');
+    // Wait for the derived continuous balance before capturing the baseline.
+    for (var i = 0; i < 100; i++) {
+      if (c.read(continuousBalanceProvider(balanceKey)).valueOrNull != null) {
+        break;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
     final bankBefore = c.read(trueAvailableProvider);
     final reserveBefore = c.read(availableReserveProvider);
     final summaryBefore = c.read(monthSummaryProvider);
@@ -546,6 +559,13 @@ void main() {
     await service.confirm(await service.preview(
         kind: 'withdrawal', amount: 4000, requestId: 'out'));
     await observed.future;
+    // The continuous balance is derived asynchronously from the vault ledger;
+    // wait for the final transfer to be reflected before reading it.
+    for (var i = 0; i < 100; i++) {
+      final current = c.read(continuousBalanceProvider(balanceKey)).valueOrNull;
+      if (current?.freeToUseMinor == 74000) break;
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
     expect(c.read(monthlyVaultCreditProvider), -6000);
     expect(c.read(trueAvailableProvider), bankBefore - 6000);
     expect(c.read(availableReserveProvider), reserveBefore - 6000);
@@ -738,5 +758,85 @@ void main() {
     } finally {
       await restored.close(deleteFromDisk: true);
     }
+  });
+
+  group('lazy Vault initialisation', () {
+    setUp(() async {
+      await h.isar.writeTxn(() async {
+        await h.isar.vaultEntrys.clear();
+        await h.isar.savingsVaults.clear();
+        await h.isar.monthlyBudgets.clear();
+        await h.isar.budgetProfiles.clear();
+        await h.isar.expenses.clear();
+        await h.isar.userProfiles.clear();
+        await h.isar.userProfiles.put(UserProfile()
+          ..id = 1
+          ..name = 'Owner'
+          ..primaryCurrency = PrimaryCurrency.huf
+          ..monthlyAvailableAmount = 0
+          ..defaultNetSalary = 100000
+          ..createdAt = DateTime(2026)
+          ..updatedAt = DateTime(2026));
+        await h.isar.monthlyBudgets.put(MonthlyBudget()
+          ..profileId = 1
+          ..yearMonth = '2026-10'
+          ..baseAvailableAmount = 100000
+          ..openingBalanceConfirmed = true
+          ..createdAt = DateTime(2026)
+          ..updatedAt = DateTime(2026));
+      });
+    });
+
+    test('first deposit creates the Vault and a zero opening entry without a sweep',
+        () async {
+      expect(await h.isar.savingsVaults.count(), 0);
+      expect(await h.isar.vaultEntrys.count(), 0);
+
+      final preview = await service.preview(
+          kind: 'deposit', amount: 10000, requestId: 'first');
+      await service.confirm(preview);
+
+      final vault = (await h.isar.savingsVaults.where().findFirst())!;
+      expect(vault.totalMinor, 10000);
+      final entries = await h.isar.vaultEntrys.where().findAll();
+      expect(entries.map((e) => e.kind).toSet(), {'opening', 'deposit'});
+      final opening = entries.singleWhere((e) => e.kind == 'opening');
+      expect(opening.amountMinor, 0);
+      expect(opening.balanceAfterMinor, 0);
+      expect(await vaultHistoryProblem(h.isar, vault), isNull);
+    });
+
+    test('target withdrawal month is validated, stored and replayed', () async {
+      final preview = await service.preview(
+          kind: 'deposit',
+          amount: 10000,
+          requestId: 'planned',
+          targetWithdrawalMonth: '2027-01');
+      expect(preview.targetWithdrawalMonth, '2027-01');
+
+      final entry = await service.confirm(preview);
+      expect(transferDetails(entry)!['targetWithdrawalMonth'], '2027-01');
+
+      // Replaying the same request returns the same entry, not a second write.
+      await service.confirm(preview);
+      expect(await h.isar.vaultEntrys.count(), 2);
+      expect((await h.isar.savingsVaults.where().findFirst())!.totalMinor,
+          10000);
+
+      await expectLater(
+          service.preview(
+              kind: 'deposit',
+              amount: 1,
+              requestId: 'bad-month',
+              targetWithdrawalMonth: '2027-13'),
+          throwsA(isA<VaultTransferException>()));
+      await expectLater(
+          service.preview(
+              kind: 'withdrawal',
+              amount: 1,
+              requestId: 'wrong-kind',
+              targetWithdrawalMonth: '2027-01'),
+          throwsA(isA<VaultTransferException>()));
+    });
   });
 }

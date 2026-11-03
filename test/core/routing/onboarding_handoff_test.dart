@@ -11,7 +11,6 @@ import 'package:budget_buddy/core/providers/active_space_provider.dart';
 import 'package:budget_buddy/core/providers/selected_month_provider.dart';
 import 'package:budget_buddy/core/models/user_profile.dart';
 import 'package:budget_buddy/features/budget_setup/domain/onboarding_startup.dart';
-import 'package:budget_buddy/features/budget_setup/providers/onboarding_rollout_provider.dart';
 import 'package:budget_buddy/features/budget_setup/providers/onboarding_readiness_provider.dart';
 import 'package:budget_buddy/features/medical/providers/medical_providers.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -113,7 +112,6 @@ void main() {
     final startup = StreamController<OnboardingStartup>();
     addTearDown(startup.close);
     final c = ProviderContainer(overrides: [
-      unifiedOnboardingEnabledProvider.overrideWithValue(true),
       onboardingStartupProvider.overrideWith((ref) => startup.stream)
     ]);
     addTearDown(c.dispose);

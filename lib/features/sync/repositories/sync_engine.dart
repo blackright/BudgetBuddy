@@ -135,8 +135,9 @@ class SyncEngine {
     'Expense': 4,
     'ExpensePurchase': 4,
     'ExpenseEvidenceChunk': 5,
-    'Reimbursement': 5,
+    'Reimbursement': 7,
     'MedicalBill': 5,
+    'MedicalApproval': 6,
   };
 
   /// Registers/overwrites a trusted author key (after a pairing confirms it).
@@ -798,6 +799,7 @@ class SyncEngine {
         .findAll();
     if (!members.any((m) => m.authorIdentityId != null) &&
         record.entityType != 'MonthEndRun' &&
+        record.entityType != 'MedicalApproval' &&
         record.entityType != 'AuditEvent' &&
         record.entityType != 'Merchant' &&
         record.entityType != 'ExpenseEvidenceChunk' &&

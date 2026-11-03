@@ -15,6 +15,7 @@ import 'package:budget_buddy/core/providers/active_profile_provider.dart';
 import 'package:budget_buddy/core/models/user_profile.dart';
 import 'package:budget_buddy/core/models/monthly_budget.dart';
 import 'package:budget_buddy/features/engine/providers/rate_registry_provider.dart';
+import 'package:budget_buddy/core/providers/selected_month_provider.dart';
 
 void main() {
   late MedicalTestHarness h;
@@ -40,6 +41,7 @@ void main() {
     WidgetTester tester, {
     required UserProfile profile,
     required MonthlyBudget budget,
+    ThemeData? theme,
   }) {
     final router = GoRouter(routes: [
       GoRoute(path: '/', builder: (_, __) => const AddExpenseScreen())
@@ -54,7 +56,7 @@ void main() {
         expenseSearchMerchantsProvider.overrideWith((ref) => Stream.value([])),
         mainCurrencyProvider.overrideWithValue(profile.primaryCurrency.code),
       ],
-      child: MaterialApp.router(routerConfig: router),
+      child: MaterialApp.router(routerConfig: router, theme: theme),
     );
   }
 
@@ -68,10 +70,12 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.text('Add Expense'), findsOneWidget);
+    expect(find.text('Add expense'), findsOneWidget);
     expect(find.text('What did you buy?'), findsOneWidget);
     expect(find.text('Amount'), findsOneWidget);
-    expect(find.text('Save Expense'), findsOneWidget);
+    expect(find.text('No budget — free-to-use'), findsOneWidget);
+    expect(find.text('Paid from free-to-use (no budget)'), findsOneWidget);
+    expect(find.text('Save expense'), findsOneWidget);
   });
 
   testWidgets('defaults the currency to the profile main, not the budget',
@@ -142,6 +146,29 @@ void main() {
     expect(
         tester.widget<TextField>(amountField()).controller!.text, '1,000,000');
   });
+
+  testWidgets('shows the month the chosen date will be recorded in',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(pump(tester,
+        profile: makeProfile(PrimaryCurrency.usd), budget: makeBudget()));
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(find.text('When'), 300,
+        scrollable: find.byType(Scrollable).first);
+    expect(find.text('Past dates are filed into their own month.'),
+        findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.calendar_month_outlined));
+    await tester.pumpAndSettle();
+    final today = DateTime.now();
+    await tester.tap(find.text('${today.day}').last);
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Recorded in ${monthLabel(currentYearMonth(today))}'),
+        findsOneWidget);
+  });
+
   testWidgets(
       'an oversized amount cannot produce a wrapped negative conversion hint',
       (tester) async {
@@ -156,4 +183,63 @@ void main() {
     expect(find.text('Amount is too large.'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('saving to the unbudgeted destination asks for confirmation',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(pump(tester,
+        profile: makeProfile(PrimaryCurrency.usd), budget: makeBudget()));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+        find.byWidgetPredicate((w) =>
+            w is TextField && w.decoration?.labelText == 'What did you buy?'),
+        'Coffee');
+    await tester.enterText(amountField(), '1,000');
+    final merchant = find.byWidgetPredicate(
+        (w) => w is TextField && w.decoration?.labelText == 'Merchant *');
+    await tester.ensureVisible(merchant);
+    await tester.enterText(merchant, 'Cafe');
+    await tester.ensureVisible(find.byIcon(Icons.calendar_month_outlined));
+    await tester.tap(find.byIcon(Icons.calendar_month_outlined));
+    await tester.pumpAndSettle();
+    final today = DateTime.now();
+    await tester.tap(find.text('${today.day}').last);
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Save expense'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(find.byKey(const Key('destinationGuardDialog')), findsOneWidget);
+    await tester.tapAt(const Offset(5, 5));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byKey(const Key('destinationGuardDialog')), findsNothing);
+  });
+
+  for (final dark in [false, true]) {
+    testWidgets(
+        'the form stays reachable at 320 wide and 200% text, dark=$dark',
+        (tester) async {
+      tester.view.physicalSize = const Size(640, 1800);
+      tester.view.devicePixelRatio = 2;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      tester.platformDispatcher.textScaleFactorTestValue = 2;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+      await tester.pumpWidget(pump(tester,
+          profile: makeProfile(PrimaryCurrency.usd),
+          budget: makeBudget(),
+          theme: ThemeData(
+              brightness: dark ? Brightness.dark : Brightness.light)));
+      await tester.pumpAndSettle();
+
+      final error = tester.takeException();
+      expect(error, isNull);
+      expect(find.byKey(const Key('saveExpenseButton')), findsOneWidget);
+      expect(find.text('Save expense'), findsOneWidget);
+    });
+  }
 }

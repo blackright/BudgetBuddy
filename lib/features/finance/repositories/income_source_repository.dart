@@ -23,6 +23,8 @@ class IncomeSourceRepository {
   AuditRepository get audit =>
       AuditRepository(_isar, recorder: recorder, actorId: actorId);
 
+  Future<IncomeSource?> getById(int id) => _isar.incomeSources.get(id);
+
   Future<List<IncomeSource>> getAll(
       {int? profileId, int? sharedSpaceId}) async {
     if (profileId != null) {

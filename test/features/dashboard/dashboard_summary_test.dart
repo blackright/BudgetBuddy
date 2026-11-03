@@ -45,6 +45,7 @@ void main() {
     double expenseReturned = 0,
     double? openingBalance = 1000,
     bool usesOverriddenIncome = false,
+    double expectedIncome = 0,
   }) {
     return MonthSummary(
       yearMonth: '2026-01',
@@ -59,6 +60,7 @@ void main() {
       insuranceReturned: insuranceReturned,
       expenseReturned: expenseReturned,
       openingBalance: openingBalance,
+      expectedIncome: expectedIncome,
     );
   }
 
@@ -140,6 +142,15 @@ void main() {
       for (final size in allSizes) {
         expect(heroSize, greaterThanOrEqualTo(size));
       }
+    });
+
+    testWidgets('expected salary is shown separately from confirmed income',
+        (tester) async {
+      await pumpCard(tester, value: makeSummary(expectedIncome: 1000));
+
+      expect(find.text('Confirmed income'), findsOneWidget);
+      expect(find.text('Expected salary'), findsOneWidget);
+      expect(find.byKey(const Key('expectedIncomeLine')), findsOneWidget);
     });
 
     testWidgets('SC-001: the hero shows income minus payments plus returns',

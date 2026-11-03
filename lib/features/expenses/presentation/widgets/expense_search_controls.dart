@@ -75,65 +75,86 @@ class _ExpenseSearchControlsState extends ConsumerState<ExpenseSearchControls> {
     }
 
     return Padding(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          TextField(
-              controller: text,
-              onChanged: actions.type,
-              decoration: InputDecoration(
-                  isDense: true,
-                  filled: true,
-                  fillColor: Theme.of(context).colorScheme.surfaceContainerLow,
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none),
-                  hintText: 'Search expenses...',
-                  prefixIcon: const Icon(Icons.search),
-                  suffixIcon: IconButton(
-                      tooltip: 'Clear search',
-                      icon: const Icon(Icons.close),
-                      onPressed: () {
-                        text.clear();
-                        actions.type('');
-                      }))),
-          Row(children: [
-            TextButton.icon(
-                onPressed: () async {
-                  ref.invalidate(expenseSearchProfileNamesProvider);
-                  await showModalBottomSheet<void>(
-                      context: context,
-                      isScrollControlled: true,
-                      useSafeArea: true,
-                      builder: (_) => const ExpenseFiltersSheet());
-                },
-                icon: const Icon(Icons.filter_list),
-                label: const Text('Filters')),
-            const Spacer(),
-            TextButton(
-                onPressed: () {
-                  actions.clear();
-                  text.clear();
-                },
-                child: const Text('Clear all'))
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+                color: Theme.of(context)
+                    .colorScheme
+                    .outlineVariant
+                    .withValues(alpha: 0.5)),
+          ),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextField(
+                controller: text,
+                onChanged: actions.type,
+                decoration: InputDecoration(
+                    isDense: true,
+                    filled: true,
+                    fillColor:
+                        Theme.of(context).colorScheme.surfaceContainerLow,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 12),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide.none),
+                    hintText: 'Search expenses...',
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: text.text.isEmpty
+                        ? null
+                        : IconButton(
+                            tooltip: 'Clear search',
+                            icon: const Icon(Icons.close),
+                            onPressed: () {
+                              text.clear();
+                              actions.type('');
+                            }))),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                FilledButton.tonalIcon(
+                    onPressed: () async {
+                      ref.invalidate(expenseSearchProfileNamesProvider);
+                      await showModalBottomSheet<void>(
+                          context: context,
+                          isScrollControlled: true,
+                          useSafeArea: true,
+                          showDragHandle: true,
+                          builder: (_) => const ExpenseFiltersSheet());
+                    },
+                    icon: const Icon(Icons.tune, size: 18),
+                    label: const Text('Filters')),
+                TextButton(
+                    onPressed: () {
+                      actions.clear();
+                      text.clear();
+                    },
+                    child: const Text('Clear all'))
+              ],
+            ),
+            if (labels.isNotEmpty)
+              ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 96),
+                  child: SingleChildScrollView(
+                      child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Wrap(spacing: 6, runSpacing: 0, children: [
+                            for (final entry in labels.entries)
+                              InputChip(
+                                  label: Text(entry.value),
+                                  onDeleted: () => entry.key == 'savedBatch'
+                                      ? actions.clearSavedBatch()
+                                      : actions.apply(
+                                          state.filters.without(entry.key)))
+                          ])))),
           ]),
-          if (labels.isNotEmpty)
-            ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 96),
-                child: SingleChildScrollView(
-                    child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Wrap(spacing: 6, runSpacing: 0, children: [
-                          for (final entry in labels.entries)
-                            InputChip(
-                                label: Text(entry.value),
-                                onDeleted: () => entry.key == 'savedBatch'
-                                    ? actions.clearSavedBatch()
-                                    : actions.apply(
-                                        state.filters.without(entry.key)))
-                        ])))),
-        ]));
+        ));
   }
 }
 

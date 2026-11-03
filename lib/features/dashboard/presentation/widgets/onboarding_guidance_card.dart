@@ -5,6 +5,9 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/providers/active_profile_provider.dart';
 import '../../../../core/providers/active_space_provider.dart';
 import '../../../../core/providers/active_budget_provider.dart';
+import '../../../../core/providers/budget_context_provider.dart';
+import '../../../../core/database/isar_helper.dart';
+import '../../../../core/services/continuous_balance_service.dart';
 import '../../../../core/providers/selected_month_provider.dart';
 import '../../../../core/services/income_aggregation_service.dart';
 import '../../../budget_setup/domain/onboarding_state.dart';
@@ -13,6 +16,8 @@ import '../../../finance/providers/income_source_providers.dart';
 import '../../../finance/providers/profile_providers.dart';
 import '../../../finance/presentation/opening_balance_sheet.dart';
 import '../../../engine/providers/true_available_provider.dart';
+import '../../../engine/providers/continuous_balance_provider.dart';
+import '../budget_status.dart';
 
 class SetupSuggestion {
   const SetupSuggestion(this.title, this.detail, this.route, this.icon);
@@ -24,13 +29,19 @@ final onboardingGuidanceEligibleProvider = Provider<bool>((ref) {
   final startup = ref.watch(onboardingStartupProvider);
   final owner = ref.watch(activeProfileProvider);
   final saved = startup.valueOrNull?.state;
-  return !startup.hasError &&
-      !startup.isLoading &&
-      !owner.hasError &&
-      !owner.isLoading &&
-      ref.watch(activeSpaceIdProvider) == null &&
-      saved?.stage == OnboardingStage.completed &&
-      saved?.committed?.profileId == owner.valueOrNull?.id;
+  if (startup.hasError ||
+      startup.isLoading ||
+      owner.hasError ||
+      owner.isLoading ||
+      ref.watch(activeSpaceIdProvider) != null) {
+    return false;
+  }
+  // Unified onboarding records a completed setup. A legacy or imported profile
+  // has no saved setup state; guide it from its real month instead of leaving
+  // only a text banner. Nothing is written until the user confirms an action.
+  if (saved == null) return owner.valueOrNull != null;
+  return saved.stage == OnboardingStage.completed &&
+      saved.committed?.profileId == owner.valueOrNull?.id;
 });
 final onboardingGuidanceProvider =
     Provider<AsyncValue<List<SetupSuggestion>>>((ref) {
@@ -56,13 +67,29 @@ final onboardingGuidanceProvider =
   final budget = month.valueOrNull,
       owner = ref.watch(activeProfileProvider).valueOrNull;
   if (budget == null || owner == null) return const AsyncLoading();
+  final context = ref.watch(budgetContextProvider);
+  final continuous = context.isShared ||
+          context.profileId == null ||
+          IsarHelper.maybeInstance == null
+      ? null
+      : ref
+          .watch(continuousBalanceProvider(
+              (profileId: context.profileId!, yearMonth: budget.yearMonth)))
+          .valueOrNull;
+  final needsOpening =
+      continuous?.needsOpeningReview ?? !budget.openingBalanceConfirmed;
   final suggestions = <SetupSuggestion>[];
-  if (!budget.openingBalanceConfirmed) {
-    suggestions.add(const SetupSuggestion(
-        'Confirm opening balance',
-        'Record what was in your bank at the start of this month. Unknown is different from a confirmed zero.',
+  if (needsOpening) {
+    final status = continuous?.status;
+    suggestions.add(SetupSuggestion(
+        status?.title ?? 'Confirm opening balance',
+        continuous?.reviewReason ??
+            status?.guidance ??
+            'Record what was in your bank at the start of this month. Unknown is different from a confirmed zero.',
         'opening',
-        Icons.account_balance_outlined));
+        status == BalanceChainStatus.needsReview
+            ? Icons.warning_amber_outlined
+            : Icons.account_balance_outlined));
   }
   final rows = sources.requireValue;
   if (rows.isEmpty) {

@@ -18,7 +18,6 @@ import 'core/routing/router_providers.dart';
 import 'features/engine/providers/sweep_provider.dart';
 import 'features/engine/seal_coordinator.dart';
 import 'features/budget_setup/domain/onboarding_automation_guard.dart';
-import 'features/budget_setup/providers/onboarding_rollout_provider.dart';
 import 'core/providers/budget_context_provider.dart';
 import 'features/identity/presentation/app_lock_gate.dart';
 import 'features/security/providers/lock_lifecycle_observer.dart';
@@ -29,6 +28,7 @@ import 'features/sync/repositories/sync_coordinator.dart';
 
 import 'core/services/reminder_notification_service.dart';
 import 'features/vault/providers/vault_providers.dart';
+import 'features/pending_actions/providers/pending_actions_providers.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -47,12 +47,12 @@ void main() async {
     ),
   );
 
-  // The vault sweep runs after the first frame — never before it — because it
-  // needs the rate registry and the active profile hydrated. It runs again on
-  // resume so a month that rolled over while the app was backgrounded is swept
-  // without waiting for a cold start.
-  final sweepObserver = _SweepLifecycleObserver(container);
-  WidgetsBinding.instance.addObserver(sweepObserver);
+  // The savings suggestion check runs after the first frame - never before it -
+  // because it needs the rate registry and the active profile hydrated. It runs
+  // again on resume so a month that rolled over while the app was backgrounded
+  // is reviewed without waiting for a cold start. It never moves money.
+  final suggestionObserver = _SavingsSuggestionObserver(container);
+  WidgetsBinding.instance.addObserver(suggestionObserver);
 
   // The seal pass runs after the first frame so it never blocks startup
   // (invariant I3), and again whenever the app resumes (FR-004).
@@ -68,7 +68,7 @@ void main() async {
   final lockObserver = LockLifecycleObserver(container);
   WidgetsBinding.instance.addObserver(lockObserver);
   WidgetsBinding.instance.addPostFrameCallback((_) {
-    sweepObserver.run();
+    suggestionObserver.run();
     sealObserver.run();
     syncObserver.run();
     // Warm up notifications only once the first frame is up, so the Android
@@ -77,18 +77,50 @@ void main() async {
   });
 }
 
-/// Runs the end-of-month Savings Vault sweep on cold start and resume.
+/// True only when a personal profile or shared space is available.
 ///
-/// Fire-and-forget: the sweep is personal and best-effort, and a paused sweep
-/// surfaces its reason in the vault screen rather than blocking the UI.
-class _SweepLifecycleObserver extends WidgetsBindingObserver {
-  _SweepLifecycleObserver(this._container);
+/// Startup observers must not read [budgetContextProvider] on a fresh install
+/// or while the profile stream is still loading; that provider deliberately
+/// throws when there is nothing to resolve.
+bool _hasContext(ProviderContainer container) {
+  try {
+    return hasResolvableBudgetContext(container);
+  } catch (_) {
+    return false;
+  }
+}
+
+/// Runs the read-only Savings Vault suggestion check on cold start and resume.
+///
+/// Fire-and-forget: it is personal and best-effort, and a skipped or paused
+/// month surfaces its reason in the Vault screen rather than blocking the UI.
+/// It only creates Pending Actions; it never deposits or withdraws.
+class _SavingsSuggestionObserver extends WidgetsBindingObserver {
+  _SavingsSuggestionObserver(this._container);
 
   final ProviderContainer _container;
 
   void run() {
-    _container.invalidate(vaultNowProvider);
-    unawaited(_container.read(sweepServiceProvider).executeSweepCheck());
+    if (!_hasContext(_container)) return;
+    try {
+      _container.invalidate(vaultNowProvider);
+    } catch (_) {
+      // A provider rebuild can fail while the profile is changing; retry on resume.
+    }
+    unawaited(_run());
+  }
+
+  Future<void> _run() async {
+    try {
+      await _container.read(sweepServiceProvider).executeSweepCheck();
+    } catch (_) {
+      // Best-effort; the Vault screen explains a skipped month.
+    }
+    try {
+      await _container.read(pendingActionsSynthesisProvider.future);
+    } catch (_) {
+      // Pending Actions can synthesize again when its screen opens.
+    }
   }
 
   @override
@@ -104,11 +136,24 @@ class _SealLifecycleObserver extends WidgetsBindingObserver {
   final ProviderContainer _container;
 
   void run() {
+    if (!_hasContext(_container)) return;
+    unawaited(_run());
+  }
+
+  Future<void> _run() async {
     // Fire-and-forget: a failed fetch downgrades labels, never blocks the UI.
-    unawaited(
-      _container.read(sealCoordinatorProvider).runSealPass(DateTime.now()),
-    );
-    unawaited(_snapToCurrentMonth());
+    try {
+      await _container
+          .read(sealCoordinatorProvider)
+          .runSealPass(DateTime.now());
+    } catch (_) {
+      // Retried on the next resume.
+    }
+    try {
+      await _snapToCurrentMonth();
+    } catch (_) {
+      // A missing or changing profile leaves the selected month untouched.
+    }
   }
 
   /// US8: if the app comes back after the month rolled over, show the current
@@ -126,7 +171,7 @@ class _SealLifecycleObserver extends WidgetsBindingObserver {
     if (await preserveAutomaticSetupMonth(IsarHelper.instance,
         profileId: context.profileId,
         isShared: context.isShared,
-        allowDraft: _container.read(unifiedOnboardingEnabledProvider))) {
+        allowDraft: true)) {
       return;
     }
     if (_container.read(selectedYearMonthProvider) != selected ||
@@ -240,6 +285,9 @@ class MyApp extends ConsumerWidget {
 
   Widget _buildRouterApp(BuildContext context, WidgetRef ref) {
     final router = ref.watch(routerProvider);
+    ReminderNotificationService().onPendingActionTap = (payload) {
+      if (payload != null && payload.isNotEmpty) router.go(payload);
+    };
     final activeProfileAsync = ref.watch(activeProfileProvider);
     final AppFontFamily familySelection =
         activeProfileAsync.valueOrNull?.fontFamily ?? AppFontFamily.system;

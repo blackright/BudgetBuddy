@@ -98,9 +98,12 @@ void main() {
     addTearDown(existing.dispose);
     await existing.read(activeProfileProvider.future);
     await existing.read(sweepServiceProvider).executeSweepCheck();
+    // The check only suggests; it never creates a Vault or writes an entry.
     expect(
         await h.isar.savingsVaults.filter().profileIdEqualTo(other.id).count(),
-        1);
+        0);
+    expect(await h.isar.vaultEntrys.filter().profileIdEqualTo(other.id).count(),
+        0);
     await h.isar.writeTxn(() async {
       final settings = (await h.isar.appSettings.get(1))!;
       settings.onboardingStateJson = '{broken';

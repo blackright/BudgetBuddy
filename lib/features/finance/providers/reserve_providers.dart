@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/models/currency_code.dart';
 import '../../../core/models/expense.dart';
 import '../../../core/services/profile_spending_service.dart';
+import '../../../core/services/medical_receipt_booking_service.dart';
 import '../../../core/providers/active_profile_provider.dart';
 import '../../../core/providers/active_space_provider.dart';
 import '../../../core/providers/budget_context_provider.dart';
@@ -12,6 +13,8 @@ import '../providers/profile_providers.dart';
 import '../../engine/currency_resolution.dart';
 import '../../engine/providers/rate_registry_provider.dart';
 import '../../engine/providers/true_available_provider.dart';
+import '../../engine/providers/continuous_balance_provider.dart';
+import '../../../core/services/continuous_balance_service.dart';
 import '../../vault/providers/vault_providers.dart';
 
 /// The money left in the reserve after everything is set aside.
@@ -28,6 +31,19 @@ import '../../vault/providers/vault_providers.dart';
 /// happens on the way (FR-003, T113).
 final availableReserveProvider = Provider<int>((ref) {
   final context = ref.watch(budgetContextProvider);
+  if (!context.isShared && context.profileId != null) {
+    final continuous = ref
+        .watch(continuousBalanceProvider(
+            (profileId: context.profileId!, yearMonth: context.yearMonth)))
+        .valueOrNull;
+    if (continuous?.status == BalanceChainStatus.needsReview) {
+      throw FormatException(
+          continuous!.reviewReason ?? 'The balance chain needs review.');
+    }
+    if (continuous != null && continuous.status == BalanceChainStatus.intact) {
+      return continuous.freeToUseMinor;
+    }
+  }
   final income = ref.watch(resolvedIncomeProvider).amount;
   final currency = _contextCurrency(ref);
 
@@ -67,6 +83,10 @@ final availableReserveProvider = Provider<int>((ref) {
   final settlement = ref.watch(monthEndBalanceProvider);
   final int vaultCredit = ref.watch(monthlyVaultCreditProvider);
   return incomeMinor +
+      medicalRecoveryForMonth(returns, context.yearMonth,
+          convert: (r) => reimbursementToDisplay(r, currency, table,
+                  accountingCurrency: currency)
+              .minorUnits) +
       vaultCredit +
       settlement.incoming +
       settlement.released -

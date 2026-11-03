@@ -1,3 +1,4 @@
+import '../../../core/models/medical_approval.dart';
 import '../../../core/models/merchant.dart';
 import '../../../core/models/expense_purchase.dart';
 import '../../../core/models/expense_evidence_chunk.dart';
@@ -109,6 +110,12 @@ class SyncIdTranslator {
             ?.id;
       case 'MedicalBill':
         return (await isar.medicalBills
+                .filter()
+                .syncGuidEqualTo(entitySyncGuid)
+                .findFirst())
+            ?.id;
+      case 'MedicalApproval':
+        return (await isar.medicalApprovals
                 .filter()
                 .syncGuidEqualTo(entitySyncGuid)
                 .findFirst())

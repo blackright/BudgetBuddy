@@ -1,6 +1,12 @@
 import 'package:budget_buddy/core/database/schema_migrations.dart';
 import 'package:budget_buddy/core/models/change_record.dart';
 import 'package:budget_buddy/core/models/context_kind.dart';
+import 'package:budget_buddy/core/models/allocation.dart';
+import 'package:budget_buddy/core/models/income_receipt_group.dart';
+import 'package:budget_buddy/core/models/month_end_run.dart';
+import 'package:budget_buddy/core/models/pending_action.dart';
+import 'package:budget_buddy/features/vault/models/savings_vault.dart';
+import 'package:budget_buddy/features/vault/models/vault_entry.dart';
 import 'package:budget_buddy/core/models/expense.dart';
 import 'package:budget_buddy/core/models/live_rate_set.dart';
 import 'package:budget_buddy/core/models/medical_bill.dart';
@@ -339,6 +345,118 @@ void main() {
       await harness.runMigrations();
 
       expect(await harness.isar.changeRecords.count(), 0);
+    });
+  });
+
+  group('step 42 PendingAction', () {
+    test('is additive and leaves existing financial rows byte-identical',
+        () async {
+      // A database this build inherits: already stamped at 41, with real money
+      // history. Step 42 must only add an empty collection.
+      await writeSchemaVersion(harness.isar, 41);
+
+      final group = IncomeReceiptGroup()
+        ..profileId = 1
+        ..sourceGuid = 'source-1'
+        ..cycleGuid = 'cycle-1'
+        ..actualDate = DateTime(2026, 10, 25)
+        ..timezone = 'Europe/Budapest'
+        ..totalMinor = 5000000
+        ..currency = 'HUF'
+        ..destinationMonth = '2026-11'
+        ..fingerprint = 'fingerprint-1'
+        ..operationIdentity = 'operation-1'
+        ..createdAt = DateTime(2026, 10, 25)
+        ..updatedAt = DateTime(2026, 10, 25);
+      final vault = SavingsVault()
+        ..profileId = 1
+        ..totalMinor = 100000
+        ..currency = 'HUF'
+        ..lastSweepYearMonth = '2026-09'
+        ..updatedAt = DateTime(2026, 9);
+      final entry = VaultEntry()
+        ..operationKey = 'vault:1:opening'
+        ..profileId = 1
+        ..kind = 'opening'
+        ..yearMonth = '2026-09'
+        ..amountMinor = 100000
+        ..currency = 'HUF'
+        ..balanceAfterMinor = 100000
+        ..createdAt = DateTime(2026, 9);
+      final allocation = Allocation()
+        ..syncGuid = 'allocation-1'
+        ..profileId = 1
+        ..yearMonth = '2026-10'
+        ..budgetProfileId = 3
+        ..amount = 250000
+        ..currency = 'HUF'
+        ..date = DateTime(2026, 10, 1)
+        ..createdAt = DateTime(2026, 10, 1);
+      final run = MonthEndRun()
+        ..syncGuid = 'run-1'
+        ..profileId = 1
+        ..contextGuid = 'personal:1'
+        ..yearMonth = '2026-09'
+        ..destinationMonth = '2026-10'
+        ..currency = 'HUF'
+        ..reportJson = '{"version":1}'
+        ..fingerprint = 'run-fingerprint'
+        ..actor = 'profile:1'
+        ..createdAt = DateTime(2026, 9, 30);
+
+      await harness.isar.writeTxn(() async {
+        await harness.isar.incomeReceiptGroups.put(group);
+        await harness.isar.savingsVaults.put(vault);
+        await harness.isar.vaultEntrys.put(entry);
+        await harness.isar.allocations.put(allocation);
+        await harness.isar.monthEndRuns.put(run);
+      });
+
+      final beforeGroups = await harness.isar.incomeReceiptGroups
+          .buildQuery<dynamic>()
+          .exportJson();
+      final beforeVaults =
+          await harness.isar.savingsVaults.buildQuery<dynamic>().exportJson();
+      final beforeEntries =
+          await harness.isar.vaultEntrys.buildQuery<dynamic>().exportJson();
+      final beforeAllocations =
+          await harness.isar.allocations.buildQuery<dynamic>().exportJson();
+      final beforeRuns =
+          await harness.isar.monthEndRuns.buildQuery<dynamic>().exportJson();
+
+      expect(await harness.isar.pendingActions.count(), 0);
+
+      await harness.runMigrations();
+
+      expect(await readSchemaVersion(harness.isar), 42);
+      expect(await harness.isar.pendingActions.count(), 0,
+          reason: 'no attention item is inferred from history');
+      expect(
+          await harness.isar.incomeReceiptGroups
+              .buildQuery<dynamic>()
+              .exportJson(),
+          beforeGroups);
+      expect(
+          await harness.isar.savingsVaults.buildQuery<dynamic>().exportJson(),
+          beforeVaults);
+      expect(
+          await harness.isar.vaultEntrys.buildQuery<dynamic>().exportJson(),
+          beforeEntries);
+      expect(
+          await harness.isar.allocations.buildQuery<dynamic>().exportJson(),
+          beforeAllocations);
+      expect(await harness.isar.monthEndRuns.buildQuery<dynamic>().exportJson(),
+          beforeRuns);
+    });
+
+    test('runs once and is idempotent', () async {
+      await writeSchemaVersion(harness.isar, 41);
+
+      await harness.runMigrations();
+      await harness.runMigrations();
+
+      expect(await readSchemaVersion(harness.isar), 42);
+      expect(await harness.isar.pendingActions.count(), 0);
     });
   });
 }

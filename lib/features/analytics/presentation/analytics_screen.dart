@@ -48,10 +48,94 @@ class AnalyticsScreen extends ConsumerWidget {
                 icon: const Icon(Icons.summarize_outlined))
           ]),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
-          const Center(child: LensSwitch()),
-          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
+                  Theme.of(context).colorScheme.surface,
+                ],
+              ),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .primary
+                      .withValues(alpha: 0.18)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .primary
+                        .withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(13),
+                  ),
+                  child: Icon(Icons.insights_outlined,
+                      color: Theme.of(context).colorScheme.primary, size: 24),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Money at a glance',
+                          style: TextStyle(
+                              fontSize: 18, fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 3),
+                      Text(
+                        'Spending, cash flow and shared contribution in one place.',
+                        style: TextStyle(
+                            fontSize: 12,
+                            height: 1.3,
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .outlineVariant
+                      .withValues(alpha: 0.5)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('VIEW',
+                    style: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.8,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                const SizedBox(height: 8),
+                const Center(child: LensSwitch()),
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
+          const _AnalyticsSection(
+              icon: Icons.pie_chart_outline, title: 'Spending'),
+          const SizedBox(height: 8),
           SpendingChart(series: spending, size: ChartSize.full),
           const SizedBox(height: 12),
           CategoryChart(
@@ -77,14 +161,20 @@ class AnalyticsScreen extends ConsumerWidget {
               }
             },
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 18),
+          const _AnalyticsSection(
+              icon: Icons.account_balance_wallet_outlined, title: 'Cash flow'),
+          const SizedBox(height: 8),
           AvailableTrendChart(series: availableTrend, size: ChartSize.full),
           const SizedBox(height: 12),
           InsuranceChart(series: insurance, size: ChartSize.full),
           // The shared-only charts render only while a space is active
           // (FR-011, contracts/chart-ui.md §3).
           if (isShared) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: 18),
+            const _AnalyticsSection(
+                icon: Icons.groups_outlined, title: 'Shared space'),
+            const SizedBox(height: 8),
             SharedVsPersonalChart(
               series: ref.watch(sharedVsPersonalSeriesProvider),
               size: ChartSize.full,
@@ -95,9 +185,42 @@ class AnalyticsScreen extends ConsumerWidget {
               size: ChartSize.full,
             ),
           ],
-          const SizedBox(height: 24),
         ],
       ),
+    );
+  }
+}
+
+class _AnalyticsSection extends StatelessWidget {
+  const _AnalyticsSection({required this.icon, required this.title});
+
+  final IconData icon;
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        Container(
+          width: 30,
+          height: 30,
+          decoration: BoxDecoration(
+            color: scheme.primary.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(9),
+          ),
+          child: Icon(icon, size: 17, color: scheme.primary),
+        ),
+        const SizedBox(width: 9),
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w800,
+            color: scheme.onSurface,
+          ),
+        ),
+      ],
     );
   }
 }

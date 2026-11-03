@@ -1,20 +1,27 @@
+import '../../../core/logging/app_logger.dart';
+import '../../../core/services/medical_bill_basis.dart';
+import '../../../core/services/medical_bill_review_service.dart';
+import '../../../core/models/medical_approval.dart';
+import '../../../core/models/monthly_budget.dart';
+import '../../../core/models/reconciliation_snapshot.dart';
+import '../../../core/services/receipt_snapshot_repository.dart';
+import '../../../core/models/user_profile.dart';
+import '../../../core/services/legacy_medical_reimbursement_guard.dart';
 import '../../finance/repositories/audit_repository.dart';
 import 'package:isar/isar.dart';
 
-import '../../../core/models/currency_code.dart';
 import '../../../core/models/expense.dart';
 import '../../../core/models/insurance_profile.dart';
 import '../../../core/models/medical_bill.dart';
+import '../../../core/models/medical_settlement_event.dart';
 import '../../../core/models/medical_service_type.dart';
-import '../../../core/models/money.dart';
 import '../../../core/network/rate_types.dart';
 import '../../../core/providers/budget_context_provider.dart';
 import '../../../core/providers/selected_month_provider.dart';
 import '../../../core/services/reminder_notification_service.dart';
-import '../../engine/currency_resolution.dart';
-import '../../engine/expense_delta.dart';
 import '../../engine/providers/rate_registry_provider.dart';
 import '../../expenses/models/reimbursement.dart';
+import '../../../core/services/medical_receipt_service.dart';
 import '../../spaces/repositories/space_write_guard.dart';
 import '../../sync/repositories/sync_recorder.dart';
 
@@ -131,6 +138,139 @@ class MedicalRepository {
   /// behaviour and its tests are unchanged. Personal rows (a `null`
   /// `sharedSpaceId`) are never exchanged, so the recorder no-ops for them.
   final SyncRecorder? _syncRecorder;
+
+  MedicalBillReviewService get billReviewService =>
+      MedicalBillReviewService(_isar, recorder: _syncRecorder);
+  Future<MedicalBillReview> reviewBill(
+          {required MedicalBill proposed,
+          required ExpenseStatus status,
+          required String reason,
+          required bool Function() isAccessCurrent,
+          bool remove = false,
+          DateTime? paymentDate}) =>
+      billReviewService.preview(
+          proposed: proposed,
+          status: status,
+          reason: reason,
+          actorId: _actingProfileId ?? proposed.profileId ?? 0,
+          isAccessCurrent: isAccessCurrent,
+          remove: remove,
+          paymentDate: paymentDate);
+
+  Future<void> applyBillReview(
+      {required MedicalBillReview review,
+      required String operationKey,
+      required bool Function() isAccessCurrent}) async {
+    if (_actingProfileId != null && _actingProfileId != review.actorId) {
+      throw const MedicalReceiptException('wrongOwner');
+    }
+    await _guardWrite(null, review.proposed.yearMonth);
+    await _isar.writeTxn(() => billReviewService.applyInTransaction(
+        review: review,
+        operationKey: operationKey,
+        isAccessCurrent: isAccessCurrent,
+        persist: (bill, status) async {
+          if (review.remove) {
+            final expense = (await _isar.expenses.get(bill.linkedExpenseId!))!;
+            expense.status = ExpenseStatus.cancelled;
+            await AuditRepository(_isar,
+                    recorder: _syncRecorder, actorId: review.actorId)
+                .put(_isar.expenses, expense, id: expense.id, type: 'Expense');
+            return;
+          }
+          _validateBill(bill);
+          final month = await _isar.monthlyBudgets
+              .filter()
+              .profileIdEqualTo(review.actorId)
+              .and()
+              .sharedSpaceIdIsNull()
+              .and()
+              .yearMonthEqualTo(bill.yearMonth)
+              .findFirst();
+          final owner = await _isar.userProfiles.get(review.actorId);
+          if (month == null || owner == null) {
+            throw const MedicalReceiptException('missingMonth');
+          }
+          final context = MedicalBillContext(
+              profileId: review.actorId,
+              budgetId: month.id,
+              yearMonth: bill.yearMonth,
+              primaryCurrency: owner.primaryCurrency.name,
+              rateTable: _rateRegistry?.tableFor(bill.yearMonth));
+          final expense = await _syncLinkedExpense(bill, context,
+              status: status,
+              paymentDate: review.paymentDate,
+              preservePaymentDate: true);
+          bill.linkedExpenseId = expense.id;
+          await _putBillRecorded(bill);
+        }));
+  }
+
+  /// Recheck stored approval/receipt references under the same financial lock.
+  Future<void> _ordinaryEditAllowed(MedicalBill bill,
+      {ExpenseStatus? status, bool deleting = false}) async {
+    final current = await _isar.medicalBills.get(bill.id);
+    if (current == null || current.sharedSpaceId != null) return;
+    final activities = await _isar.medicalClaimActivitys
+        .filter()
+        .billGuidEqualTo(current.syncGuid)
+        .findAll();
+    if (activities.any((a) => a.kind == 'removed')) {
+      throw const MedicalReceiptException('billRemoved');
+    }
+    if (deleting && activities.any((a) => a.kind != 'created')) {
+      throw const MedicalReceiptException('billReviewRequired');
+    }
+    final approval = await _isar.medicalApprovals
+        .filter()
+        .billGuidEqualTo(current.syncGuid)
+        .findFirst();
+    if (approval == null) return;
+    final expense = current.linkedExpenseId == null
+        ? null
+        : await _isar.expenses.get(current.linkedExpenseId!);
+    if (deleting ||
+        medicalBillBasis(current) != medicalBillBasis(bill) ||
+        current.profileId != bill.profileId ||
+        current.sharedSpaceId != bill.sharedSpaceId ||
+        current.linkedExpenseId != bill.linkedExpenseId ||
+        current.syncGuid != bill.syncGuid ||
+        current.reimbursedAmount != bill.reimbursedAmount ||
+        current.fundsImpact != bill.fundsImpact ||
+        current.state != bill.state ||
+        (status != null && expense != null && status != expense.status)) {
+      throw const MedicalReceiptException('billReviewRequired');
+    }
+  }
+
+  MedicalReceiptService get receiptService =>
+      MedicalReceiptService(_isar, recorder: _syncRecorder);
+
+  /// Read-only presentation batch; never creates or patches a financial row.
+  Future<MedicalHistoryBatch> readBillViewData(ContextRef context,
+          {required bool Function() isAccessCurrent}) =>
+      receiptService.historyBatch(
+          context: context,
+          actorId: _actingProfileId ??
+              (throw const MedicalReceiptException('accessChanged')),
+          isAccessCurrent: isAccessCurrent);
+
+  /// Owner-scoped, cross-month batch for the action inbox.
+  Future<MedicalHistoryBatch> readInboxViewData(ContextRef context,
+          {required bool Function() isAccessCurrent}) =>
+      receiptService.historyInboxBatch(
+          context: context,
+          actorId: _actingProfileId ??
+              (throw const MedicalReceiptException('accessChanged')),
+          isAccessCurrent: isAccessCurrent);
+
+  Future<MedicalReceiptHistory> receiptHistory(int billId,
+          {required bool Function() isAccessCurrent}) =>
+      receiptService.history(
+          billId: billId,
+          actorId: _actingProfileId ??
+              (throw const MedicalReceiptException('accessChanged')),
+          isAccessCurrent: isAccessCurrent);
 
   Future<void> _guardWrite(int? sharedSpaceId, String yearMonth) async {
     await _writeGuard?.assertSharedMoneyWrite(
@@ -270,19 +410,6 @@ class MedicalRepository {
           .sortByName()
           .findAll();
 
-  /// The single [Reimbursement] attached to a bill's expense, if any.
-  Future<Reimbursement?> getReimbursementForBill(MedicalBill bill) async {
-    final expenseId = bill.linkedExpenseId;
-    if (expenseId == null) return null;
-    final rows = await _isar.reimbursements
-        .filter()
-        .expenseIdEqualTo(expenseId)
-        .findAll();
-    if (rows.isEmpty) return null;
-    rows.sort((a, b) => a.id.compareTo(b.id));
-    return rows.first;
-  }
-
   // ---------------------------------------------------------------------------
   // Bill lifecycle
   // ---------------------------------------------------------------------------
@@ -297,7 +424,13 @@ class MedicalRepository {
     MedicalBill bill,
     MedicalBillContext context, {
     ExpenseStatus? status,
+    bool Function()? isAccessCurrent,
   }) async {
+    AppLogger.medicalRepo(
+        'SAVE_BILL_START id=${bill.id} syncGuid=${bill.syncGuid} profileId=${bill.profileId} sharedSpaceId=${bill.sharedSpaceId} yearMonth=${bill.yearMonth} state=${bill.state} paymentMethod=${bill.paymentMethod} billedAmount=${bill.billedAmount} patientSharePercent=${bill.patientSharePercent} currency=${bill.currency} linkedExpenseId=${bill.linkedExpenseId} fundsImpact=${bill.fundsImpact}');
+    if (isAccessCurrent != null && !isAccessCurrent()) {
+      throw const MedicalReceiptException('accessChanged');
+    }
     await _guardWrite(context.sharedSpaceId, context.yearMonth);
     _validateBill(bill);
 
@@ -313,53 +446,99 @@ class MedicalRepository {
       ..patientSharePercent = bill.patientSharePercent.clamp(0.0, 100.0);
 
     await _isar.writeTxn(() async {
+      if (isAccessCurrent != null && !isAccessCurrent()) {
+        throw const MedicalReceiptException('accessChanged');
+      }
+      final creating = await _isar.medicalBills.get(bill.id) == null;
+      AppLogger.medicalRepo('SAVE_BILL_CREATING=$creating id=${bill.id}');
+      await _ordinaryEditAllowed(bill, status: status);
+      // A2 (improvements plan): never leave a bill in a month that has no
+      // budget row, so the later reviewed-correction flow can always read a
+      // receipt snapshot. Provision an unconfirmed month if needed; never
+      // invent an opening balance or mark it confirmed.
+      await _ensureBillMonth(bill, context);
+      final approvalCount = !creating && bill.sharedSpaceId == null
+          ? await _isar.medicalApprovals
+              .filter()
+              .billGuidEqualTo(bill.syncGuid)
+              .count()
+          : 0;
+      if (!creating && bill.sharedSpaceId == null && approvalCount > 0) {
+        AppLogger.medicalRepo(
+            'SAVE_BILL_DOC_ONLY_EDIT id=${bill.id} approvalCount=$approvalCount');
+        // Document-only edits must not re-sync or invent an old payment date.
+        await _putBillRecorded(bill);
+        if (isAccessCurrent != null && !isAccessCurrent()) {
+          throw const MedicalReceiptException('accessChanged');
+        }
+        return;
+      }
+      AppLogger.medicalRepo(
+          'SAVE_BILL_SYNCING_EXPENSE id=${bill.id} status=$status');
       final expense = await _syncLinkedExpense(bill, context, status: status);
+      AppLogger.medicalRepo(
+          'SAVE_BILL_SYNCED_EXPENSE id=${bill.id} expenseId=${expense.id} expenseAmount=${expense.amount} expenseStatus=${expense.status}');
       bill.linkedExpenseId = expense.id;
       await _putBillRecorded(bill);
+      if (creating &&
+          bill.sharedSpaceId == null &&
+          bill.paymentMethod == MedicalPaymentMethod.insurerPaid &&
+          (bill.state == MedicalBillState.paid ||
+              bill.state == MedicalBillState.waiting)) {
+        // T053: one atomic creation-time fact. Paid answers are confirmed;
+        // waiting is an explicit pending fact, never guessed from legacy data.
+        final confirmed = bill.state == MedicalBillState.paid;
+        final settlement = MedicalSettlementEvent()
+          ..profileId = bill.profileId
+          ..billGuid = bill.syncGuid
+          ..kind = MedicalSettlementKind.insurerProviderSettlement
+          ..confirmed = confirmed
+          ..effectiveDate =
+              (expense.paidAt ?? bill.serviceDate ?? DateTime.now()).toUtc()
+          ..recordedAt = DateTime.now().toUtc()
+          ..currency = expense.currencyCode?.code
+          ..amountMinor = bill.insurerPaidAmount
+          ..basisJson = medicalBillBasis(bill)
+          ..expenseId = expense.id
+          ..expenseGuid = expense.syncGuid
+          ..reason = ''
+          ..actorId = _actingProfileId ?? bill.profileId!
+          ..operationIdentity =
+              'medical-settlement:provider:${bill.syncGuid}:create'
+          ..inputFingerprint = medicalBillBasis(bill);
+        await AuditRepository(_isar,
+                recorder: _syncRecorder,
+                actorId: _actingProfileId ?? bill.profileId)
+            .put(_isar.medicalSettlements, settlement,
+                id: settlement.id,
+                type: 'MedicalSettlementEvent',
+                derived: false);
+      }
+      if (creating && bill.sharedSpaceId == null) {
+        final row = MedicalClaimActivity()
+          ..billGuid = bill.syncGuid
+          ..profileId = bill.profileId!
+          ..yearMonth = bill.yearMonth
+          ..kind = 'created'
+          ..reason = ''
+          ..currency = bill.currency
+          ..recordedAt = DateTime.now().toUtc()
+          ..actorId = _actingProfileId ?? bill.profileId!
+          ..operationIdentity = 'medical-created:${bill.syncGuid}'
+          ..inputFingerprint = bill.syncGuid;
+        await AuditRepository(_isar,
+                recorder: _syncRecorder,
+                actorId: _actingProfileId ?? bill.profileId)
+            .put(_isar.medicalClaimActivitys, row,
+                id: row.id, type: 'MedicalClaimActivity', derived: false);
+      }
+      if (isAccessCurrent != null && !isAccessCurrent()) {
+        throw const MedicalReceiptException('accessChanged');
+      }
     });
+    AppLogger.medicalRepo(
+        'SAVE_BILL_DONE id=${bill.id} linkedExpenseId=${bill.linkedExpenseId} fundsImpact=${bill.fundsImpact} state=${bill.state}');
     return bill;
-  }
-
-  /// Marks the bill as paid (or back to planned) for the provider.
-  ///
-  /// Returns the exact engine delta so the UI can explain the budget movement.
-  Future<ExpenseDelta> setBillPaidToProvider(
-    MedicalBill bill,
-    MedicalBillContext context, {
-    required bool paid,
-  }) async {
-    final expenseId = bill.linkedExpenseId;
-    if (expenseId == null) {
-      throw StateError('Bill ${bill.id} has no linked expense to pay.');
-    }
-    await _guardWrite(
-        bill.sharedSpaceId ?? context.sharedSpaceId, bill.yearMonth);
-    final stored = await _isar.expenses.get(expenseId);
-    if (stored == null) {
-      throw StateError('Linked expense $expenseId no longer exists.');
-    }
-    final before = ExpenseSnapshot.of(stored);
-
-    stored
-      ..status = paid ? ExpenseStatus.paid : ExpenseStatus.planned
-      ..paidAt = paid ? (stored.paidAt ?? DateTime.now()) : null;
-
-    await _isar.writeTxn(() async {
-      await AuditRepository(_isar,
-              recorder: _syncRecorder, actorId: _actingProfileId)
-          .put(_isar.expenses, stored, id: stored.id, type: 'Expense');
-    });
-    return ExpenseDelta.between(
-      before: before,
-      after: ExpenseSnapshot.of(stored),
-      toPrimary: (s) {
-        final code = s.currency;
-        final primary = CurrencyCode.tryParse(context.primaryCurrency);
-        if (code == null || primary == null) return 0.0;
-        return toDisplay(Money(s.amount, code), primary, context.rateTable)
-            .majorValue;
-      },
-    );
   }
 
   /// Validation gate for a state change (T2, FR-044).
@@ -398,6 +577,8 @@ class MedicalRepository {
     MedicalBillContext? context,
     int? reimbursedAmount,
   }) async {
+    AppLogger.medicalRepo(
+        'SET_BILL_STATE_START id=${bill.id} from=${bill.state} to=$state linkedExpenseId=${bill.linkedExpenseId} fundsImpact=${bill.fundsImpact} paymentMethod=${bill.paymentMethod}');
     await _guardWrite(
         bill.sharedSpaceId ?? context?.sharedSpaceId, bill.yearMonth);
     _validateTransition(bill, state);
@@ -414,10 +595,16 @@ class MedicalRepository {
     }
 
     await _isar.writeTxn(() async {
+      await _ordinaryEditAllowed(copyMedicalBill(bill)..state = state,
+          status: state == MedicalBillState.planned
+              ? ExpenseStatus.planned
+              : ExpenseStatus.paid);
       // T4 — a bill that is no longer finished, or is rejected, must not keep a
       // reimbursement.
       final losesReimbursement = state == MedicalBillState.rejected ||
           bill.state == MedicalBillState.finished;
+      AppLogger.medicalRepo(
+          'SET_BILL_STATE_TXN id=${bill.id} losesReimbursement=$losesReimbursement');
       if (losesReimbursement) {
         await _clearReimbursementFor(bill);
         bill.reimbursedAmount = 0;
@@ -428,13 +615,17 @@ class MedicalRepository {
 
       final syncContext = context ?? await _contextForExistingBill(bill);
       if (syncContext != null) {
-        await _syncLinkedExpense(bill, syncContext);
+        final expense = await _syncLinkedExpense(bill, syncContext);
+        AppLogger.medicalRepo(
+            'SET_BILL_STATE_SYNCED id=${bill.id} expenseId=${expense.id} expenseAmount=${expense.amount} expenseStatus=${expense.status}');
       }
     });
 
     if (state == MedicalBillState.paid || state == MedicalBillState.finished) {
       await _clearReminder(bill);
     }
+    AppLogger.medicalRepo(
+        'SET_BILL_STATE_DONE id=${bill.id} state=${bill.state}');
   }
 
   /// Switches a bill between insurer-paid and self-paid (FR-041).
@@ -461,6 +652,7 @@ class MedicalRepository {
         bill.sharedSpaceId ?? context?.sharedSpaceId, bill.yearMonth);
 
     await _isar.writeTxn(() async {
+      await _ordinaryEditAllowed(copyMedicalBill(bill)..paymentMethod = method);
       final becomesInsurerPaid = method == MedicalPaymentMethod.insurerPaid;
       if (becomesInsurerPaid) {
         await _clearReimbursementFor(bill);
@@ -488,6 +680,9 @@ class MedicalRepository {
       MedicalBill bill, int totalReimbursed) async {
     await _guardWrite(bill.sharedSpaceId, bill.yearMonth);
     await _isar.writeTxn(() async {
+      final current = await _isar.medicalBills.get(bill.id);
+      if (current == null) throw StateError('Medical bill no longer exists.');
+      await LegacyMedicalReimbursementGuard.forBill(_isar, current);
       bill.reimbursedAmount = totalReimbursed;
       // A finished bill stays finished: correcting the payout amount must not
       // silently reopen a settled bill.
@@ -513,6 +708,8 @@ class MedicalRepository {
     required int amount,
     DateTime? date,
   }) async {
+    AppLogger.medicalRepo(
+        'LOG_REIMBURSEMENT_START id=${bill.id} amount=$amount date=$date paymentMethod=${bill.paymentMethod} canBeReimbursed=${bill.canBeReimbursed} linkedExpenseId=${bill.linkedExpenseId}');
     if (amount <= 0) {
       throw ArgumentError.value(
         amount,
@@ -545,6 +742,9 @@ class MedicalRepository {
     }
 
     await _isar.writeTxn(() async {
+      final current = await _isar.medicalBills.get(bill.id);
+      if (current == null) throw StateError('Medical bill no longer exists.');
+      await LegacyMedicalReimbursementGuard.forBill(_isar, current);
       final existing = await _isar.reimbursements
           .filter()
           .expenseIdEqualTo(expenseId)
@@ -591,17 +791,37 @@ class MedicalRepository {
         ..reimbursedAmount = amount
         ..state = MedicalBillState.finished;
       await _putBillRecorded(bill);
+      AppLogger.medicalRepo(
+          'LOG_REIMBURSEMENT_TXN_DONE id=${bill.id} reimbursementId=${reimbursement.id} originYearMonth=${reimbursement.originYearMonth}');
     });
+    AppLogger.medicalRepo(
+        'LOG_REIMBURSEMENT_DONE id=${bill.id} reimbursedAmount=${bill.reimbursedAmount} state=${bill.state}');
   }
 
   /// Sets or clears the follow-up reminder date for a pending claim (FR-009).
-  Future<void> setFollowUpDate(MedicalBill bill, DateTime? date) async {
+  Future<void> setFollowUpDate(MedicalBill bill, DateTime? date,
+      {bool Function()? isAccessCurrent}) async {
+    final access = isAccessCurrent ?? () => true;
+    if (!access()) throw const MedicalReceiptException('accessChanged');
     if (date != null && date.isBefore(DateTime.now())) {
       throw ArgumentError('Follow up date must be in the future.');
     }
     await _isar.writeTxn(() async {
+      final current = await _isar.medicalBills.get(bill.id);
+      if (current == null) {
+        throw StateError('Medical bill no longer exists.');
+      }
+      if (isAccessCurrent != null) {
+        await receiptService.historyInTransaction(
+            billId: current.id,
+            actorId: _actingProfileId ?? bill.profileId ?? 0,
+            isAccessCurrent: access,
+            write: true);
+      }
+      current.followUpDate = date;
+      await _putBillRecorded(current);
       bill.followUpDate = date;
-      await _putBillRecorded(bill);
+      if (!access()) throw const MedicalReceiptException('accessChanged');
     });
 
     if (date != null) {
@@ -616,22 +836,40 @@ class MedicalRepository {
     }
   }
 
-  Future<void> setCalendarEventId(MedicalBill bill, String? eventId) async {
+  Future<void> setCalendarEventId(MedicalBill bill, String? eventId,
+      {bool Function()? isAccessCurrent}) async {
+    final access = isAccessCurrent ?? () => true;
+    if (!access()) throw const MedicalReceiptException('accessChanged');
     await _isar.writeTxn(() async {
-      bill.calendarEventId = eventId;
-      await _putBillRecorded(bill);
+      final current = await _isar.medicalBills.get(bill.id);
+      if (current == null) {
+        throw StateError('Medical bill no longer exists.');
+      }
+      if (isAccessCurrent != null) {
+        await receiptService.historyInTransaction(
+            billId: current.id,
+            actorId: _actingProfileId ?? bill.profileId ?? 0,
+            isAccessCurrent: access,
+            write: true);
+      }
+      current.calendarEventId = eventId;
+      await _putBillRecorded(current);
+      if (!access()) throw const MedicalReceiptException('accessChanged');
     });
   }
 
   Future<void> _clearReminder(MedicalBill bill) async {
-    if (bill.followUpDate != null) {
-      await _isar.writeTxn(() async {
-        bill.followUpDate = null;
-        // Optionally, clear calendarEventId here if we are removing the event too,
-        // but removing device_calendar event requires device_calendar plugin.
-        // The UI or a dedicated service should probably handle device_calendar deletion.
-        await _putBillRecorded(bill);
-      });
+    var cleared = false;
+    await _isar.writeTxn(() async {
+      final current = await _isar.medicalBills.get(bill.id);
+      if (current?.followUpDate == null) {
+        return;
+      }
+      current!.followUpDate = null;
+      await _putBillRecorded(current);
+      cleared = true;
+    });
+    if (cleared) {
       await ReminderNotificationService().cancelReminder(bill.id);
     }
   }
@@ -643,9 +881,15 @@ class MedicalRepository {
   /// Throws [ReimbursedBillDeletionException] unless [force] is set, so the
   /// caller has to warn the user first.
   Future<void> deleteBill(int billId, {bool force = false}) async {
+    AppLogger.medicalRepo('DELETE_BILL_START id=$billId force=$force');
     final bill = await _isar.medicalBills.get(billId);
-    if (bill == null) return;
+    if (bill == null) {
+      AppLogger.medicalRepo('DELETE_BILL_NOT_FOUND id=$billId');
+      return;
+    }
 
+    AppLogger.medicalRepo(
+        'DELETE_BILL_EXISTING id=${bill.id} profileId=${bill.profileId} sharedSpaceId=${bill.sharedSpaceId} yearMonth=${bill.yearMonth} linkedExpenseId=${bill.linkedExpenseId} reimbursedAmount=${bill.reimbursedAmount}');
     await _guardWrite(bill.sharedSpaceId, bill.yearMonth);
 
     if (!force && bill.reimbursedAmount > 0) {
@@ -653,6 +897,7 @@ class MedicalRepository {
     }
 
     await _isar.writeTxn(() async {
+      await _ordinaryEditAllowed(bill, deleting: true);
       await _clearReimbursementFor(bill);
       final expenseId = bill.linkedExpenseId;
       if (expenseId != null) {
@@ -671,6 +916,7 @@ class MedicalRepository {
     });
 
     await ReminderNotificationService().cancelReminder(billId);
+    AppLogger.medicalRepo('DELETE_BILL_DONE id=$billId');
   }
 
   // ---------------------------------------------------------------------------
@@ -1108,6 +1354,8 @@ class MedicalRepository {
     MedicalBill bill,
     MedicalBillContext context, {
     ExpenseStatus? status,
+    DateTime? paymentDate,
+    bool preservePaymentDate = false,
   }) async {
     final providerName = await _providerNameFor(bill.providerId);
     final title = providerName ?? 'Medical Bill';
@@ -1156,15 +1404,24 @@ class MedicalRepository {
       // M4 — a planned bill belongs to the planned pool, never to payments.
       // Derived from the bill's state rather than inherited from the stored row,
       // otherwise moving back to `planned` would leave the expense still paid.
-      ..status = status ??
+      // Medical bills never write partial-reimbursement states; those remain
+      // read-only history from older releases.
+      ..status = switch (status ??
           (bill.state == MedicalBillState.planned
               ? ExpenseStatus.planned
-              : ExpenseStatus.paid)
+              : ExpenseStatus.paid)) {
+        ExpenseStatus.partiallyReimbursed ||
+        ExpenseStatus.reimbursed =>
+          ExpenseStatus.paid,
+        final value => value,
+      }
       ..date = bill.serviceDate ?? DateTime.now()
       ..notes = _notesFor(bill);
 
     if (expense.status == ExpenseStatus.paid) {
-      expense.paidAt ??= DateTime.now();
+      expense.paidAt = paymentDate?.toUtc() ??
+          expense.paidAt ??
+          (preservePaymentDate ? null : DateTime.now());
     } else {
       expense.paidAt = null;
     }
@@ -1181,7 +1438,63 @@ class MedicalRepository {
     if (bill.paymentMethod == MedicalPaymentMethod.selfPaid) {
       return 'Self-paid';
     }
-    return '${bill.patientSharePercent.toStringAsFixed(0)}% patient share';
+    return '${bill.patientSharePercent.toStringAsFixed(0)}% your share';
+  }
+
+  /// Provisions an unconfirmed `MonthlyBudget` row for [bill]'s owning month when
+  /// none exists, so a bill can never be saved into a month that cannot later be
+  /// reconciled. Never marks a month confirmed and never invents an opening
+  /// balance (A2, improvements plan). Idempotent: reuses an existing row.
+  Future<void> _ensureBillMonth(
+      MedicalBill bill, MedicalBillContext context) async {
+    if (bill.yearMonth.isEmpty) return;
+    final isShared = context.sharedSpaceId != null;
+    final rows = await _isar.monthlyBudgets
+        .filter()
+        .yearMonthEqualTo(bill.yearMonth)
+        .findAll();
+    final owned = rows.firstWhere(
+      (m) => isShared
+          ? m.sharedSpaceId == context.sharedSpaceId
+          : (m.profileId == context.profileId && m.sharedSpaceId == null),
+      orElse: () => MonthlyBudget()
+        ..profileId = isShared ? null : context.profileId
+        ..sharedSpaceId = isShared ? context.sharedSpaceId : null
+        ..yearMonth = bill.yearMonth
+        ..baseAvailableAmount = 0
+        ..openingBalanceConfirmed = false
+        ..createdAt = DateTime.now()
+        ..updatedAt = DateTime.now(),
+    );
+    final alreadyExists = rows.any((m) => isShared
+        ? m.sharedSpaceId == context.sharedSpaceId
+        : (m.profileId == context.profileId && m.sharedSpaceId == null));
+    if (!alreadyExists) {
+      await AuditRepository(_isar,
+              recorder: _syncRecorder, actorId: _actingProfileId)
+          .put(_isar.monthlyBudgets, owned,
+              id: owned.id, type: 'MonthlyBudget');
+    }
+  }
+
+  /// Read-only receipt-readiness blockers for [bill]'s owning month, used by the
+  /// detail screen to surface month setup problems before the user is asked for
+  /// a reason (A1, improvements plan). Propagates failures instead of treating
+  /// access/actor problems so the UI can keep readiness unknown.
+  Future<List<ReceiptBlocker>> monthBlockersFor(MedicalBill bill) async {
+    final actor = _actingProfileId ?? bill.profileId ?? 0;
+    if (actor <= 0 || bill.yearMonth.isEmpty) {
+      throw const MedicalReceiptException('accessChanged');
+    }
+    final isShared = bill.sharedSpaceId != null;
+    final context = isShared
+        ? ContextRef.shared(
+            spaceId: bill.sharedSpaceId!, yearMonth: bill.yearMonth)
+        : ContextRef.personal(
+            profileId: bill.profileId!, yearMonth: bill.yearMonth);
+    final snap = await ReceiptSnapshotRepository(_isar)
+        .read(context: context, actorId: actor, isAccessCurrent: () => true);
+    return snap.blockers;
   }
 
   /// Rebuilds the context needed to re-sync a bill's expense when only the bill
@@ -1216,6 +1529,9 @@ class MedicalRepository {
         .expenseIdEqualTo(expenseId)
         .findAll();
     if (rows.isEmpty) return;
+    if (rows.any((r) => r.medicalReceiptJson != null)) {
+      throw const MedicalReceiptException('useIncomeSources');
+    }
     await _isar.reimbursements.deleteAll(rows.map((r) => r.id).toList());
     for (final row in rows) {
       await _syncRecorder?.recordReimbursementRemoved(row);

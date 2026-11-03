@@ -1,3 +1,6 @@
+import 'package:budget_buddy/features/finance/presentation/income_sources_screen.dart';
+import 'package:budget_buddy/features/finance/providers/income_source_providers.dart';
+import 'package:budget_buddy/core/providers/selected_month_provider.dart';
 import 'package:budget_buddy/core/models/currency_code.dart';
 import 'package:budget_buddy/core/models/medical_bill.dart';
 import 'package:budget_buddy/core/providers/active_budget_provider.dart';
@@ -122,4 +125,32 @@ void main() {
     expect(find.text('Health & Insurance'), findsOneWidget);
     expect(find.text('Medical Bills Placeholder'), findsNothing);
   });
+  for (final query in ['42', 'invalid', '-1']) {
+    testWidgets(
+        'D1 incoming route validates optional bill focus $query without opening a command',
+        (tester) async {
+      final local =
+          createAppRouter(initialLocation: '/income_sources?bill=$query');
+      addTearDown(local.dispose);
+      await tester.pumpWidget(ProviderScope(overrides: [
+        budgetContextProvider.overrideWithValue(
+            ContextRef.personal(profileId: 1, yearMonth: '2026-10')),
+        activeProfileProvider.overrideWith((ref) => Stream.value(null)),
+        activeSpaceProvider.overrideWith((ref) => Stream.value(null)),
+        activeBudgetProvider.overrideWith((ref) => Stream.value(null)),
+        activeContextCanEditProvider.overrideWithValue(false),
+        incomeSourcesProvider.overrideWith((ref) => Stream.value([])),
+        selectedYearMonthProvider.overrideWith((ref) => '2026-10'),
+        rateRegistryProvider.overrideWithValue(RateTableRegistry()),
+      ], child: MaterialApp.router(routerConfig: local)));
+      await tester.pumpAndSettle();
+      expect(
+          tester
+              .widget<IncomeSourcesScreen>(find.byType(IncomeSourcesScreen))
+              .focusedBillId,
+          query == '42' ? 42 : null);
+      expect(find.text('Confirm salary'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+  }
 }

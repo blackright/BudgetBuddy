@@ -1,3 +1,10 @@
+import 'medical_messages.dart' show medicalReceiptMessage;
+import 'medical_access_check.dart';
+import 'medical_bill_review_dialog.dart';
+import 'medical_collapsible_section.dart';
+import 'reminder_picker_sheet.dart';
+import '../../../core/services/medical_bill_basis.dart';
+import '../../../core/services/medical_receipt_service.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -19,9 +26,7 @@ import '../../../shared/presentation/widgets/money_field.dart';
 import '../../settings/providers/settings_provider.dart';
 import '../providers/medical_providers.dart';
 import 'medical_theme.dart';
-
-const String _newProviderSentinel = '__new_provider__';
-const String _newMemberSentinel = '__new_member__';
+import 'medical_copy.dart';
 
 /// Add / edit form for a single [MedicalBill] (T010).
 ///
@@ -31,14 +36,9 @@ class MedicalBillForm extends ConsumerStatefulWidget {
   const MedicalBillForm({
     super.key,
     this.existingBill,
-    this.initialPaidToProvider = false,
   });
 
   final MedicalBill? existingBill;
-
-  /// Provider-payment state lives on the linked expense, not the bill, so it
-  /// is handed in by the route once the join is resolved.
-  final bool initialPaidToProvider;
 
   @override
   ConsumerState<MedicalBillForm> createState() => _MedicalBillFormState();
@@ -67,12 +67,7 @@ class MedicalBillFormRoute extends ConsumerWidget {
             message: 'This medical bill no longer exists.',
           );
         }
-        final statuses = ref.watch(medicalExpenseStatusesProvider).value ??
-            const <int, ExpenseStatus>{};
-        return MedicalBillForm(
-          existingBill: bill,
-          initialPaidToProvider: isPaidToProvider(bill, statuses),
-        );
+        return MedicalBillForm(existingBill: bill);
       },
       loading: () => const _RouteMessage(
         title: 'Medical Bill',
@@ -114,14 +109,17 @@ class _RouteMessage extends StatelessWidget {
 class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
   final _formKey = GlobalKey<FormState>();
   final _amountController = TextEditingController();
-  final _patientShareController = TextEditingController();
-  final _providerNameController = TextEditingController();
-  final _memberNameController = TextEditingController();
-  final _reimbursementController = TextEditingController();
+  final _coverageController = TextEditingController();
 
   int? _selectedProviderId;
   int? _selectedFamilyMemberId;
   int? _serviceTypeId;
+
+  /// Entries created inline in this form, kept locally so they are selectable
+  /// immediately even before the directory stream refreshes.
+  final List<MedicalProvider> _createdProviders = [];
+  final List<FamilyMember> _createdMembers = [];
+  final List<MedicalServiceType> _createdServiceTypes = [];
 
   /// FR-041: the only two methods. Changes what the bill costs the budget.
   MedicalPaymentMethod _paymentMethod = MedicalPaymentMethod.selfPaid;
@@ -129,24 +127,34 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
   /// The bill document. Optional either way (FR-047).
   String? _billPhotoPath;
 
-  /// The insurer's reply. Self-paid bills only (FR-047, D2).
+  /// The insurer's reply. Edit only: new bills never attach one (PRD §12.2).
   String? _insurerReplyPath;
 
   DateTime _serviceDate = DateTime.now();
+  DateTime? _followUpDate;
 
-  /// FR-055: the bill belongs to its service month unless the user overrides it.
-  String? _monthOverride;
+  /// The month whose budget the bill affects. Always explicit and preserved,
+  /// even for historical bills (PRD §6.2, AC-13).
+  DateTime _budgetPeriod = DateTime(DateTime.now().year, DateTime.now().month);
+  bool _budgetPeriodTouched = false;
 
-  /// FR-053: `planned` keeps a bill out of payments entirely.
-  MedicalBillState _state = MedicalBillState.waiting;
+  /// Creation always opens `planned`; editing keeps the stored lifecycle state
+  /// because payment and status changes live in Bill Management (D2).
+  MedicalBillState _state = MedicalBillState.planned;
 
   CurrencyCode? _selectedCurrency;
 
-  /// FR-009: the patient-share field is a percentage — select-all-on-focus but
-  /// no comma grouping.
-  late final FocusNode _patientShareFocus;
+  /// The coverage field is a percentage — select-all-on-focus but no grouping.
+  late final FocusNode _coverageFocus;
 
   bool _saving = false;
+  bool _confirmingSave = false;
+  bool _coverageEdited = false;
+  bool _coverageDefaultApplied = false;
+  String? _saveError;
+  bool get _personal => widget.existingBill != null
+      ? widget.existingBill!.sharedSpaceId == null
+      : ref.read(activeSpaceIdProvider) == null;
 
   bool get _isEditing => widget.existingBill != null;
 
@@ -154,25 +162,23 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
   /// the form mirrors the detail screen's lock when opened on such a bill.
   bool get _isLocked => widget.existingBill?.state == MedicalBillState.finished;
 
-  /// Only a self-paid bill can be reimbursed (R-1).
-  bool get _showReimbursementField =>
-      _paymentMethod == MedicalPaymentMethod.selfPaid &&
-      (_isEditing || _state == MedicalBillState.finished);
-
   @override
   void initState() {
     super.initState();
-    _patientShareFocus = selectAllOnFocus(_patientShareController);
-    final bill = widget.existingBill;
-    if (bill == null) {
-      _patientShareController.text = '20';
+    _coverageFocus = selectAllOnFocus(_coverageController);
+    if (widget.existingBill == null) {
+      _state = MedicalBillState.planned;
+      _followUpDate = _defaultReminder();
+      _coverageController.text = _formatPercent(_defaultCoverage());
+      _budgetPeriod = DateTime(DateTime.now().year, DateTime.now().month);
       return;
     }
+    final bill = widget.existingBill!;
     _amountController.text = NumberFormat('#,##0.00', 'en_US').format(
       Money(bill.billedAmount, bill.currencyCode ?? CurrencyCode.huf)
           .majorValue,
     );
-    _patientShareController.text = bill.patientSharePercent.toStringAsFixed(0);
+    _coverageController.text = _formatPercent(bill.insuranceCoveragePercent);
     _selectedProviderId = bill.providerId;
     _selectedFamilyMemberId = bill.familyMemberId;
     _serviceTypeId = bill.serviceTypeId;
@@ -180,22 +186,46 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
     _billPhotoPath = bill.billPhotoPath;
     _insurerReplyPath = bill.insurerReplyPath;
     _serviceDate = bill.serviceDate ?? DateTime.now();
+    _followUpDate = bill.followUpDate;
     _state = bill.state;
-    _reimbursementController.text = NumberFormat('#,##0.00', 'en_US').format(
-      Money(bill.reimbursedAmount, bill.currencyCode ?? CurrencyCode.huf)
-          .majorValue,
-    );
+    _budgetPeriod = _periodFromMonth(bill.yearMonth) ??
+        DateTime(_serviceDate.year, _serviceDate.month);
     _selectedCurrency = bill.currencyCode;
+  }
+
+  /// The profile's default coverage, or 80% when none is configured.
+  double _defaultCoverage() {
+    final preset = ref.read(insuranceProfileProvider).valueOrNull;
+    final share = preset?.defaultPatientPercent;
+    if (share != null && share.isFinite && share >= 0 && share <= 100) {
+      return 100 - share;
+    }
+    return 80;
+  }
+
+  static String _formatPercent(double value) =>
+      value.toStringAsFixed(value == value.roundToDouble() ? 0 : 1);
+
+  static DateTime? _periodFromMonth(String yearMonth) {
+    final match = RegExp(r'^(\d{4})-(\d{2})$').firstMatch(yearMonth);
+    if (match == null) return null;
+    final year = int.tryParse(match.group(1)!);
+    final month = int.tryParse(match.group(2)!);
+    if (year == null || month == null || month < 1 || month > 12) return null;
+    return DateTime(year, month);
+  }
+
+  /// Creation default: three days from today, at 09:00 local (PRD §7.1).
+  static DateTime _defaultReminder() {
+    final target = DateTime.now().add(const Duration(days: 3));
+    return DateTime(target.year, target.month, target.day, 9);
   }
 
   @override
   void dispose() {
     _amountController.dispose();
-    _patientShareController.dispose();
-    _patientShareFocus.dispose();
-    _providerNameController.dispose();
-    _memberNameController.dispose();
-    _reimbursementController.dispose();
+    _coverageController.dispose();
+    _coverageFocus.dispose();
     super.dispose();
   }
 
@@ -209,6 +239,17 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
       source: source,
       maxWidth: 2000,
       imageQuality: 85,
+    );
+    final path = file?.path;
+    if (path == null || !mounted) return;
+    setState(() => _billPhotoPath = path);
+  }
+
+  /// Picks the bill document from the device file manager (PRD §12.1).
+  Future<void> _pickBillFile() async {
+    final file = await FilePicker.pickFile(
+      type: FileType.custom,
+      allowedExtensions: const ['pdf', 'jpg', 'jpeg', 'png', 'heic'],
     );
     final path = file?.path;
     if (path == null || !mounted) return;
@@ -234,23 +275,39 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
     setState(() => _insurerReplyPath = path);
   }
 
-  Future<void> _pickMonthOverride() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _serviceDate,
-      firstDate: DateTime(DateTime.now().year - 5),
-      lastDate: DateTime(DateTime.now().year + 1),
-      helpText: 'Which month should this bill land in?',
+  Future<void> _pickReminder() async {
+    final picked = await ReminderPickerSheet.show(
+      context,
+      initialDate: _followUpDate,
+      allowClear: true,
     );
     if (picked == null || !mounted) return;
-    setState(() => _monthOverride = DateFormat('yyyy-MM').format(picked));
+    setState(() {
+      _followUpDate = picked == ReminderPickerSheet.cleared ? null : picked;
+    });
+  }
+
+  /// Choose the month + year the bill belongs to, including historical years.
+  Future<void> _pickBudgetPeriod() async {
+    final picked = await showDialog<DateTime>(
+      context: context,
+      builder: (dialog) => _BudgetPeriodDialog(initial: _budgetPeriod),
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _budgetPeriod = DateTime(picked.year, picked.month);
+      _budgetPeriodTouched = true;
+    });
   }
 
   // -----------------------------------------------------------------------------
   // Derived values (T013)
   // -----------------------------------------------------------------------------
 
-  double get _amount => parseMoneyInput(_amountController.text) ?? 0.0;
+  double get _amount {
+    final value = parseMoneyInput(_amountController.text);
+    return value != null && value.isFinite && value > 0 ? value : 0;
+  }
 
   CurrencyCode get _currencyCode {
     if (_selectedCurrency != null) return _selectedCurrency!;
@@ -260,9 +317,21 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
 
   int get _amountMinor => Money.fromMajor(_amount, _currencyCode).minorUnits;
 
-  /// FR-048: the share the *user* pays, not the insurer's coverage.
-  double get _patientSharePercent =>
-      double.tryParse(_patientShareController.text.trim()) ?? 0.0;
+  /// Coverage as entered, or `null` when the input is invalid.
+  double? get _coveragePercent {
+    final value = double.tryParse(_coverageController.text.trim());
+    return value != null && value.isFinite && value >= 0 && value <= 100
+        ? value
+        : null;
+  }
+
+  /// FR-048 / PRD §8.3: the share the user pays, derived from coverage.
+  double get _patientSharePercent => 100 - (_coveragePercent ?? 0);
+
+  /// New bills are always planned; editing keeps the stored lifecycle status.
+  ExpenseStatus get _draftExpenseStatus => _state == MedicalBillState.planned
+      ? ExpenseStatus.planned
+      : ExpenseStatus.paid;
 
   /// Live preview of the split while the user types, and what this bill will
   /// take from the budget.
@@ -279,7 +348,9 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
     return (
       patientShare: probe.patientShareAmount,
       insurerPaid: probe.insurerPaidAmount,
-      projectedImpact: probe.fundsImpact,
+      // Creation only plans the bill; the effect is what will count once the
+      // relevant payment is confirmed (PRD §17.2).
+      projectedImpact: probe.plannedBudgetEffect,
     );
   }
 
@@ -287,17 +358,69 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
   // Save (T016)
   // -----------------------------------------------------------------------------
 
+  /// Serialize the whole save, including confirmations and directory creation.
   Future<void> _saveBill() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (_saving || _confirmingSave) return;
+    setState(() => _confirmingSave = true);
+    try {
+      await _saveBillImpl();
+    } finally {
+      if (mounted) setState(() => _confirmingSave = false);
+    }
+  }
+
+  Future<void> _saveBillImpl() async {
+    final validFields = _formKey.currentState!.validate();
+    final coverage = _coveragePercent;
+    // Lazy sections may be outside the widget tree while saving. Validate the
+    // actual draft as well so invalid input cannot become the preview's zero.
+    if (!validFields || _amount <= 0 || coverage == null) {
+      setState(() => _saveError = _amount <= 0
+          ? 'Enter a bill total greater than zero.'
+          : coverage == null
+              ? 'Insurance coverage must be between 0 and 100.'
+              : 'Select a patient, a provider and a service type before saving.');
+      return;
+    }
+    if (!_isEditing &&
+        (_selectedProviderId == null ||
+            _selectedFamilyMemberId == null ||
+            _serviceTypeId == null)) {
+      setState(() => _saveError =
+          'Select a patient, a provider and a service type before saving.');
+      return;
+    }
     if (_saving) return;
 
+    final access = medicalAccessCheck(context, ref);
+    if (!access()) return;
+    var replyForSave = _insurerReplyPath;
+    if (_paymentMethod == MedicalPaymentMethod.insurerPaid &&
+        replyForSave != null) {
+      final remove = await showDialog<bool>(
+          context: context,
+          builder: (dialog) => AlertDialog(
+                title: const Text('Remove insurance reply?'),
+                content: const Text(
+                    'This document belongs to a bill you pay yourself. Keep editing to change the payment choice, or remove the reply from this bill and save. The file itself is not deleted.'),
+                actions: [
+                  TextButton(
+                      onPressed: () => Navigator.pop(dialog, false),
+                      child: const Text('Keep editing')),
+                  FilledButton(
+                      onPressed: () => Navigator.pop(dialog, true),
+                      child: const Text('Remove reply and save'))
+                ],
+              ));
+      if (remove != true || !mounted || !access()) return;
+      replyForSave = null;
+    }
     final billContext = ref.read(medicalBillContextProvider);
     if (billContext == null) {
       _toast('Set up a monthly budget first so this bill can affect it.');
       return;
     }
-    final profileId = ref.read(activeProfileProvider).value?.id;
-    if (profileId == null) {
+    if (ref.read(activeProfileProvider).value?.id == null) {
       _toast('No active profile. Create one to save medical bills.');
       return;
     }
@@ -323,77 +446,117 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
       }
     }
 
-    setState(() => _saving = true);
+    setState(() {
+      _saving = true;
+      _saveError = null;
+    });
     final repo = ref.read(medicalRepositoryProvider);
     final navigator = GoRouter.of(context);
     final messenger = ScaffoldMessenger.of(context);
 
     try {
-      // FR-008: typing a new provider name adds it to the directory.
-      var providerId = _selectedProviderId;
-      final typedProvider = _providerNameController.text.trim();
-      if (providerId == null && typedProvider.isNotEmpty) {
-        final provider = await repo.findOrCreateProvider(
-          profileId: profileId,
-          sharedSpaceId: billContext.sharedSpaceId,
-          name: typedProvider,
-        );
-        providerId = provider.id;
+      final history = _personal && widget.existingBill != null
+          ? await repo.receiptHistory(widget.existingBill!.id,
+              isAccessCurrent: access)
+          : null;
+      if (history?.approval != null &&
+          (_createdProviders.isNotEmpty ||
+              _createdMembers.isNotEmpty ||
+              _createdServiceTypes.isNotEmpty)) {
+        // Directory rows written inline must not become part of an approved
+        // bill correction; the correction flow requires a stable directory.
+        throw const MedicalReceiptException('directoryBeforeCorrection');
       }
 
-      var memberId = _selectedFamilyMemberId;
-      final typedMember = _memberNameController.text.trim();
-      if (memberId == null && typedMember.isNotEmpty) {
-        final member = await repo.saveFamilyMember(
-          profileId: profileId,
-          sharedSpaceId: billContext.sharedSpaceId,
-          name: typedMember,
-          relation: 'Family',
-        );
-        memberId = member.id;
-      }
-
-      final bill = widget.existingBill ?? MedicalBill();
+      final bill = widget.existingBill == null
+          ? MedicalBill()
+          : copyMedicalBill(widget.existingBill!);
       bill
         ..billedAmount = _amountMinor
         ..patientSharePercent = _patientSharePercent
         ..paymentMethod = _paymentMethod
         ..serviceTypeId = _serviceTypeId
-        ..providerId = providerId
-        ..familyMemberId = memberId
+        ..providerId = _selectedProviderId
+        ..familyMemberId = _selectedFamilyMemberId
         ..billPhotoPath = _billPhotoPath
-        ..insurerReplyPath = _insurerReplyPath
+        ..insurerReplyPath = replyForSave
         ..serviceDate = _serviceDate
+        ..followUpDate = _followUpDate
         // FR-013: the context owns the row, so a shared bill is keyed on the
         // space (`billContext.profileId` is 0 for a space) and can never be
         // pinned to a personal profile.
         ..profileId = billContext.profileId
         ..currency = _currencyCode.code
         ..state = _state;
+      if (!_isEditing) {
+        bill
+          ..overallStatus = MedicalOverallStatus.open
+          ..providerPaymentStatus =
+              _paymentMethod == MedicalPaymentMethod.insurerPaid
+                  ? MedicalProviderPaymentStatus.notRequired
+                  : MedicalProviderPaymentStatus.notConfirmed
+          ..insuranceRequestStatus = MedicalInsuranceRequestStatus.notSubmitted
+          ..salarySettlementType =
+              _paymentMethod == MedicalPaymentMethod.insurerPaid
+                  ? MedicalSalarySettlementType.userShareDeduction
+                  : MedicalSalarySettlementType.insuranceRefund
+          ..salarySettlementStatus = MedicalSalarySettlementStatus.notRequired
+          ..needsReview = false;
+      }
+      bill.lastUpdatedAt = DateTime.now();
 
-      // FR-055: an explicit month override wins over the service month.
-      final override = _monthOverride?.trim();
-      if (override != null && override.isNotEmpty) {
-        bill.yearMonth = override;
+      // PRD §6.2: the explicitly chosen period (including a historical one) is
+      // stored as-is; it is never replaced by the current month.
+      bill.yearMonth = DateFormat('yyyy-MM').format(_budgetPeriod);
+
+      var status = history?.expense.status ?? _draftExpenseStatus;
+      MedicalBill saved;
+      if (history?.approval != null &&
+          (medicalBillBasis(history!.bill) != medicalBillBasis(bill) ||
+              status != history.expense.status ||
+              bill.state != history.bill.state)) {
+        if (!mounted || !access()) return;
+        final reason = await medicalReviewReason(
+            context, 'Review approved bill correction',
+            isAccessCurrent: access);
+        if (reason == null || !mounted || !access()) return;
+        final preview = await repo.reviewBill(
+            proposed: bill,
+            status: status,
+            reason: reason,
+            isAccessCurrent: access);
+        if (!mounted ||
+            !access() ||
+            !await confirmMedicalBillReview(context, preview,
+                isAccessCurrent: access,
+                directory: ref.read(medicalDirectoryProvider),
+                services: {
+                  for (final service
+                      in ref.read(medicalServiceTypesProvider).valueOrNull ??
+                          const <MedicalServiceType>[])
+                    service.id: service.name
+                })) {
+          return;
+        }
+        await repo.applyBillReview(
+            review: preview,
+            operationKey: DateTime.now().microsecondsSinceEpoch.toString(),
+            isAccessCurrent: access);
+        saved = preview.proposed;
+      } else {
+        saved = await repo.saveBill(bill, billContext,
+            status: status, isAccessCurrent: access);
       }
 
-      final saved = await repo.saveBill(
-        bill,
-        billContext,
-        status: _state == MedicalBillState.planned
-            ? ExpenseStatus.planned
-            : ExpenseStatus.paid,
-      );
-
-      // FR-034: editing a reimbursed bill corrects the payout rather than
-      // stacking a second one.
-      if (saved.reimbursedAmount > 0) {
-        final amount = parseMoneyInput(_reimbursementController.text);
-        if (amount != null && amount > 0) {
-          final code = saved.currencyCode ?? _currencyCode;
-          final amountMinor = Money.fromMajor(amount, code).minorUnits;
-          if (amountMinor != saved.reimbursedAmount) {
-            await repo.logReimbursement(saved, amount: amountMinor);
+      // Reminder is metadata only; scheduling happens after the bill is saved so
+      // a notification failure cannot roll back booked money.
+      if (_followUpDate != widget.existingBill?.followUpDate) {
+        try {
+          await repo.setFollowUpDate(saved, _followUpDate,
+              isAccessCurrent: access);
+        } catch (_) {
+          if (mounted) {
+            _toast('Bill saved, but the reminder could not be scheduled.');
           }
         }
       }
@@ -402,7 +565,10 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
         ..hideCurrentSnackBar()
         ..showSnackBar(SnackBar(
           content: Text(
-            _isEditing ? 'Medical bill updated ✅' : 'Medical bill saved ✅',
+            _isEditing
+                ? 'Bill updated.'
+                : 'Bill saved as planned. Record payments and insurance '
+                    'replies in bill details.',
           ),
         ));
       if (navigator.canPop()) {
@@ -415,7 +581,10 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
       _toast(error.message?.toString() ?? 'Check the values you entered.');
     } catch (error) {
       if (!mounted) return;
-      _toast('Could not save the bill: $error');
+      setState(() => _saveError = error is MedicalReceiptException
+          ? medicalReceiptMessage(error)
+          : 'Could not save the bill: $error');
+      _toast(_saveError!);
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -431,22 +600,139 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
     final picked = await showDatePicker(
       context: context,
       initialDate: _serviceDate,
-      firstDate: DateTime(DateTime.now().year - 5),
+      firstDate: DateTime(DateTime.now().year - 20),
       lastDate: DateTime(DateTime.now().year + 1),
     );
     if (picked == null) return;
-    setState(() => _serviceDate = picked);
+    setState(() {
+      _serviceDate = picked;
+      // Suggest the matching period, but never lock it (PRD §6.2).
+      if (!_budgetPeriodTouched) {
+        _budgetPeriod = DateTime(picked.year, picked.month);
+      }
+    });
   }
 
-  /// Adopts the profile's default patient share once it resolves.
-  void _prefillPatientShare(InsuranceProfile? profile) {
-    if (_isEditing || profile == null) return;
-    final percent = profile.defaultPatientPercent;
-    if (percent <= 0) return;
-    final next = percent.toStringAsFixed(0);
-    if (_patientShareController.text != next) {
-      _patientShareController.text = next;
+  /// Adopts the profile's default coverage once it resolves.
+  void _prefillCoverage(InsuranceProfile? profile) {
+    if (_isEditing ||
+        profile == null ||
+        _coverageEdited ||
+        _coverageDefaultApplied) {
+      return;
+    }
+    final share = profile.defaultPatientPercent;
+    if (!share.isFinite || share < 0 || share > 100) return;
+    _coverageDefaultApplied = true;
+    final next = _formatPercent(100 - share);
+    if (_coverageController.text != next) {
+      _coverageController.text = next;
       setState(() {});
+    }
+  }
+
+  // -----------------------------------------------------------------------------
+  // Inline directory creation (PRD §5.1–5.3)
+  // -----------------------------------------------------------------------------
+
+  /// Asks for a name and trims it; `null` means the user cancelled.
+  Future<String?> _askDirectoryName({
+    required String title,
+    required String label,
+  }) {
+    return showDialog<String>(
+      context: context,
+      builder: (dialog) => _NameDialog(title: title, label: label),
+    );
+  }
+
+  ({int profileId, int? sharedSpaceId})? get _directoryContext {
+    final profileId = ref.read(activeProfileProvider).value?.id;
+    final billContext = ref.read(medicalBillContextProvider);
+    if (profileId == null) return null;
+    return (profileId: profileId, sharedSpaceId: billContext?.sharedSpaceId);
+  }
+
+  Future<void> _addProvider() async {
+    final name =
+        await _askDirectoryName(title: 'Add provider', label: 'Provider name');
+    if (name == null || !mounted) return;
+    final contextInfo = _directoryContext;
+    if (contextInfo == null) {
+      _toast('No active profile. Create one to add providers.');
+      return;
+    }
+    try {
+      final provider =
+          await ref.read(medicalRepositoryProvider).findOrCreateProvider(
+                profileId: contextInfo.profileId,
+                sharedSpaceId: contextInfo.sharedSpaceId,
+                name: name,
+              );
+      if (!mounted) return;
+      setState(() {
+        if (!_createdProviders.any((p) => p.id == provider.id)) {
+          _createdProviders.add(provider);
+        }
+        _selectedProviderId = provider.id;
+      });
+    } catch (error) {
+      if (mounted) _toast('Could not add the provider: $error');
+    }
+  }
+
+  Future<void> _addMember() async {
+    final name =
+        await _askDirectoryName(title: 'Add patient', label: 'Patient name');
+    if (name == null || !mounted) return;
+    final contextInfo = _directoryContext;
+    if (contextInfo == null) {
+      _toast('No active profile. Create one to add patients.');
+      return;
+    }
+    try {
+      final member = await ref.read(medicalRepositoryProvider).saveFamilyMember(
+            profileId: contextInfo.profileId,
+            sharedSpaceId: contextInfo.sharedSpaceId,
+            name: name,
+            relation: 'Family',
+          );
+      if (!mounted) return;
+      setState(() {
+        if (!_createdMembers.any((m) => m.id == member.id)) {
+          _createdMembers.add(member);
+        }
+        _selectedFamilyMemberId = member.id;
+      });
+    } catch (error) {
+      if (mounted) _toast('Could not add the patient: $error');
+    }
+  }
+
+  Future<void> _addServiceType() async {
+    final name = await _askDirectoryName(
+        title: 'Add service type', label: 'Service type name');
+    if (name == null || !mounted) return;
+    final contextInfo = _directoryContext;
+    if (contextInfo == null) {
+      _toast('No active profile. Create one to add service types.');
+      return;
+    }
+    try {
+      final type = await ref.read(medicalRepositoryProvider).saveServiceType(
+            profileId: contextInfo.profileId,
+            sharedSpaceId: contextInfo.sharedSpaceId,
+            name: name,
+          );
+      if (!mounted) return;
+      setState(() {
+        if (!_createdServiceTypes.any((t) => t.id == type.id)) {
+          _createdServiceTypes.add(type);
+        }
+        _serviceTypeId = type.id;
+      });
+    } catch (error) {
+      if (mounted) _toast('Could not add the service type: $error');
     }
   }
 
@@ -456,14 +742,30 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
 
   @override
   Widget build(BuildContext context) {
-    // Adopt the profile's default patient share once it resolves.
-    ref.listen<AsyncValue<InsuranceProfile?>>(insuranceProfileProvider,
-        (_, next) => _prefillPatientShare(next.value));
+    // Adopt the profile's default coverage once it resolves.
+    ref.listen<AsyncValue<InsuranceProfile?>>(
+        insuranceProfileProvider, (_, next) => _prefillCoverage(next.value));
 
     final background = MedicalTheme.background(context);
-    final providers = ref.watch(medicalProvidersProvider).value ?? const [];
-    final members = ref.watch(familyMembersProvider).value ?? const [];
-    final serviceTypes = ref.watch(selectableServiceTypesProvider);
+    final watchedProviders =
+        ref.watch(medicalProvidersProvider).value ?? const [];
+    final watchedMembers = ref.watch(familyMembersProvider).value ?? const [];
+    final watchedServiceTypes = ref.watch(selectableServiceTypesProvider);
+    final providers = <MedicalProvider>[
+      ...watchedProviders,
+      for (final created in _createdProviders)
+        if (!watchedProviders.any((p) => p.id == created.id)) created,
+    ];
+    final members = <FamilyMember>[
+      ...watchedMembers,
+      for (final created in _createdMembers)
+        if (!watchedMembers.any((m) => m.id == created.id)) created,
+    ];
+    final serviceTypes = <MedicalServiceType>[
+      ...watchedServiceTypes,
+      for (final created in _createdServiceTypes)
+        if (!watchedServiceTypes.any((t) => t.id == created.id)) created,
+    ];
     final allServiceTypes = ref.watch(medicalServiceTypesProvider).value ??
         const <MedicalServiceType>[];
     final selectedTypeMissing = _serviceTypeId != null &&
@@ -477,8 +779,11 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
         }
       }
     }
+    final selectedProviderMissing = _selectedProviderId != null &&
+        !providers.any((p) => p.id == _selectedProviderId);
+    final selectedMemberMissing = _selectedFamilyMemberId != null &&
+        !members.any((m) => m.id == _selectedFamilyMemberId);
     final estimate = _preview;
-    final showReimbursement = _showReimbursementField;
 
     return Scaffold(
       backgroundColor: background,
@@ -490,424 +795,448 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
           IconButton(
             icon: const Icon(Icons.check),
             tooltip: 'Save',
-            onPressed: _saving ? null : _saveBill,
+            onPressed: _saving || _confirmingSave ? null : _saveBill,
           ),
         ],
       ),
       body: Form(
         key: _formKey,
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
           children: [
-            _ProviderSelector(
-              providers: providers,
-              selectedId: _selectedProviderId,
-              newNameController: _providerNameController,
-              onChanged: (value) => setState(() {
-                if (value == _newProviderSentinel) {
-                  _selectedProviderId = null;
-                } else {
-                  _selectedProviderId = value as int?;
-                  _providerNameController.clear();
-                }
-              }),
+            _FormIntro(
+              isEditing: _isEditing,
+              paymentMethod: _paymentMethod,
             ),
-            const SizedBox(height: 16),
-            _MemberSelector(
-              members: members,
-              selectedId: _selectedFamilyMemberId,
-              newNameController: _memberNameController,
-              onChanged: (value) => setState(() {
-                if (value == _newMemberSentinel) {
-                  _selectedFamilyMemberId = null;
-                } else {
-                  _selectedFamilyMemberId = value as int?;
-                  _memberNameController.clear();
-                }
-              }),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            const SizedBox(height: 12),
+            // Grouped, collapsible sections (Phase 2d, T080). Bill details is
+            // expanded by default because it holds every save-validated
+            // field. maintainState keeps each section's field state and
+            // widget keys alive while collapsed, so collapsing never loses
+            // input or changes save behaviour.
+            MedicalCollapsibleSection(
+              storageKey: 'medicalFormBillDetails',
+              initiallyExpanded: true,
+              title: 'Bill details',
+              icon: Icons.receipt_long_outlined,
+              accent: Theme.of(context).colorScheme.primary,
               children: [
-                Expanded(
-                  flex: 2,
-                  child: MoneyField(
-                    key: const Key('medicalBilledAmountField'),
-                    controller: _amountController,
-                    label: 'Billed amount',
-                    prefixText: '${_currencyCode.symbol} ',
+                const Text('Who pays the provider?',
+                    style: TextStyle(fontWeight: FontWeight.bold)),
+                for (final method in [
+                  MedicalPaymentMethod.selfPaid,
+                  MedicalPaymentMethod.insurerPaid
+                ]) ...[
+                  _PaymentMethodCard(
+                    key: ValueKey('paymentMethod-${method.name}'),
+                    method: method,
+                    selected: _paymentMethod == method,
+                    enabled: !_isLocked,
+                    onTap: () => setState(() {
+                      _paymentMethod = method;
+                    }),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                const SizedBox(height: 16),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    MoneyField(
+                      key: const Key('medicalBilledAmountField'),
+                      controller: _amountController,
+                      label: 'Bill total',
+                      prefixText: '${_currencyCode.symbol} ',
+                      validator: (value) {
+                        final parsed = parseMoneyInput(value ?? '');
+                        if (parsed == null || !parsed.isFinite) {
+                          return 'Enter the bill total';
+                        }
+                        if (parsed <= 0) return 'Must be greater than zero';
+                        return null;
+                      },
+                      onChanged: (_) => setState(() {}),
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<CurrencyCode>(
+                      key: const Key('currencyCodeField'),
+                      initialValue: _currencyCode,
+                      decoration: const InputDecoration(
+                        labelText: 'Currency',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: CurrencyCode.values.map((code) {
+                        return DropdownMenuItem(
+                          value: code,
+                          child: Text(code.code.toUpperCase()),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() {
+                            _selectedCurrency = value;
+                          });
+                        }
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  key: const Key('insuranceCoverageField'),
+                  controller: _coverageController,
+                  focusNode: _coverageFocus,
+                  decoration: const InputDecoration(
+                    labelText: 'Insurance coverage (%) *',
+                    helperText: MedicalCopy.coverageHelp,
+                    suffixText: '%',
+                    border: OutlineInputBorder(),
+                  ),
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  validator: (value) {
+                    final parsed = double.tryParse(value?.trim() ?? '');
+                    if (parsed == null || !parsed.isFinite) {
+                      return 'Enter the insurance coverage';
+                    }
+                    if (parsed < 0 || parsed > 100) {
+                      return 'Must be between 0 and 100';
+                    }
+                    return null;
+                  },
+                  onChanged: (_) => setState(() => _coverageEdited = true),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: [
+                    for (final preset in const [0, 50, 70, 80, 90, 100])
+                      ChoiceChip(
+                        key: Key('insuranceCoveragePreset-$preset'),
+                        label: Text('$preset%'),
+                        selected: _coveragePercent == preset,
+                        onSelected: _isLocked
+                            ? null
+                            : (_) => setState(() {
+                                  _coverageController.text = '$preset';
+                                  _coverageEdited = true;
+                                }),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                _AmountRow(
+                  label: 'Your share',
+                  value:
+                      '${_formatPercent(_patientSharePercent)}% · ${MedicalTheme.moneyMinor(_currencyCode, estimate.patientShare)}',
+                  color: Colors.orange,
+                ),
+                const SizedBox(height: 16),
+              ],
+            ),
+            const SizedBox(height: 12),
+            MedicalCollapsibleSection(
+              storageKey: 'medicalFormProviderPerson',
+              title: 'Provider & person',
+              icon: Icons.local_hospital_outlined,
+              accent: Colors.teal,
+              children: [
+                KeyedSubtree(
+                  key: const Key('providerField'),
+                  child: DropdownButtonFormField<int>(
+                    key: ValueKey(
+                        'provider-$_selectedProviderId-${providers.length}'),
+                    initialValue: _selectedProviderId,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Provider *',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.local_hospital_outlined),
+                    ),
                     validator: (value) {
-                      final parsed = parseMoneyInput(value ?? '');
-                      if (parsed == null) return 'Enter the billed amount';
-                      if (parsed <= 0) return 'Must be greater than zero';
+                      if (value == null && !_isEditing) {
+                        return 'Select or add a provider';
+                      }
                       return null;
                     },
-                    onChanged: (_) => setState(() {}),
+                    items: [
+                      if (selectedProviderMissing)
+                        DropdownMenuItem<int>(
+                          value: _selectedProviderId,
+                          enabled: false,
+                          child: const Text('Provider'),
+                        ),
+                      for (final provider in providers)
+                        DropdownMenuItem<int>(
+                          value: provider.id,
+                          child: Text(
+                            provider.specialty == null
+                                ? provider.name
+                                : '${provider.name} · ${provider.specialty}',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                    ],
+                    onChanged: _isLocked
+                        ? null
+                        : (value) {
+                            if (value != null) {
+                              setState(() => _selectedProviderId = value);
+                            }
+                          },
                   ),
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                  flex: 1,
-                  child: DropdownButtonFormField<CurrencyCode>(
-                    key: const Key('currencyCodeField'),
-                    initialValue: _currencyCode,
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: OutlinedButton.icon(
+                    key: const Key('addProviderAction'),
+                    onPressed: _isLocked ? null : _addProvider,
+                    icon: const Icon(Icons.add),
+                    label: const Text('Add new provider'),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                KeyedSubtree(
+                  key: const Key('serviceTypeField'),
+                  child: DropdownButtonFormField<int>(
+                    key: ValueKey(
+                        'serviceType-$_serviceTypeId-${serviceTypes.length}'),
+                    initialValue: _serviceTypeId,
+                    isExpanded: true,
                     decoration: const InputDecoration(
-                      labelText: 'Currency',
+                      labelText: 'Service type *',
                       border: OutlineInputBorder(),
                     ),
-                    items: CurrencyCode.values.map((code) {
-                      return DropdownMenuItem(
-                        value: code,
-                        child: Text(code.code.toUpperCase()),
-                      );
-                    }).toList(),
-                    onChanged: (value) {
-                      if (value != null) {
-                        setState(() {
-                          _selectedCurrency = value;
-                        });
+                    validator: (value) {
+                      if (value == null && !_isEditing) {
+                        return 'Select or add a service type';
                       }
+                      return null;
                     },
+                    items: [
+                      // An archived (or not-yet-loaded) type must still be shown so
+                      // the seeded `initialValue` always has exactly one matching
+                      // item — otherwise DropdownButtonFormField asserts on frame 1
+                      // of the Edit form (defect batch walkthrough).
+                      if (selectedTypeMissing)
+                        DropdownMenuItem<int>(
+                          value: _serviceTypeId,
+                          enabled: false,
+                          child: Text(selectedTypeName ?? 'Service type'),
+                        ),
+                      for (final type in serviceTypes)
+                        DropdownMenuItem<int>(
+                            value: type.id, child: Text(type.name)),
+                    ],
+                    onChanged: _isLocked
+                        ? null
+                        : (value) {
+                            if (value != null) {
+                              setState(() => _serviceTypeId = value);
+                            }
+                          },
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            // FR-041: the single most consequential choice on this form.
-            DropdownButtonFormField<MedicalPaymentMethod>(
-              key: const Key('paymentMethodField'),
-              initialValue: _paymentMethod,
-              decoration: const InputDecoration(
-                labelText: 'How was this paid?',
-                border: OutlineInputBorder(),
-              ),
-              items: [
-                for (final method in MedicalPaymentMethod.values)
-                  DropdownMenuItem(
-                    value: method,
-                    child: Text(
-                      method == MedicalPaymentMethod.insurerPaid
-                          ? 'Insurer paid (you pay your share only)'
-                          : 'Self-paid (you pay in full, then claim back)',
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: OutlinedButton.icon(
+                    key: const Key('addServiceTypeAction'),
+                    onPressed: _isLocked ? null : _addServiceType,
+                    icon: const Icon(Icons.add),
+                    label: const Text('Add new service type'),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                KeyedSubtree(
+                  key: const Key('patientField'),
+                  child: DropdownButtonFormField<int>(
+                    key: ValueKey(
+                        'member-$_selectedFamilyMemberId-${members.length}'),
+                    initialValue: _selectedFamilyMemberId,
+                    isExpanded: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Patient *',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.person_outline),
                     ),
-                  ),
-              ],
-              onChanged: _isLocked
-                  ? null
-                  : (value) {
-                      if (value == null) return;
-                      setState(() {
-                        _paymentMethod = value;
-                        // D2: an insurer reply cannot survive the switch to
-                        // insurer-paid, so drop it rather than save an invalid
-                        // pair.
-                        if (value == MedicalPaymentMethod.insurerPaid) {
-                          _insurerReplyPath = null;
-                        }
-                      });
+                    validator: (value) {
+                      if (value == null && !_isEditing) {
+                        return 'Select or add a patient';
+                      }
+                      return null;
                     },
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              key: const Key('patientShareField'),
-              controller: _patientShareController,
-              focusNode: _patientShareFocus,
-              decoration: const InputDecoration(
-                labelText: 'Your share (%)',
-                helperText: 'The percentage you pay, not the insurer\'s.',
-                border: OutlineInputBorder(),
-              ),
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              validator: (value) {
-                final parsed = double.tryParse(value?.trim() ?? '');
-                if (parsed == null) return 'Enter your share';
-                if (parsed < 0 || parsed > 100) {
-                  return 'Must be between 0 and 100';
-                }
-                return null;
-              },
-              onChanged: (_) => setState(() {}),
-            ),
-            const SizedBox(height: 16),
-            DropdownButtonFormField<int?>(
-              key: const Key('serviceTypeField'),
-              initialValue: _serviceTypeId,
-              decoration: const InputDecoration(
-                labelText: 'Service type',
-                border: OutlineInputBorder(),
-              ),
-              items: [
-                const DropdownMenuItem<int?>(value: null, child: Text('None')),
-                // An archived (or not-yet-loaded) type must still be shown so
-                // the seeded `initialValue` always has exactly one matching
-                // item — otherwise DropdownButtonFormField asserts on frame 1
-                // of the Edit form (defect batch walkthrough).
-                if (selectedTypeMissing)
-                  DropdownMenuItem<int?>(
-                    value: _serviceTypeId,
-                    enabled: false,
-                    child: Text(selectedTypeName ?? 'Service type'),
+                    items: [
+                      if (selectedMemberMissing)
+                        DropdownMenuItem<int>(
+                          value: _selectedFamilyMemberId,
+                          enabled: false,
+                          child: const Text('Patient'),
+                        ),
+                      for (final member in members)
+                        DropdownMenuItem<int>(
+                          value: member.id,
+                          child: Text(
+                            member.relation.isEmpty
+                                ? member.name
+                                : '${member.name} · ${member.relation}',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                    ],
+                    onChanged: _isLocked
+                        ? null
+                        : (value) {
+                            if (value != null) {
+                              setState(() => _selectedFamilyMemberId = value);
+                            }
+                          },
                   ),
-                for (final type in serviceTypes)
-                  DropdownMenuItem<int?>(
-                      value: type.id, child: Text(type.name)),
-              ],
-              onChanged: (value) => setState(() => _serviceTypeId = value),
-            ),
-            const SizedBox(height: 8),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.event_outlined),
-              title: const Text('Service date'),
-              subtitle: Text(DateFormat.yMMMd().format(_serviceDate)),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: _pickServiceDate,
-            ),
-            ListTile(
-              key: const Key('monthOverrideTile'),
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.calendar_month_outlined),
-              title: const Text('Belongs to month'),
-              subtitle: Text(
-                (_monthOverride ?? '').isNotEmpty
-                    ? _monthOverride!
-                    : DateFormat.yMMM().format(_serviceDate),
-              ),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: _pickMonthOverride,
-            ),
-            const SizedBox(height: 8),
-            // FR-052: the state drives both the insurance meaning and the cost.
-            SegmentedButton<MedicalBillState>(
-              key: const Key('billStateField'),
-              segments: [
-                const ButtonSegment(
-                  value: MedicalBillState.planned,
-                  label: Text('Planned'),
                 ),
-                const ButtonSegment(
-                  value: MedicalBillState.waiting,
-                  label: Text('Waiting'),
-                ),
-                const ButtonSegment(
-                  value: MedicalBillState.paid,
-                  label: Text('Paid'),
-                ),
-                // A finished bill is terminal, so its chip is shown but cannot
-                // be selected. Without this the seeded value would have no
-                // matching segment and the form would assert.
-                if (_state == MedicalBillState.finished)
-                  const ButtonSegment(
-                    value: MedicalBillState.finished,
-                    label: Text('Finished'),
-                    enabled: false,
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: OutlinedButton.icon(
+                    key: const Key('addPatientAction'),
+                    onPressed: _isLocked ? null : _addMember,
+                    icon: const Icon(Icons.add),
+                    label: const Text('Add new patient'),
                   ),
+                ),
               ],
-              selected: {_state},
-              onSelectionChanged: _isLocked
-                  ? null
-                  : (selection) => setState(() => _state = selection.first),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
+            MedicalCollapsibleSection(
+              storageKey: 'medicalFormDatesReminders',
+              title: 'Dates & reminders',
+              icon: Icons.event_outlined,
+              accent: MedicalTheme.semantic(context, MedicalTheme.planned),
+              children: [
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.event_outlined),
+                  title: const Text('Service date'),
+                  subtitle: Text(DateFormat.yMMMd().format(_serviceDate)),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: _pickServiceDate,
+                ),
+                ListTile(
+                  key: const Key('budgetPeriodField'),
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.calendar_month_outlined),
+                  title: const Text('Budget period'),
+                  subtitle: Text(DateFormat.yMMMM().format(_budgetPeriod)),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: _pickBudgetPeriod,
+                ),
+                ListTile(
+                  key: const Key('followUpReminderTile'),
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.notifications_active_outlined),
+                  title: const Text('Remind me'),
+                  subtitle: Text(_followUpDate == null
+                      ? 'No reminder'
+                      : DateFormat.yMMMd().add_jm().format(_followUpDate!)),
+                  trailing: _followUpDate == null
+                      ? const Icon(Icons.chevron_right)
+                      : IconButton(
+                          tooltip: 'Clear reminder',
+                          icon: const Icon(Icons.close),
+                          onPressed: () => setState(() => _followUpDate = null),
+                        ),
+                  onTap: _pickReminder,
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
             _EstimateCard(
               currency: _currencyCode,
+              billedAmount: _amountMinor,
+              coveragePercent: _coveragePercent ?? 0,
+              rejected: _state == MedicalBillState.rejected,
               patientShare: estimate.patientShare,
               insurerPaid: estimate.insurerPaid,
               projectedImpact: estimate.projectedImpact,
               paymentMethod: _paymentMethod,
             ),
-            if (showReimbursement) ...[
-              const SizedBox(height: 16),
-              MoneyField(
-                key: const Key('medicalReimbursementField'),
-                controller: _reimbursementController,
-                label: 'Reimbursed amount',
-                prefixText: '${_currencyCode.symbol} ',
-                helperText: 'Already reimbursed - edit to correct the payout.',
-                validator: (value) {
-                  final parsed = parseMoneyInput(value ?? '');
-                  // 0 is a valid "not reimbursed yet" state on a self-paid
-                  // bill; without this the Edit form could never save one.
-                  if (parsed == null || parsed < 0) return 'Enter an amount';
-                  return null;
-                },
-              ),
-            ],
+            const SizedBox(height: 12),
+            MedicalCollapsibleSection(
+              storageKey: 'medicalFormDocuments',
+              title: 'Documents',
+              icon: Icons.attach_file,
+              accent: Colors.purple,
+              children: [
+                // FR-047: the two documents are separate, and the insurer reply is
+                // self-paid only.
+                _DocumentTile(
+                  documentKey: const Key('billPhotoTile'),
+                  label: 'Bill document',
+                  path: _billPhotoPath,
+                  helper:
+                      'Optional. Take a photo, pick an image or choose a file.',
+                  onPickCamera: () => _pickImage(ImageSource.camera),
+                  onPickGallery: () => _pickImage(ImageSource.gallery),
+                  onPickDocument: _pickBillFile,
+                  onClear: () => setState(() => _billPhotoPath = null),
+                ),
+                // PRD §12.2: creation never shows an Insurance Reply. It stays
+                // available when editing an existing self-paid bill.
+                if (_isEditing &&
+                    _paymentMethod == MedicalPaymentMethod.selfPaid)
+                  _DocumentTile(
+                    documentKey: const Key('insurerReplyTile'),
+                    label: 'Insurance reply',
+                    path: _insurerReplyPath,
+                    helper: 'Optional. Keep the reply from your insurer.',
+                    onPickDocument: _pickInsurerReply,
+                    onClear: () => setState(() => _insurerReplyPath = null),
+                  ),
+              ],
+            ),
             const SizedBox(height: 24),
-            // FR-047: the two documents are separate, and the insurer reply is
-            // self-paid only.
-            _DocumentTile(
-              documentKey: const Key('billPhotoTile'),
-              label: 'Bill photo',
-              path: _billPhotoPath,
-              helper: 'Optional. Keep it for your own records.',
-              onPickCamera: () => _pickImage(ImageSource.camera),
-              onPickGallery: () => _pickImage(ImageSource.gallery),
-              onClear: () => setState(() => _billPhotoPath = null),
-            ),
-            if (_paymentMethod == MedicalPaymentMethod.selfPaid)
-              _DocumentTile(
-                documentKey: const Key('insurerReplyTile'),
-                label: 'Insurer reply',
-                path: _insurerReplyPath,
-                helper: 'Optional. Needed to claim a self-paid bill back.',
-                onPickDocument: _pickInsurerReply,
-                onClear: () => setState(() => _insurerReplyPath = null),
-              ),
-            const SizedBox(height: 32),
-            ElevatedButton(
-              onPressed: _saving ? null : _saveBill,
-              child: Text(_isEditing ? 'Save Changes' : 'Save Bill'),
-            ),
           ],
         ),
       ),
-    );
-  }
-}
-
-// -----------------------------------------------------------------------------
-// Provider + patient selection (T011)
-// -----------------------------------------------------------------------------
-
-class _ProviderSelector extends StatefulWidget {
-  const _ProviderSelector({
-    required this.providers,
-    required this.selectedId,
-    required this.newNameController,
-    required this.onChanged,
-  });
-
-  final List<MedicalProvider> providers;
-  final int? selectedId;
-  final TextEditingController newNameController;
-  final ValueChanged<Object?> onChanged;
-
-  @override
-  State<_ProviderSelector> createState() => _ProviderSelectorState();
-}
-
-class _ProviderSelectorState extends State<_ProviderSelector> {
-  @override
-  Widget build(BuildContext context) {
-    final typingNew = widget.selectedId == null;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        DropdownButtonFormField<Object>(
-          key: ValueKey(
-            'provider-${widget.selectedId}-${typingNew ? widget.newNameController.text : ''}',
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Container(
+          decoration: BoxDecoration(
+            color: MedicalTheme.surface(context),
+            border: Border(
+                top: BorderSide(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .outlineVariant
+                        .withValues(alpha: 0.6))),
           ),
-          initialValue: typingNew ? null : widget.selectedId,
-          isExpanded: true,
-          decoration: const InputDecoration(
-            labelText: 'Medical provider',
-            border: OutlineInputBorder(),
-          ),
-          items: [
-            for (final provider in widget.providers)
-              DropdownMenuItem<Object>(
-                value: provider.id,
-                child: Text(
-                  provider.specialty == null
-                      ? provider.name
-                      : '${provider.name} · ${provider.specialty}',
-                  overflow: TextOverflow.ellipsis,
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (_saveError != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(_saveError!,
+                      style: TextStyle(
+                          color: Theme.of(context).colorScheme.error)),
                 ),
-              ),
-            const DropdownMenuItem<Object>(
-              value: _newProviderSentinel,
-              child: Text('+ Add a new provider'),
-            ),
-          ],
-          onChanged: widget.onChanged,
-        ),
-        if (typingNew) ...[
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: widget.newNameController,
-            decoration: const InputDecoration(
-              labelText: 'Provider name',
-              border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.local_hospital_outlined),
-            ),
-            textInputAction: TextInputAction.next,
-            onChanged: (_) => setState(() {}),
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-class _MemberSelector extends StatefulWidget {
-  const _MemberSelector({
-    required this.members,
-    required this.selectedId,
-    required this.newNameController,
-    required this.onChanged,
-  });
-
-  final List<FamilyMember> members;
-  final int? selectedId;
-  final TextEditingController newNameController;
-  final ValueChanged<Object?> onChanged;
-
-  @override
-  State<_MemberSelector> createState() => _MemberSelectorState();
-}
-
-class _MemberSelectorState extends State<_MemberSelector> {
-  @override
-  Widget build(BuildContext context) {
-    final typingNew = widget.selectedId == null;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        DropdownButtonFormField<Object>(
-          key: ValueKey(
-            'member-${widget.selectedId}-${typingNew ? widget.newNameController.text : ''}',
-          ),
-          initialValue: typingNew ? null : widget.selectedId,
-          isExpanded: true,
-          decoration: const InputDecoration(
-            labelText: 'Patient',
-            border: OutlineInputBorder(),
-          ),
-          items: [
-            for (final member in widget.members)
-              DropdownMenuItem<Object>(
-                value: member.id,
-                child: Text(
-                  member.relation.isEmpty
-                      ? member.name
-                      : '${member.name} · ${member.relation}',
-                  overflow: TextOverflow.ellipsis,
+              FilledButton.icon(
+                key: const Key('saveBillButton'),
+                onPressed: _saving || _confirmingSave ? null : _saveBill,
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(52),
+                  shape: RoundedRectangleBorder(
+                      borderRadius:
+                          BorderRadius.circular(MedicalTheme.inputRadius)),
                 ),
+                icon: const Icon(Icons.save_outlined),
+                label: Text(_isEditing ? 'Save Changes' : 'Save Bill',
+                    style: const TextStyle(fontWeight: FontWeight.w700)),
               ),
-            const DropdownMenuItem<Object>(
-              value: _newMemberSentinel,
-              child: Text('+ Add a new family member'),
-            ),
-          ],
-          onChanged: widget.onChanged,
-        ),
-        if (typingNew) ...[
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: widget.newNameController,
-            decoration: const InputDecoration(
-              labelText: 'Patient name',
-              border: OutlineInputBorder(),
-              prefixIcon: Icon(Icons.person_outline),
-            ),
-            textInputAction: TextInputAction.next,
-            onChanged: (_) => setState(() {}),
+            ],
           ),
-        ],
-      ],
+        ),
+      ),
     );
   }
 }
@@ -915,6 +1244,306 @@ class _MemberSelectorState extends State<_MemberSelector> {
 // -----------------------------------------------------------------------------
 // Patient-share estimate + documents
 // -----------------------------------------------------------------------------
+
+/// A friendly, coloured introduction so the add/edit screen has a clear focus.
+class _FormIntro extends StatelessWidget {
+  const _FormIntro({required this.isEditing, required this.paymentMethod});
+
+  final bool isEditing;
+  final MedicalPaymentMethod paymentMethod;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final accent = paymentMethod == MedicalPaymentMethod.insurerPaid
+        ? Colors.teal
+        : scheme.primary;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            accent.withValues(alpha: 0.16),
+            scheme.surface.withValues(alpha: 0.55),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(MedicalTheme.cardRadius),
+        border: Border.all(color: accent.withValues(alpha: 0.22)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: 0.18),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(
+              isEditing ? Icons.edit_note : Icons.add_card_outlined,
+              color: accent,
+              size: 26,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isEditing ? 'Edit medical bill' : 'New medical bill',
+                  style: const TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  isEditing
+                      ? 'Update the recorded facts. Money still moves only through the bill actions.'
+                      : 'Plan the cost now, then record payments and insurance results step by step.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    height: 1.35,
+                    color: MedicalTheme.subtleText(context),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A selectable payment-model card with its own colour and clear selected state.
+class _PaymentMethodCard extends StatelessWidget {
+  const _PaymentMethodCard({
+    super.key,
+    required this.method,
+    required this.selected,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final MedicalPaymentMethod method;
+  final bool selected;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final accent = method == MedicalPaymentMethod.insurerPaid
+        ? Colors.teal
+        : scheme.primary;
+    final selfPaid = method == MedicalPaymentMethod.selfPaid;
+    return Opacity(
+      opacity: enabled ? 1 : 0.55,
+      child: Material(
+        color: selected ? accent.withValues(alpha: 0.1) : Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: BorderSide(
+            color: selected
+                ? accent.withValues(alpha: 0.55)
+                : scheme.outlineVariant,
+          ),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: enabled ? onTap : null,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                  child: Icon(
+                    selfPaid
+                        ? Icons.payments_outlined
+                        : Icons.account_balance_outlined,
+                    color: accent,
+                    size: 21,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        selfPaid ? MedicalCopy.selfPay : MedicalCopy.insurerPay,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          color: selected ? accent : null,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        selfPaid
+                            ? 'You pay the full bill, then claim an insurance refund.'
+                            : MedicalCopy.insurerPayHelp,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: MedicalTheme.subtleText(context),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Icon(
+                  selected ? Icons.check_circle : Icons.radio_button_unchecked,
+                  color: selected ? accent : scheme.outline,
+                  size: 22,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Small single-field dialog that owns its controller, so disposal happens
+/// after the route transition instead of while the text field is still mounted.
+class _NameDialog extends StatefulWidget {
+  const _NameDialog({required this.title, required this.label});
+
+  final String title;
+  final String label;
+
+  @override
+  State<_NameDialog> createState() => _NameDialogState();
+}
+
+class _NameDialogState extends State<_NameDialog> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final trimmed = _controller.text.trim();
+    if (trimmed.isNotEmpty) Navigator.pop(context, trimmed);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.title),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        textCapitalization: TextCapitalization.words,
+        decoration: InputDecoration(labelText: widget.label),
+        onSubmitted: (_) => _submit(),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _submit,
+          child: const Text('Add'),
+        ),
+      ],
+    );
+  }
+}
+
+/// Month + year picker for the bill's budget period (PRD §6.2).
+///
+/// Historical years are selectable so old bills can be entered and preserved.
+class _BudgetPeriodDialog extends StatefulWidget {
+  const _BudgetPeriodDialog({required this.initial});
+
+  final DateTime initial;
+
+  @override
+  State<_BudgetPeriodDialog> createState() => _BudgetPeriodDialogState();
+}
+
+class _BudgetPeriodDialogState extends State<_BudgetPeriodDialog> {
+  late int _month = widget.initial.month;
+  late int _year = widget.initial.year;
+
+  @override
+  Widget build(BuildContext context) {
+    final currentYear = DateTime.now().year;
+    final years = <int>[
+      for (var year = currentYear + 1; year >= currentYear - 20; year--) year,
+      if (_year > currentYear + 1 || _year < currentYear - 20) _year,
+    ];
+    return AlertDialog(
+      title: const Text('Budget period'),
+      content: Row(
+        children: [
+          Expanded(
+            child: DropdownButtonFormField<int>(
+              key: const Key('budgetPeriodMonth'),
+              initialValue: _month,
+              isExpanded: true,
+              decoration: const InputDecoration(labelText: 'Month'),
+              items: [
+                for (var month = 1; month <= 12; month++)
+                  DropdownMenuItem(
+                    value: month,
+                    child:
+                        Text(DateFormat.MMMM().format(DateTime(2000, month))),
+                  ),
+              ],
+              onChanged: (value) {
+                if (value != null) setState(() => _month = value);
+              },
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: DropdownButtonFormField<int>(
+              key: const Key('budgetPeriodYear'),
+              initialValue: _year,
+              isExpanded: true,
+              decoration: const InputDecoration(labelText: 'Year'),
+              items: [
+                for (final year in years)
+                  DropdownMenuItem(value: year, child: Text('$year')),
+              ],
+              onChanged: (value) {
+                if (value != null) setState(() => _year = value);
+              },
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: const Key('budgetPeriodConfirm'),
+          onPressed: () => Navigator.pop(context, DateTime(_year, _month)),
+          child: const Text('Use period'),
+        ),
+      ],
+    );
+  }
+}
 
 /// Live preview of who pays what, and - most importantly - what this bill will
 /// actually take out of the budget once saved.
@@ -924,6 +1553,9 @@ class _MemberSelectorState extends State<_MemberSelector> {
 class _EstimateCard extends StatelessWidget {
   const _EstimateCard({
     required this.currency,
+    required this.billedAmount,
+    required this.coveragePercent,
+    required this.rejected,
     required this.patientShare,
     required this.insurerPaid,
     required this.projectedImpact,
@@ -931,10 +1563,14 @@ class _EstimateCard extends StatelessWidget {
   });
 
   final CurrencyCode currency;
+  final int billedAmount;
+  final double coveragePercent;
+  final bool rejected;
   final int patientShare;
   final int insurerPaid;
 
-  /// What this bill removes from available funds, per the money-impact table.
+  /// What this bill is expected to take from the budget once payment is
+  /// confirmed (PRD §17.2).
   final int projectedImpact;
 
   final MedicalPaymentMethod paymentMethod;
@@ -942,42 +1578,100 @@ class _EstimateCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final insurerPaidBill = paymentMethod == MedicalPaymentMethod.insurerPaid;
+    final accent =
+        insurerPaidBill ? Colors.teal : Theme.of(context).colorScheme.primary;
+    final sharePercent = (100 - coveragePercent).clamp(0.0, 100.0).toDouble();
+    final rate = _percentLabel(coveragePercent);
     return Card(
-      color: MedicalTheme.surface(context),
+      elevation: 0,
+      color: accent.withValues(alpha: 0.04),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(MedicalTheme.cardRadius),
+        side: BorderSide(color: accent.withValues(alpha: 0.2)),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Who pays what',
-                style: Theme.of(context).textTheme.titleSmall),
+            Row(
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child:
+                      Icon(Icons.calculate_outlined, size: 19, color: accent),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text('Bill estimate',
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleSmall
+                          ?.copyWith(fontWeight: FontWeight.w800)),
+                ),
+              ],
+            ),
             const SizedBox(height: 12),
             _AmountRow(
-              label: 'You pay',
-              value: MedicalTheme.moneyMinor(currency, patientShare),
+                label: 'Bill total',
+                value: MedicalTheme.moneyMinor(currency, billedAmount),
+                color: Theme.of(context).colorScheme.onSurface),
+            _AmountRow(
+              label: MedicalCopy.insuranceCoverage,
+              value: rate,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+            _AmountRow(
+              key: const Key('yourShareEstimateRow'),
+              label: MedicalCopy.yourShare,
+              value:
+                  '${_percentLabel(sharePercent)} · ${MedicalTheme.moneyMinor(currency, patientShare)}',
               color: Colors.orange,
             ),
-            _AmountRow(
-              label: 'Insurer pays',
-              value: MedicalTheme.moneyMinor(currency, insurerPaid),
-              color: Colors.green,
-            ),
+            if (!insurerPaidBill)
+              _AmountRow(
+                key: const Key('expectedRefundRow'),
+                label: MedicalCopy.expectedInsuranceRefund,
+                value:
+                    '$rate · ${MedicalTheme.moneyMinor(currency, rejected ? 0 : insurerPaid)}',
+                color: Colors.green,
+              )
+            else
+              _AmountRow(
+                key: const Key('insurancePaysProviderRow'),
+                label: MedicalCopy.insurancePaysProviderAmount,
+                value:
+                    '$rate · ${MedicalTheme.moneyMinor(currency, rejected ? 0 : insurerPaid)}',
+                color: Colors.green,
+              ),
             const Divider(height: 24),
             _AmountRow(
-              label: insurerPaidBill
-                  ? 'Leaves your budget (your share)'
-                  : 'Leaves your budget (full charge)',
+              key: const Key('plannedBudgetEffectRow'),
+              label: MedicalCopy.plannedBudgetEffect,
               value: MedicalTheme.moneyMinor(currency, projectedImpact),
               color: Colors.red,
               bold: true,
             ),
             const SizedBox(height: 8),
             Text(
-              insurerPaidBill
-                  ? 'The insurer is billed directly, so only your share affects '
-                      'this month. There is nothing to claim back.'
-                  : 'You paid in full, so the whole charge leaves your budget '
-                      'until a reimbursement is recorded.',
+              rejected
+                  ? 'Insurance declined. The full bill remains your responsibility. Payment is recorded in bill details.'
+                  : insurerPaidBill
+                      ? 'Insurance pays its covered share directly to the provider. Only your share is planned for your budget.'
+                      : 'You pay the provider in full and expect the covered share back from insurance. The full bill is planned for your budget.',
+              style: TextStyle(
+                fontSize: 12,
+                color: MedicalTheme.subtleText(context),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              MedicalCopy.creationMovesNoMoney,
               style: TextStyle(
                 fontSize: 12,
                 color: MedicalTheme.subtleText(context),
@@ -988,10 +1682,15 @@ class _EstimateCard extends StatelessWidget {
       ),
     );
   }
+
+  static String _percentLabel(double value) => value == value.roundToDouble()
+      ? '${value.toStringAsFixed(0)}%'
+      : '$value%';
 }
 
 class _AmountRow extends StatelessWidget {
   const _AmountRow({
+    super.key,
     required this.label,
     required this.value,
     required this.color,
@@ -1015,8 +1714,9 @@ class _AmountRow extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: base),
-          Text(value, style: style),
+          Expanded(child: Text(label, style: base)),
+          const SizedBox(width: 12),
+          Flexible(child: Text(value, style: style, textAlign: TextAlign.end)),
         ],
       ),
     );
@@ -1073,15 +1773,57 @@ class _DocumentTile extends StatelessWidget {
                 onPressed: onClear,
               )
             : const Icon(Icons.add_photo_alternate_outlined),
-        onTap: attached
-            ? null
-            : () {
-                if (onPickDocument != null) {
-                  onPickDocument!();
-                } else if (onPickCamera != null) {
-                  onPickCamera!();
-                }
-              },
+        onTap: () => _showSourceSheet(context),
+      ),
+    );
+  }
+
+  /// PRD §12.1: camera, gallery and file manager are all offered.
+  Future<void> _showSourceSheet(BuildContext context) async {
+    final actions = <Widget>[
+      if (onPickCamera != null)
+        ListTile(
+          leading: const Icon(Icons.photo_camera_outlined),
+          title: const Text('Take photo'),
+          onTap: () {
+            Navigator.pop(context);
+            onPickCamera!();
+          },
+        ),
+      if (onPickGallery != null)
+        ListTile(
+          leading: const Icon(Icons.photo_library_outlined),
+          title: const Text('Gallery'),
+          onTap: () {
+            Navigator.pop(context);
+            onPickGallery!();
+          },
+        ),
+      if (onPickDocument != null)
+        ListTile(
+          leading: const Icon(Icons.folder_open_outlined),
+          title: const Text('Choose file'),
+          onTap: () {
+            Navigator.pop(context);
+            onPickDocument!();
+          },
+        ),
+    ];
+    if (actions.isEmpty) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheet) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: Text(label,
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+            ),
+            ...actions,
+          ],
+        ),
       ),
     );
   }

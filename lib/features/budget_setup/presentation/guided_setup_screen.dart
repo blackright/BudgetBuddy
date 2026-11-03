@@ -1,7 +1,9 @@
 import '../repositories/onboarding_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/database/isar_helper.dart';
 import '../../../core/providers/active_profile_provider.dart';
 import '../../../core/providers/active_space_provider.dart';
 import '../../../core/providers/selected_month_provider.dart';
@@ -11,10 +13,13 @@ import '../domain/onboarding_state.dart';
 import '../providers/budget_setup_provider.dart';
 import '../providers/setup_handoff_provider.dart';
 import '../providers/onboarding_readiness_provider.dart';
+import '../services/onboarding_opening_service.dart';
 import 'widgets/learning_steps.dart';
 import '../../../shared/presentation/financial_feedback.dart';
+import '../../finance/providers/income_source_providers.dart';
 import 'widgets/profile_setup_step.dart';
 import 'widgets/month_income_step.dart';
+import 'widgets/income_activation_step.dart';
 import 'widgets/setup_review.dart';
 import 'widgets/setup_recovery.dart';
 import 'widgets/setup_form_components.dart';
@@ -33,6 +38,10 @@ class _GuidedSetupScreenState extends ConsumerState<GuidedSetupScreen> {
     _scroll.dispose();
     super.dispose();
   }
+
+  static const _activationStage = 5;
+  static const _overviewStage = 6;
+  static const _finishStage = 7;
 
   int _stage = 2;
   bool _initialized = false, _busy = false;
@@ -67,6 +76,14 @@ class _GuidedSetupScreenState extends ConsumerState<GuidedSetupScreen> {
     }
   }
 
+  Future<String> _deviceZone() async {
+    try {
+      return (await FlutterTimezone.getLocalTimezone()).identifier;
+    } catch (_) {
+      return 'UTC';
+    }
+  }
+
   Future<void> _move(int stage) async {
     final c = ref.read(financialSetupProvider.notifier);
     if (stage <= 2 && ref.read(financialSetupProvider).receipt == null) {
@@ -74,7 +91,8 @@ class _GuidedSetupScreenState extends ConsumerState<GuidedSetupScreen> {
     }
     await c.checkpoint(OnboardingStep.values[stage]);
     if (mounted) {
-      if (stage == 6 && ref.read(financialSetupProvider).receipt != null) {
+      if (stage == _finishStage &&
+          ref.read(financialSetupProvider).receipt != null) {
         ref.invalidate(setupProtectionStatusProvider(
             'p${ref.read(financialSetupProvider).receipt!.profileId}'));
       }
@@ -116,7 +134,8 @@ class _GuidedSetupScreenState extends ConsumerState<GuidedSetupScreen> {
           ref.read(nativeAccessBindingProvider).token == binding &&
           ref.read(deviceAuthSessionProvider).authenticated &&
           !ref.read(lockControllerProvider).isLocked;
-      await c.save(isAuthorized: valid);
+      final zone = await _deviceZone();
+      await c.save(isAuthorized: valid, timezone: zone);
       if (mounted && ref.read(financialSetupProvider).receipt != null) {
         showFinancialFeedback(context, 'Financial details saved.');
         await _move(4);
@@ -130,11 +149,40 @@ class _GuidedSetupScreenState extends ConsumerState<GuidedSetupScreen> {
           !c.preparationReady) {
         throw StateError('Confirm protection and preparation.');
       }
-      await _move(5);
+      final receipt = view.receipt;
+      if (receipt == null) throw StateError('The saved owner is unavailable.');
+      final native = ref.read(deviceAuthSessionProvider.notifier),
+          epoch = ref.read(deviceAuthSessionProvider).generation;
+      bool authorized() =>
+          mounted &&
+          native.isCurrent(epoch) &&
+          ref.read(nativeAccessBindingProvider).key ==
+              'p${receipt.profileId}' &&
+          ref.read(deviceAuthSessionProvider).authenticated &&
+          !ref.read(lockControllerProvider).isLocked;
+      if (!authorized()) throw StateError('Verify the exact profile.');
+      final opening = view.draft.opening;
+      if (opening.choice == OnboardingOpeningChoice.known &&
+          opening.minorUnits != null) {
+        final zone = await _deviceZone();
+        await OnboardingOpeningService(IsarHelper.instance).ensure(
+          profileId: receipt.profileId,
+          yearMonth: receipt.yearMonth,
+          openingMinor: opening.minorUnits!,
+          timezone: zone,
+          flowId: view.draft.flowId,
+          isAccessCurrent: authorized,
+        );
+      }
+      await _move(_activationStage);
       return;
     }
-    if (_stage == 5) {
-      await _move(6);
+    if (_stage == _activationStage) {
+      await _move(_overviewStage);
+      return;
+    }
+    if (_stage == _overviewStage) {
+      await _move(_finishStage);
       return;
     }
     final receipt = view.receipt;
@@ -157,11 +205,48 @@ class _GuidedSetupScreenState extends ConsumerState<GuidedSetupScreen> {
     final verifiers = ref.read(pinVerifierStoreProvider);
     try {
       await c.finish(verifierIsSet: verifiers.isSet, isAuthorized: authorized);
-      if (mounted && authorized()) context.go('/dashboard');
+      if (mounted && authorized()) {
+        try {
+          await ref
+              .read(incomeActivationServiceProvider)
+              .ensureActivationActions(receipt.profileId, receipt.yearMonth);
+        } catch (_) {
+          // Attention metadata is best-effort; setup must still open.
+        }
+        if (!mounted || !authorized()) return;
+        context.go('/dashboard');
+      }
     } catch (_) {
       if (mounted) ref.read(setupHandoffProvider.notifier).state = null;
       rethrow;
     }
+  }
+
+  Widget _startingPositionReview(FinancialSetupView view) {
+    final receipt = view.receipt;
+    final currency = view.draft.profile.currency;
+    if (receipt == null || currency == null) return const SizedBox.shrink();
+    final args = (
+      profileId: receipt.profileId,
+      month: receipt.yearMonth,
+      opening: view.draft.opening,
+      currency: currency,
+    );
+    final position = ref.watch(onboardingStartingPositionProvider(args));
+    return position.when(
+      loading: () =>
+          const SetupSurface(child: Center(child: CircularProgressIndicator())),
+      error: (_, __) => SetupSurface(
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('Your starting position could not be loaded.'),
+        TextButton(
+            onPressed: () =>
+                ref.invalidate(onboardingStartingPositionProvider(args)),
+            child: const Text('Retry')),
+      ])),
+      data: (data) => StartingPositionReview(position: data),
+    );
   }
 
   @override
@@ -176,18 +261,48 @@ class _GuidedSetupScreenState extends ConsumerState<GuidedSetupScreen> {
           : saved.amendmentDraftJson != null
               ? 2
               : saved.committed != null
-                  ? saved.step.index.clamp(4, 6)
+                  ? saved.step.index.clamp(4, _finishStage)
                   : saved.step.index.clamp(0, 3);
     }
     final ready = c.savedProgress;
     final securityReady = ready != null &&
         ready.securityChoice != OnboardingSecurityChoice.pending &&
         c.preparationReady;
-    final protection = _stage == 6 && view.receipt != null
+    final protection = _stage == _finishStage && view.receipt != null
         ? ref
             .watch(setupProtectionStatusProvider('p${view.receipt!.profileId}'))
         : null;
     final blocked = _busy || view.loading || view.isSaving || view.needsReview;
+    final primaryEnabled = !(blocked ||
+        (_stage == 4 && !securityReady) ||
+        (_stage == _finishStage &&
+            (protection == null ||
+                protection.isLoading ||
+                protection.hasError ||
+                protection.valueOrNull == SetupProtection.incomplete)));
+    final primaryLabel = _stage == _finishStage
+        ? 'Open my Dashboard'
+        : _stage == 3 && view.page == 2 && view.receipt == null
+            ? 'Confirm financial details'
+            : 'Continue';
+    final onSkip = _stage == 1
+        ? () => _run(() => _move(2))
+        : _stage == _activationStage
+            ? () => _run(() => _move(_overviewStage))
+            : _stage == _overviewStage
+                ? () => _run(() => _move(_finishStage))
+                : null;
+    final skipLabel =
+        _stage == _activationStage ? 'Set up later' : 'Skip explanations';
+    final onBack = _stage > 0
+        ? () => _run(() async {
+              if (_stage == 3 && view.page == 2 && view.receipt == null) {
+                c.goTo(1);
+                return;
+              }
+              await _move(_stage - 1);
+            })
+        : null;
     return SetupPresentation(
         child: PopScope(
             canPop: false,
@@ -200,6 +315,15 @@ class _GuidedSetupScreenState extends ConsumerState<GuidedSetupScreen> {
               appBar: AppBar(
                   title: const Text('Personal setup'),
                   automaticallyImplyLeading: false),
+              bottomNavigationBar: _SetupActionBar(
+                label: primaryLabel,
+                enabled: primaryEnabled,
+                blocked: blocked,
+                onContinue: () => _run(_continue),
+                onSkip: onSkip,
+                skipLabel: skipLabel,
+                onBack: onBack,
+              ),
               body: SafeArea(
                   child: SingleChildScrollView(
                       controller: _scroll,
@@ -317,9 +441,17 @@ class _GuidedSetupScreenState extends ConsumerState<GuidedSetupScreen> {
                                             ownerId: view.receipt!.profileId,
                                             flowId: view.draft.flowId),
                                       ],
-                                      if (_stage == 5)
+                                      if (_stage == _activationStage &&
+                                          view.receipt != null)
+                                        OnboardingIncomeActivationStep(
+                                            profileId: view.receipt!.profileId,
+                                            month: view.receipt!.yearMonth),
+                                      if (_stage == _overviewStage)
                                         const LearningSteps(overview: true),
-                                      if (_stage == 6 && view.receipt != null)
+                                      if (_stage == _finishStage &&
+                                          view.receipt != null) ...[
+                                        _startingPositionReview(view),
+                                        const SizedBox(height: 16),
                                         SetupSurface(
                                             highlight: true,
                                             child: Column(
@@ -375,6 +507,7 @@ class _GuidedSetupScreenState extends ConsumerState<GuidedSetupScreen> {
                                                   const Text(
                                                       'Open your personal Dashboard to complete setup. Viewing this page does not move money or create a shared space.')
                                                 ])),
+                                      ],
                                       const SizedBox(height: 8),
                                       Semantics(
                                           liveRegion: true,
@@ -435,63 +568,75 @@ class _GuidedSetupScreenState extends ConsumerState<GuidedSetupScreen> {
                                                   child: const Text(
                                                       'Review saved setup'))
                                             ])),
-                                      const SizedBox(height: 20),
-                                      FilledButton(
-                                          key: const Key('guidedContinue'),
-                                          onPressed: blocked ||
-                                                  (_stage == 4 &&
-                                                      !securityReady) ||
-                                                  (_stage == 6 &&
-                                                      (protection == null ||
-                                                          protection
-                                                              .isLoading ||
-                                                          protection.hasError ||
-                                                          protection
-                                                                  .valueOrNull ==
-                                                              SetupProtection
-                                                                  .incomplete))
-                                              ? null
-                                              : () => _run(_continue),
-                                          style: FilledButton.styleFrom(
-                                              padding: const EdgeInsets.all(16),
-                                              shape: RoundedRectangleBorder(
-                                                  borderRadius:
-                                                      BorderRadius.circular(
-                                                          16))),
-                                          child: Text(
-                                              _stage == 6
-                                                  ? 'Open my Dashboard'
-                                                  : _stage == 3 &&
-                                                          view.page == 2 &&
-                                                          view.receipt == null
-                                                      ? 'Confirm financial details'
-                                                      : 'Continue',
-                                              textAlign: TextAlign.center)),
-                                      if (_stage == 1 || _stage == 5)
-                                        TextButton(
-                                            onPressed: blocked
-                                                ? null
-                                                : () => _run(() =>
-                                                    _move(_stage == 1 ? 2 : 6)),
-                                            child: const Text(
-                                                'Skip explanations')),
-                                      if (_stage > 0)
-                                        TextButton(
-                                            onPressed: blocked
-                                                ? null
-                                                : () => _run(() async {
-                                                      if (_stage == 3 &&
-                                                          view.page == 2 &&
-                                                          view.receipt ==
-                                                              null) {
-                                                        c.goTo(1);
-                                                        return;
-                                                      }
-                                                      await _move(_stage - 1);
-                                                    }),
-                                            child: const Text('Back')),
                                     ],
                                   ]))))),
             )));
+  }
+}
+
+/// Sticky action area shared by every setup stage.
+class _SetupActionBar extends StatelessWidget {
+  const _SetupActionBar({
+    required this.label,
+    required this.enabled,
+    required this.blocked,
+    required this.onContinue,
+    this.onSkip,
+    this.skipLabel = 'Skip explanations',
+    this.onBack,
+  });
+
+  final String label;
+  final bool enabled, blocked;
+  final VoidCallback onContinue;
+  final VoidCallback? onSkip;
+  final String skipLabel;
+  final VoidCallback? onBack;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        border: Border(top: BorderSide(color: scheme.outlineVariant)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              FilledButton(
+                key: const Key('guidedContinue'),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(52),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                onPressed: enabled ? onContinue : null,
+                child: Text(label, textAlign: TextAlign.center),
+              ),
+              if (onSkip != null || onBack != null) ...[
+                const SizedBox(height: 4),
+                Wrap(alignment: WrapAlignment.center, spacing: 8, children: [
+                  if (onSkip != null)
+                    TextButton(
+                      onPressed: blocked ? null : onSkip,
+                      child: Text(skipLabel),
+                    ),
+                  if (onBack != null)
+                    TextButton(
+                      onPressed: blocked ? null : onBack,
+                      child: const Text('Back'),
+                    ),
+                ]),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

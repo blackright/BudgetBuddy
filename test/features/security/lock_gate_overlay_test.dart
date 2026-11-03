@@ -1,5 +1,7 @@
 import 'package:budget_buddy/core/models/lock_setting.dart';
 import 'package:budget_buddy/core/providers/identity_provider.dart';
+import 'package:budget_buddy/features/budget_setup/domain/onboarding_startup.dart';
+import 'package:budget_buddy/features/budget_setup/providers/onboarding_readiness_provider.dart';
 import 'package:budget_buddy/features/identity/presentation/app_lock_gate.dart';
 import 'package:budget_buddy/features/identity/repositories/secret_store.dart';
 import 'package:budget_buddy/features/security/domain/lock_subject.dart';
@@ -56,6 +58,8 @@ void main() {
           // async database stream is left open in the widget tree.
           identityProvider.overrideWith((ref) => Stream.value(null)),
           consentProvider.overrideWith((ref) => Stream.value(null)),
+          onboardingStartupProvider.overrideWith((ref) =>
+              Stream.value(OnboardingStartup(StartupKind.establishedUser))),
         ],
         child: MaterialApp(
           builder: (context, child) =>

@@ -75,3 +75,14 @@ final budgetContextProvider = Provider<ContextRef>((ref) {
   }
   return ContextRef.personal(profileId: fallback.id, yearMonth: yearMonth);
 });
+
+/// Whether the app can currently resolve a personal or shared context.
+///
+/// Startup observers use this before reading [budgetContextProvider]; on a
+/// fresh install, or while a profile is still loading, there is nothing to
+/// resolve and the observer should simply wait for the next resume.
+bool hasResolvableBudgetContext(ProviderContainer container) {
+  if (container.read(activeSpaceIdProvider) != null) return true;
+  if (container.read(activeProfileIdProvider) != null) return true;
+  return container.read(activeProfileProvider).valueOrNull != null;
+}

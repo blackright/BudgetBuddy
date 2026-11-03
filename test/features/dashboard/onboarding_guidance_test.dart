@@ -8,11 +8,35 @@ import 'package:budget_buddy/core/providers/active_profile_provider.dart';
 import 'package:budget_buddy/core/providers/active_budget_provider.dart';
 import 'package:budget_buddy/core/providers/selected_month_provider.dart';
 import 'package:budget_buddy/features/dashboard/presentation/widgets/onboarding_guidance_card.dart';
+import 'package:budget_buddy/features/budget_setup/domain/onboarding_startup.dart';
+import 'package:budget_buddy/features/budget_setup/providers/onboarding_readiness_provider.dart';
 import 'package:budget_buddy/features/finance/providers/income_source_providers.dart';
 import 'package:budget_buddy/features/finance/providers/profile_providers.dart';
 import 'package:budget_buddy/features/engine/providers/true_available_provider.dart';
 
 void main() {
+  test('legacy profiles are eligible without saved setup; no owner is not',
+      () async {
+    Future<bool> eligible(UserProfile? profile) async {
+      final c = ProviderContainer(overrides: [
+        onboardingStartupProvider.overrideWith((ref) =>
+            Stream.value(OnboardingStartup(StartupKind.establishedUser))),
+        activeProfileProvider.overrideWith((ref) => Stream.value(profile)),
+      ]);
+      addTearDown(c.dispose);
+      await c.read(onboardingStartupProvider.future);
+      await c.read(activeProfileProvider.future);
+      return c.read(onboardingGuidanceEligibleProvider);
+    }
+
+    expect(
+        await eligible(UserProfile()
+          ..id = 1
+          ..name = 'Legacy'
+          ..primaryCurrency = PrimaryCurrency.huf),
+        isTrue);
+    expect(await eligible(null), isFalse);
+  });
   for (final kind in ['none', 'zero', 'inactive', 'active']) {
     test('actual guidance distinguishes $kind income without changing totals',
         () async {

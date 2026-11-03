@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../core/models/currency_code.dart';
+import '../../../../shared/presentation/widgets/app_card.dart';
 import '../../../../shared/presentation/widgets/profile_avatar.dart';
 import '../../providers/budget_setup_provider.dart';
 import 'setup_form_components.dart';
@@ -43,6 +44,12 @@ class ProfileSetupStep extends StatelessWidget {
       SetupSurface(
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const AppSectionHeader(
+          icon: Icons.person_outline,
+          title: 'Your details',
+          subtitle: 'Only for this device. You can change them later.',
+        ),
+        const SizedBox(height: 16),
         SetupInput(
             key: const Key('financialProfileName'),
             label: 'Preferred name',

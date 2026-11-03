@@ -66,7 +66,9 @@ class VaultHistory extends ConsumerWidget {
                   child: ExpansionTile(
                 title: Text(entry.kind == 'opening'
                     ? 'Opening balance • $amount'
-                    : '${entry.yearMonth} • Saved $amount'),
+                    : entry.kind == 'sweep'
+                        ? '${entry.yearMonth} • Earlier automatic savings $amount'
+                        : '${entry.yearMonth} • Saved $amount'),
                 subtitle: Text(formatVaultTime(entry.createdAt)),
                 childrenPadding: const EdgeInsets.all(16),
                 expandedCrossAxisAlignment: CrossAxisAlignment.start,

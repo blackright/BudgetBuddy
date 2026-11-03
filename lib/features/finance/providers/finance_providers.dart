@@ -1,3 +1,4 @@
+import '../../../core/services/income_receipt_ledger.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/models/currency_code.dart';
@@ -73,6 +74,16 @@ final resolvedIncomeProvider = Provider<ResolvedIncome>((ref) {
             CurrencyCode.huf.minorUnitsPerMajor);
     return ResolvedIncome(amount: major, usesOverride: false);
   }
+  final actualAsync = ref.watch(actualIncomeLedgerProvider);
+  if (actualAsync.hasError) throw const FormatException('Confirmed income needs review.');
+  final actual = actualAsync.valueOrNull;
+  if (actual != null &&
+      (actual.groups.any((g) =>
+              g.group.destinationMonth == context.yearMonth ||
+              g.cycleMonth == context.yearMonth) ||
+          actual.corrections.any((c) => c.cashMonth == context.yearMonth))) {
+    return ResolvedIncome(amount: aggregatedMajor,usesOverride:false);
+  }
   if (month?.netSalaryOverride != null) {
     return ResolvedIncome.resolve(
       override: month?.netSalaryOverride,
@@ -101,9 +112,31 @@ final incomeSourcesTotalProvider = Provider<double>((ref) {
   }
   // Select the accounting currency before summing minor units. Without this,
   // mixed sources became zero and foreign-only cents were relabelled as HUF.
+  final actualAsync = ref.watch(actualIncomeLedgerProvider);
+  if (actualAsync.hasError) throw const FormatException('Confirmed income needs review.');
+  final actual = actualAsync.valueOrNull;
+  final confirmed = IncomeReceiptLedger.incomeForMonth(
+      actual?.groups ?? const [],
+      sources,
+      context.yearMonth,
+      currency,
+      corrections: actual?.corrections ?? const []);
+  if (confirmed != null) return confirmed / currency.minorUnitsPerMajor;
   final totalMinor = const IncomeAggregationService()
       .monthlyTotal(sources, context.yearMonth, currency: currency);
   return totalMinor / currency.minorUnitsPerMajor;
+});
+
+/// Forecast salary for the selected personal month, in accounting minor units.
+/// Display-only: confirmed cash is a separate figure.
+final expectedIncomeMinorProvider = Provider<int>((ref) {
+  final context = ref.watch(budgetContextProvider);
+  if (context.isShared) return 0;
+  final sources = ref.watch(incomeSourcesProvider).value ?? const [];
+  final currency = ref.watch(activeProfileProvider).value?.primaryCurrency.code ??
+      CurrencyCode.huf;
+  return const IncomeAggregationService()
+      .monthlyTotal(sources, context.yearMonth, currency: currency);
 });
 
 /// Whether the selected month has enough recorded to present a real verdict

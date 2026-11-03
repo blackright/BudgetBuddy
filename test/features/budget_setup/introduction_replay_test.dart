@@ -33,8 +33,7 @@ import 'package:budget_buddy/features/budget_setup/presentation/introduction_scr
 
 void main() {
   for (final shared in [false, true]) {
-    testWidgets(
-        'replay shared=$shared preserves database and selected context with rollout off',
+    testWidgets('replay shared=$shared preserves database and selected context',
         (tester) async {
       late MedicalTestHarness h;
       late String before;

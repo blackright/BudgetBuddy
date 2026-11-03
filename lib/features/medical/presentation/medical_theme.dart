@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../../core/models/currency_code.dart';
 import '../../../core/models/medical_bill.dart';
+import '../../../core/services/medical_management_reducer.dart';
 import '../../../shared/presentation/money_format.dart';
+import 'medical_bill_view_state.dart';
 
 /// Shared visual tokens for the medical screens.
 ///
@@ -108,6 +110,72 @@ class MedicalTheme {
         return Icons.cancel_outlined;
     }
   }
+
+  /// Inbox group colour. Always paired with the group icon and text.
+  static Color inboxGroupColor(BuildContext context, MedicalInboxGroup group) {
+    final base = switch (group) {
+      MedicalInboxGroup.needsYou => moneyOut,
+      MedicalInboxGroup.waiting => planned,
+      MedicalInboxGroup.closed => bank,
+    };
+    return semantic(context, base);
+  }
+
+  static IconData inboxGroupIcon(MedicalInboxGroup group) => switch (group) {
+        MedicalInboxGroup.needsYou => Icons.notifications_active_outlined,
+        MedicalInboxGroup.waiting => Icons.hourglass_top_outlined,
+        MedicalInboxGroup.closed => Icons.inventory_2_outlined,
+      };
+
+  /// Status accent for the new management stages. Text and an icon always
+  /// accompany the colour, so colour is never the only signal.
+  static Color managementStageColor(
+      BuildContext context, MedicalManagementStage stage) {
+    final base = switch (stage) {
+      MedicalManagementStage.needsReview => planned,
+      MedicalManagementStage.planned => Colors.blueGrey,
+      MedicalManagementStage.receiptPending => Colors.blue,
+      MedicalManagementStage.inProgress => Colors.indigo,
+      MedicalManagementStage.approved => moneyIn,
+      MedicalManagementStage.waitingForPayslip => planned,
+      MedicalManagementStage.rejected => moneyOut,
+      MedicalManagementStage.appeal => Colors.purple,
+      MedicalManagementStage.requestCancelled => bank,
+      MedicalManagementStage.completed => Colors.teal,
+      MedicalManagementStage.closed => moneyIn,
+      MedicalManagementStage.cancelled => bank,
+    };
+    return semantic(context, base);
+  }
+
+  static IconData managementStageIcon(MedicalManagementStage stage) =>
+      switch (stage) {
+        MedicalManagementStage.needsReview => Icons.rate_review_outlined,
+        MedicalManagementStage.planned => Icons.event_note_outlined,
+        MedicalManagementStage.receiptPending => Icons.mark_email_read_outlined,
+        MedicalManagementStage.inProgress => Icons.hourglass_top_outlined,
+        MedicalManagementStage.approved => Icons.verified_outlined,
+        MedicalManagementStage.waitingForPayslip =>
+          Icons.account_balance_wallet_outlined,
+        MedicalManagementStage.rejected => Icons.cancel_outlined,
+        MedicalManagementStage.appeal => Icons.gavel_outlined,
+        MedicalManagementStage.requestCancelled => Icons.block_outlined,
+        MedicalManagementStage.completed => Icons.task_alt_outlined,
+        MedicalManagementStage.closed => Icons.inventory_2_outlined,
+        MedicalManagementStage.cancelled => Icons.block_outlined,
+      };
+
+  /// Minimum logical touch target used by inbox cards and filters.
+  static const double minTouchTarget = 48;
+
+  /// v2 spacing and shape tokens. Screens should use these instead of ad-hoc
+  /// literals so the Medical surfaces stay consistent at 320px and 200% text.
+  static const double screenGutter = 16;
+  static const double sectionGap = 16;
+  static const double cardPadding = 16;
+  static const double tightGap = 8;
+  static const double cardRadius = 16;
+  static const double inputRadius = 12;
 
   /// Money rendered from a **major-unit** value (e.g. an engine aggregate still
   /// expressed as a double), through the app's single formatter (FR-018). Most

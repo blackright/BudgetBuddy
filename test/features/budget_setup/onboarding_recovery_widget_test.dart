@@ -1,5 +1,4 @@
 import 'package:budget_buddy/features/budget_setup/presentation/financial_setup_screen.dart';
-import 'package:budget_buddy/features/budget_setup/providers/onboarding_rollout_provider.dart';
 import 'package:budget_buddy/features/budget_setup/repositories/onboarding_repository.dart';
 import '../medical/repositories/medical_test_harness.dart';
 import 'dart:io';
@@ -119,10 +118,9 @@ void main() {
     await tester.runAsync(controller.save);
     expect(controller.state.error, isNotNull);
     try {
-      await tester.pumpWidget(ProviderScope(overrides: [
-        unifiedOnboardingEnabledProvider.overrideWithValue(true),
-        financialSetupProvider.overrideWith((ref) => controller)
-      ], child: const MaterialApp(home: FinancialSetupScreen())));
+      await tester.pumpWidget(ProviderScope(
+          overrides: [financialSetupProvider.overrideWith((ref) => controller)],
+          child: const MaterialApp(home: FinancialSetupScreen())));
       await tester.pumpAndSettle();
       await tester.ensureVisible(find.text('Review saved setup'));
       await tester.tap(find.text('Review saved setup'));

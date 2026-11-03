@@ -1,5 +1,7 @@
+import 'income_receipt_ledger.dart';
 import 'dart:convert';
 import 'fx_booking_service.dart';
+import 'medical_receipt_booking_service.dart';
 import '../models/fx_revision.dart';
 import 'dart:math' as math;
 import '../models/financial_report.dart';
@@ -81,7 +83,17 @@ class ReportMonthInput {
       required this.settlements,
       required this.vault,
       required this.categories,
-      required this.recorded});
+      required this.recorded,
+      this.incomeGroups = const [],
+      this.incomeCorrections = const [],
+      this.requiresReviewedBank = false,
+      this.reviewedBankMinor,
+      this.excludedCashExpenseIds = const {}});
+  final List<IncomeReceiptLedger> incomeGroups;
+  final List<SalaryCorrection> incomeCorrections;
+  final bool requiresReviewedBank;
+  final int? reviewedBankMinor;
+  final Set<int> excludedCashExpenseIds;
   final ReportOwner owner;
   final String name;
   final CurrencyCode currency;
@@ -139,7 +151,8 @@ CalculatedReportMonth calculateReportMonth(
 
   int refundContext(Reimbursement r) {
     final m = reimbursementAccountingMoney(r);
-    if (r.fxHistoryJson != null && m.currency != contextCurrency) {
+    if ((r.fxHistoryJson != null || r.medicalReceiptJson != null) &&
+        m.currency != contextCurrency) {
       throw const FormatException('Booked refund currency needs review.');
     }
     return toContext(m.minorUnits, m.currency.code);
@@ -262,14 +275,16 @@ CalculatedReportMonth calculateReportMonth(
         owner: input.owner,
         context: input.name,
         month: key,
-        kind: 'Refund',
+        kind: r.medicalReceiptJson == null ? 'Refund' : 'Insurance refund',
         name: target?.title ?? 'Unlinked refund',
         date: r.date,
         recordedAt: r.date,
         amount: r.amount,
         currency: r.currency.toUpperCase(),
         converted: bookedDisplay(() => refundContext(r)),
-        rateBasis: fxBasis(r.fxHistoryJson),
+        rateBasis: r.medicalReceiptJson == null
+            ? fxBasis(r.fxHistoryJson)
+            : 'Original Medical booking; actual receipt attribution',
         profile: target == null ? 'Unresolved' : profileName(target),
         profileKey: target == null
             ? 'unresolved'
@@ -281,6 +296,58 @@ CalculatedReportMonth calculateReportMonth(
         notes: r.note,
         status: 'Recorded',
         effect: -1));
+  }
+  for (final ledger
+      in input.incomeGroups.where((g) => g.group.destinationMonth == key)) {
+    final group = ledger.group;
+    final amount = ledger.salaryMinor + ledger.incomeMinor;
+    if (amount <= 0) continue;
+    final salary = ledger.salaryMinor > 0;
+    rows.add(ReportTransaction(
+        owner: input.owner,
+        context: input.name,
+        month: key,
+        kind: salary ? 'Salary received' : 'Income received',
+        name: salary
+            ? 'Salary component of bank credit'
+            : 'Confirmed income component of bank credit',
+        date: group.actualDate,
+        recordedAt: group.createdAt,
+        amount: amount,
+        currency: group.currency.toUpperCase(),
+        converted: converted(amount, group.currency),
+        rateBasis: 'Confirmed bank credit component',
+        profile: 'Main',
+        profileKey: 'main',
+        category: 'Income',
+        merchant: 'Not applicable',
+        notes: salary
+            ? 'Insurance refunds are classified separately; the bank credit is counted once.'
+            : 'Recorded as confirmed income; expected income is not spendable.',
+        status: 'Confirmed',
+        effect: 0));
+  }
+  for (final correction
+      in input.incomeCorrections.where((c) => c.cashMonth == key)) {
+    rows.add(ReportTransaction(
+        owner: input.owner,
+        context: input.name,
+        month: key,
+        kind: 'Salary correction',
+        name: correction.reason,
+        date: DateTime.parse('${correction.cashMonth}-01'),
+        recordedAt: DateTime.parse('${correction.cashMonth}-01'),
+        amount: correction.amountMinor,
+        currency: correction.currency.toUpperCase(),
+        converted: converted(correction.amountMinor, correction.currency),
+        rateBasis: 'Append-only salary correction',
+        profile: 'Main',
+        profileKey: 'main',
+        category: 'Income',
+        merchant: 'Not applicable',
+        notes: 'The original salary receipt is unchanged.',
+        status: 'Correction',
+        effect: 0));
   }
   try {
     int spent(int? id, String? type) => sumFinancialMinor([
@@ -305,14 +372,18 @@ CalculatedReportMonth calculateReportMonth(
     final incomeTotal = const IncomeAggregationService()
         .monthlyTotal(input.sources, key, currency: contextCurrency);
     sumFinancialMinor([incomeTotal]);
-    final income = input.owner.shared
-        ? input.month.sharedIncomeOverride ??
-            (incomeTotal > 0 ? incomeTotal : input.defaultIncome)
-        : input.month.netSalaryOverride != null
-            ? reportMajor(input.month.netSalaryOverride!, contextCurrency)
-            : incomeTotal > 0
-                ? incomeTotal
-                : input.defaultIncome;
+    final recordedIncome = IncomeReceiptLedger.incomeForMonth(
+        input.incomeGroups, input.sources, key, contextCurrency,
+        corrections: input.incomeCorrections);
+    final income = recordedIncome ??
+        (input.owner.shared
+            ? input.month.sharedIncomeOverride ??
+                (incomeTotal > 0 ? incomeTotal : input.defaultIncome)
+            : input.month.netSalaryOverride != null
+                ? reportMajor(input.month.netSalaryOverride!, contextCurrency)
+                : incomeTotal > 0
+                    ? incomeTotal
+                    : input.defaultIncome);
     if (income < 0) throw const FormatException('Income must not be negative.');
     for (final p in budgets) {
       if (p.allocation < 0) {
@@ -360,6 +431,7 @@ CalculatedReportMonth calculateReportMonth(
         : monthlyVaultCredit(input.vault, key, contextCurrency);
     final reserve = sumFinancialMinor([
       income,
+      medicalRecoveryForMonth(returns, key, convert: refundContext),
       carryIn,
       released,
       -protection,
@@ -455,6 +527,11 @@ CalculatedReportMonth calculateReportMonth(
       final gross = sumFinancialMinor(expenses
           .where((e) => isPaidExpenseStatus(e.status))
           .map(expenseContext));
+      final grossCash = sumFinancialMinor(expenses
+          .where((e) =>
+              isPaidExpenseStatus(e.status) &&
+              !input.excludedCashExpenseIds.contains(e.id))
+          .map(expenseContext));
       final refunds = sumFinancialMinor(returns.map(refundContext));
       final free = freeToSpend(
               income: income,
@@ -482,14 +559,19 @@ CalculatedReportMonth calculateReportMonth(
             ? display(
                 reportMajor(input.month.baseAvailableAmount, contextCurrency))
             : null,
-        'bank': input.month.openingBalanceConfirmed
-            ? display(sumFinancialMinor([
-                reportMajor(input.month.baseAvailableAmount, contextCurrency),
-                -gross,
-                refunds,
-                credit
-              ]))
-            : null
+        'bank': input.requiresReviewedBank
+            ? (input.reviewedBankMinor == null
+                ? null
+                : display(input.reviewedBankMinor!))
+            : input.month.openingBalanceConfirmed
+                ? display(sumFinancialMinor([
+                    reportMajor(
+                        input.month.baseAvailableAmount, contextCurrency),
+                    -grossCash,
+                    refunds,
+                    credit
+                  ]))
+                : null
       });
       metrics['rounding'] = sumFinancialMinor([
         metrics['free']!,

@@ -3,6 +3,19 @@ import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../models/user_profile.dart';
+import '../models/financial_adoption.dart';
+import '../models/medical_approval.dart';
+import '../models/medical_appeal.dart';
+import '../models/medical_withholding_match.dart';
+import '../models/medical_settlement_event.dart';
+import '../models/money_receipt.dart';
+import '../models/balance_checkpoint.dart';
+import '../models/banking_calendar_coverage.dart';
+import '../models/desired_salary_reminder.dart';
+import '../models/period_funding_assignment.dart';
+import '../models/salary_schedule.dart';
+import '../models/salary_cycle.dart';
+import '../models/income_receipt_group.dart';
 import '../models/monthly_budget.dart';
 import '../../core/models/expense.dart';
 import '../../core/models/expense_template.dart';
@@ -34,6 +47,7 @@ import '../models/transfer.dart';
 import '../models/merchant.dart';
 import '../models/expense_evidence_chunk.dart';
 import '../models/expense_purchase.dart';
+import '../models/pending_action.dart';
 import '../services/evidence_staging.dart';
 import 'dart:developer' as developer;
 import '../models/audit_event.dart';
@@ -67,6 +81,23 @@ class IsarHelper {
     _isarValue = await Isar.open(
       [
         UserProfileSchema,
+        FinancialAdoptionSchema,
+        MedicalApprovalSchema,
+        MedicalWithholdingMatchSchema,
+        MedicalSettlementEventSchema,
+        MedicalClaimClosureSchema,
+        MedicalClaimActivitySchema,
+        MedicalAppealSchema,
+        MoneyReceiptSchema,
+        ReceiptRevisionSchema,
+        BalanceCheckpointSchema,
+        BankingCalendarCoverageSchema,
+        DesiredSalaryReminderSchema,
+        MovementInclusionSchema,
+        PeriodFundingAssignmentSchema,
+        SalaryScheduleSchema,
+        SalaryCycleSchema,
+        IncomeReceiptGroupSchema,
         MonthlyBudgetSchema,
         ExpenseSchema,
         ExpenseTemplateSchema,
@@ -101,6 +132,7 @@ class IsarHelper {
         MerchantSchema,
         ExpenseEvidenceChunkSchema,
         ExpensePurchaseSchema,
+        PendingActionSchema,
         AuditEventSchema,
         AppSettingsSchema,
       ],

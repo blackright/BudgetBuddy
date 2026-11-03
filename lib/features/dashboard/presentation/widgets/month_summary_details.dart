@@ -46,6 +46,13 @@ class MonthSummaryDetails extends ConsumerWidget {
         title: const Text('Details'),
         childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
         children: [
+          if (summary.expectedIncome > 0)
+            _DetailLine(
+              label: 'Expected salary',
+              value: _money(summary.expectedIncome),
+              valueKey: const Key('expectedIncomeDetailLine'),
+              color: MedicalTheme.semantic(context, MedicalTheme.bank),
+            ),
           _DetailLine(
             label: 'Medical',
             value: _money(summary.medicalPaid),

@@ -49,7 +49,9 @@ void main() {
       );
 
   Future<void> fillForm(WidgetTester tester) async {
-    await tester.enterText(find.byType(TextFormField).first, 'Groceries');
+    final title = find.byWidgetPredicate((w) =>
+        w is TextField && w.decoration?.labelText == 'What did you buy?');
+    await tester.enterText(title, 'Groceries');
     await tester.enterText(amountField(), '100');
     await tester.pump();
     await tester.ensureVisible(find.text('Planned'));
@@ -66,6 +68,13 @@ void main() {
     await tester.tap(payment);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Cash').last);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byIcon(Icons.calendar_month_outlined));
+    await tester.tap(find.byIcon(Icons.calendar_month_outlined));
+    await tester.pumpAndSettle();
+    final today = DateTime.now();
+    await tester.tap(find.text('${today.day}').last);
+    await tester.tap(find.text('OK'));
     await tester.pumpAndSettle();
   }
 
@@ -99,16 +108,18 @@ void main() {
     await tester.pumpAndSettle();
 
     await fillForm(tester);
-    await tester.ensureVisible(find.text('Save Expense'));
-    await tester.tap(find.text('Save Expense'));
+    await tester.ensureVisible(find.text('Save expense'));
+    await tester.tap(find.text('Save expense'));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('confirmSpaceOnSaveMessage')), findsOneWidget);
-    expect(find.text('Add "Groceries" (Ft 100) to "Home"?'), findsOneWidget);
-    expect(find.text('Confirm'), findsOneWidget);
-    expect(find.text('Change context'), findsOneWidget);
+    // Main + shared space is one combined review, not two dialogs.
+    expect(find.byKey(const Key('destinationGuardDialog')), findsOneWidget);
+    expect(find.textContaining('Add "Groceries" (Ft 100) to "Home"?'),
+        findsOneWidget);
+    expect(find.text('Choose a profile'), findsOneWidget);
+    expect(find.text('Save to free-to-use'), findsOneWidget);
 
-    // Dismiss via the barrier: the guard returns without saving.
+    // Dismiss via the barrier: nothing is saved.
     await tester.tapAt(const Offset(5, 5));
     await tester.pumpAndSettle();
     expect(find.byType(AlertDialog), findsNothing);

@@ -33,6 +33,7 @@ import '../../features/finance/presentation/allocations_screen.dart';
 import '../../features/finance/presentation/income_sources_screen.dart';
 import '../../features/finance/presentation/profiles_screen.dart';
 import '../../features/finance/presentation/transfer_screen.dart';
+import '../../features/pending_actions/presentation/pending_actions_screen.dart';
 import '../models/expense.dart';
 import '../models/category.dart';
 
@@ -92,9 +93,26 @@ GoRouter createAppRouter(
           builder: (context, state) => const VaultScreen(),
         ),
         GoRoute(
+          path: '/pending_actions',
+          parentNavigatorKey: rootNavigatorKey,
+          builder: (context, state) => const PendingActionsScreen(),
+        ),
+        GoRoute(
           path: '/income_sources',
           parentNavigatorKey: rootNavigatorKey,
-          builder: (context, state) => const IncomeSourcesScreen(),
+          builder: (context, state) {
+            final id = int.tryParse(state.uri.queryParameters['bill'] ?? '');
+            final activate = state.uri.queryParameters['activate'];
+            final rawPeriod = state.uri.queryParameters['period'];
+            final period = rawPeriod != null &&
+                    RegExp(r'^\d{4}-(0[1-9]|1[0-2])$').hasMatch(rawPeriod)
+                ? rawPeriod
+                : null;
+            return IncomeSourcesScreen(
+                focusedBillId: id != null && id > 0 ? id : null,
+                activationGuid: activate,
+                activationPeriod: period);
+          },
         ),
         GoRoute(
           path: '/profiles',
@@ -169,8 +187,13 @@ GoRouter createAppRouter(
         GoRoute(
           path: '/medical_detail',
           parentNavigatorKey: rootNavigatorKey,
-          builder: (context, state) =>
-              MedicalDetailScreen(billId: state.extra as int),
+          builder: (context, state) {
+            final extra = state.extra;
+            final id = extra is int
+                ? extra
+                : int.tryParse(state.uri.queryParameters['bill'] ?? '') ?? 0;
+            return MedicalDetailScreen(billId: id);
+          },
         ),
         GoRoute(
           path: '/medical_bill_form',
@@ -267,8 +290,6 @@ GoRouter createAppRouter(
         ),
       ],
     );
-
-final goRouter = createAppRouter();
 
 /// Recreate owner-bound page state even in inactive cached shell branches.
 class _ContextRoot extends ConsumerStatefulWidget {

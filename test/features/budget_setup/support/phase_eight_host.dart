@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:budget_buddy/core/models/currency_code.dart';
+import 'package:budget_buddy/core/models/income_source.dart';
+import 'package:budget_buddy/core/models/salary_cycle.dart';
 import 'package:budget_buddy/core/presentation/app_themes.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -6,9 +9,11 @@ import 'package:budget_buddy/core/providers/active_profile_provider.dart';
 import 'package:budget_buddy/core/models/user_profile.dart';
 import 'package:budget_buddy/features/budget_setup/domain/onboarding_state.dart';
 import 'package:budget_buddy/features/budget_setup/domain/onboarding_finance.dart';
+import 'package:budget_buddy/features/budget_setup/domain/onboarding_starting_position.dart';
 import 'package:budget_buddy/features/budget_setup/providers/budget_setup_provider.dart';
 import 'package:budget_buddy/features/budget_setup/presentation/guided_setup_screen.dart';
 import 'package:budget_buddy/features/budget_setup/presentation/widgets/security_setup_step.dart';
+import 'package:budget_buddy/features/finance/providers/income_source_providers.dart';
 import 'financial_drafts.dart';
 
 // Presentation fixtures only: no authentication or financial save is simulated.
@@ -75,6 +80,25 @@ Future<void> pumpStage(WidgetTester tester, LayoutController controller,
   await tester.pumpWidget(ProviderScope(
       overrides: [
         financialSetupProvider.overrideWith((ref) => controller),
+        onboardingActivationSourcesProvider
+            .overrideWith((ref, profileId) async => const <IncomeSource>[]),
+        salaryCyclesProvider.overrideWith((ref) async => const <SalaryCycle>[]),
+        onboardingStartingPositionProvider.overrideWith((ref, args) async =>
+            OnboardingStartingPosition(
+                month: args.month,
+                currency: CurrencyCode.huf,
+                openingMinor: 0,
+                confirmedMinor: 0,
+                pendingMinor: 0,
+                skippedMinor: 0,
+                unconfiguredMinor: 0,
+                cancelledMinor: 0,
+                confirmed: const [],
+                pending: const [],
+                skipped: const [],
+                unconfigured: const [],
+                future: const [],
+                cancelled: const [])),
         // Deliberately unresolved protection owner exercises the persistent error UI.
         activeProfileProvider
             .overrideWith((ref) => Stream<UserProfile?>.value(null)),

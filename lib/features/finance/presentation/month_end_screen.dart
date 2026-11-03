@@ -13,6 +13,7 @@ import '../../../core/services/refund_service.dart';
 import '../../../shared/presentation/money_format.dart';
 import '../../../shared/presentation/input_formatters/thousands_separator_input_formatter.dart';
 import '../providers/month_end_providers.dart';
+import '../../pending_actions/providers/pending_actions_providers.dart';
 
 class MonthEndScreen extends ConsumerWidget {
   const MonthEndScreen({super.key});
@@ -186,6 +187,8 @@ class _MonthEndBodyState extends ConsumerState<_MonthEndBody> {
       await ref
           .read(monthEndServiceProvider)
           .confirm(report, choices: _reviewedChoices);
+      await ref.read(pendingActionServiceProvider).completeByRecord(
+          'monthend.close', report.yearMonth, report.yearMonth);
       if (!mounted) return;
       showFinancialFeedback(context, 'Month-End confirmed');
       final saved =

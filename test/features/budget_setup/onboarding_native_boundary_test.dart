@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:budget_buddy/features/budget_setup/presentation/budget_setup_screen.dart';
 import 'package:budget_buddy/features/budget_setup/providers/budget_setup_provider.dart';
-import 'package:budget_buddy/features/budget_setup/providers/onboarding_rollout_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:budget_buddy/core/providers/identity_provider.dart';
@@ -16,7 +15,6 @@ void main() {
     var reads = 0;
     final auth = FakeDeviceAuthenticator(allow: false);
     await tester.pumpWidget(ProviderScope(overrides: [
-      unifiedOnboardingEnabledProvider.overrideWithValue(true),
       nativeAccessBindingProvider
           .overrideWithValue(const NativeAccessBinding(key: 'setup:flow')),
       deviceAuthenticatorProvider.overrideWithValue(auth),

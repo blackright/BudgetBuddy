@@ -10,25 +10,18 @@ import '../medical/repositories/medical_test_harness.dart';
 import 'package:budget_buddy/core/models/currency_code.dart';
 import 'package:budget_buddy/features/budget_setup/presentation/financial_setup_screen.dart';
 import 'package:budget_buddy/features/budget_setup/providers/budget_setup_provider.dart';
-import 'package:budget_buddy/features/budget_setup/providers/onboarding_rollout_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'support/financial_drafts.dart';
 
 void main() {
-  test('new financial rollout is off by default', () {
-    final c = ProviderContainer();
-    addTearDown(c.dispose);
-    expect(c.read(unifiedOnboardingEnabledProvider), isFalse);
-  });
   testWidgets('profile, separate funds, one expanded income and exact review',
       (tester) async {
     final controller = FinancialSetupController(initial: financialDraft());
-    await tester.pumpWidget(ProviderScope(overrides: [
-      unifiedOnboardingEnabledProvider.overrideWithValue(true),
-      financialSetupProvider.overrideWith((ref) => controller)
-    ], child: const MaterialApp(home: FinancialSetupScreen())));
+    await tester.pumpWidget(ProviderScope(
+        overrides: [financialSetupProvider.overrideWith((ref) => controller)],
+        child: const MaterialApp(home: FinancialSetupScreen())));
     await tester.pumpAndSettle();
     expect(find.text('Your profile'), findsOneWidget);
     expect(find.text('J'), findsOneWidget);
@@ -84,10 +77,9 @@ void main() {
       'grouped entry reaches exact review and cancelling removal keeps income',
       (tester) async {
     final controller = FinancialSetupController(initial: financialDraft());
-    await tester.pumpWidget(ProviderScope(overrides: [
-      unifiedOnboardingEnabledProvider.overrideWithValue(true),
-      financialSetupProvider.overrideWith((ref) => controller)
-    ], child: const MaterialApp(home: FinancialSetupScreen())));
+    await tester.pumpWidget(ProviderScope(
+        overrides: [financialSetupProvider.overrideWith((ref) => controller)],
+        child: const MaterialApp(home: FinancialSetupScreen())));
     await tester.tap(find.byKey(const Key('financialContinue')));
     await tester.pumpAndSettle();
     final opening = find.descendant(
@@ -137,7 +129,6 @@ void main() {
         try {
           await tester.pumpWidget(ProviderScope(
               overrides: [
-                unifiedOnboardingEnabledProvider.overrideWithValue(true),
                 financialSetupProvider.overrideWith((ref) => controller)
               ],
               child: RepaintBoundary(

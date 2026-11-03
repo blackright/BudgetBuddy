@@ -1,4 +1,11 @@
 import '../../../core/models/merchant.dart';
+import '../../../core/models/medical_approval.dart';
+import '../../../core/models/medical_appeal.dart';
+import '../../../core/models/medical_settlement_event.dart';
+import 'codecs/medical_approval_codec.dart';
+import 'codecs/medical_appeal_codec.dart';
+import 'codecs/medical_claim_activity_codec.dart';
+import 'codecs/medical_settlement_event_codec.dart';
 import '../../../core/services/fx_booking_service.dart';
 import '../../../core/models/expense_purchase.dart';
 import '../../../core/services/purchase_policy.dart';
@@ -92,6 +99,10 @@ const List<EntityApplier> entityAppliers = [
   ExpensePurchaseApplier(),
   ReimbursementApplier(),
   MedicalBillApplier(),
+  MedicalApprovalApplier(),
+  MedicalClaimActivityApplier(),
+  MedicalAppealApplier(),
+  MedicalSettlementEventApplier(),
   FamilyMemberApplier(),
   MedicalProviderApplier(),
   MedicalServiceTypeApplier(),
@@ -487,7 +498,228 @@ class ReimbursementApplier extends EntityApplier {
 
   @override
   Future<void> delete(Isar isar, int entityLocalId) =>
-      isar.reimbursements.delete(entityLocalId);
+      _deleteReimbursement(isar, entityLocalId);
+
+  Future<void> _deleteReimbursement(Isar isar, int id) async {
+    if ((await isar.reimbursements.get(id))?.medicalReceiptJson != null) {
+      throw const FormatException('Use a reviewed Medical receipt correction.');
+    }
+    await isar.reimbursements.delete(id);
+  }
+}
+
+class MedicalApprovalApplier extends EntityApplier {
+  const MedicalApprovalApplier();
+  @override
+  String get entityType => 'MedicalApproval';
+  @override
+  Future<int> upsert(Isar isar, String payload) async {
+    final json = canonicalJsonDecode(payload);
+    final row = const MedicalApprovalCodec().fromJson(json);
+    final space = await SyncIdTranslator(isar).resolveLocalEntity(
+        'SharedSpace', decodeGuidOrNull(json['sharedSpaceSyncGuid']));
+    final bill = await isar.medicalBills
+        .filter()
+        .syncGuidEqualTo(row.billGuid)
+        .findFirst();
+    if (space == null ||
+        bill == null ||
+        bill.sharedSpaceId != space ||
+        !bill.canBeReimbursed) {
+      throw const FormatException('Medical approval owner needs review.');
+    }
+    final expense = bill.linkedExpenseId == null
+        ? null
+        : await isar.expenses.get(bill.linkedExpenseId!);
+    if (expense == null || row.currency != expense.currencyCode?.code) {
+      throw const FormatException('Medical approval currency needs review.');
+    }
+    row.sharedSpaceId = space;
+    row.profileId = null;
+    final existing = await isar.medicalApprovals
+        .filter()
+        .syncGuidEqualTo(row.syncGuid)
+        .findFirst();
+    if (existing != null) {
+      if (existing.sharedSpaceId != space ||
+          const MedicalApprovalCodec().toPayload(existing) !=
+              const MedicalApprovalCodec().toPayload(row)) {
+        throw const FormatException('Immutable Medical approval conflict.');
+      }
+      return existing.id;
+    }
+    final prior = await isar.medicalApprovals
+        .filter()
+        .billGuidEqualTo(row.billGuid)
+        .sortByRevisionDesc()
+        .findFirst();
+    if (row.revision != (prior?.revision ?? 0) + 1 ||
+        row.previousGuid != prior?.syncGuid) {
+      throw const FormatException('Incomplete Medical approval chain.');
+    }
+    return isar.medicalApprovals.put(row);
+  }
+
+  @override
+  Future<void> delete(Isar isar, int entityLocalId) async {
+    throw const FormatException('Medical decision history cannot be deleted.');
+  }
+}
+
+class MedicalClaimActivityApplier extends EntityApplier {
+  const MedicalClaimActivityApplier();
+
+  @override
+  String get entityType => 'MedicalClaimActivity';
+
+  @override
+  Future<int> upsert(Isar isar, String payload) async {
+    final json = canonicalJsonDecode(payload);
+    final row = const MedicalClaimActivityCodec().fromJson(json);
+    final space = await SyncIdTranslator(isar).resolveLocalEntity(
+        'SharedSpace', decodeGuidOrNull(json['sharedSpaceSyncGuid']));
+    final bill = await isar.medicalBills
+        .filter()
+        .syncGuidEqualTo(row.billGuid)
+        .findFirst();
+    if (bill == null) {
+      throw const FormatException('Medical activity bill is missing.');
+    }
+    if (space == null) {
+      if (bill.sharedSpaceId != null) {
+        throw const FormatException('Medical activity owner needs review.');
+      }
+      row
+        ..sharedSpaceId = null
+        ..profileId = bill.profileId ?? 0;
+    } else {
+      if (bill.sharedSpaceId != space) {
+        throw const FormatException('Medical activity owner needs review.');
+      }
+      row
+        ..sharedSpaceId = space
+        ..profileId = 0;
+    }
+
+    final existing = await isar.medicalClaimActivitys
+        .filter()
+        .syncGuidEqualTo(row.syncGuid)
+        .findFirst();
+    if (existing != null) {
+      if (canonicalJsonEncode(
+              const MedicalClaimActivityCodec().toJson(existing)) !=
+          canonicalJsonEncode(const MedicalClaimActivityCodec().toJson(row))) {
+        throw const FormatException('Medical activity history is immutable.');
+      }
+      return existing.id;
+    }
+    return isar.medicalClaimActivitys.put(row);
+  }
+
+  @override
+  Future<void> delete(Isar isar, int entityLocalId) =>
+      isar.medicalClaimActivitys.delete(entityLocalId);
+}
+
+class MedicalAppealApplier extends EntityApplier {
+  const MedicalAppealApplier();
+
+  @override
+  String get entityType => 'MedicalAppeal';
+
+  @override
+  Future<int> upsert(Isar isar, String payload) async {
+    final json = canonicalJsonDecode(payload);
+    final row = const MedicalAppealCodec().fromJson(json);
+    final space = await SyncIdTranslator(isar).resolveLocalEntity(
+        'SharedSpace', decodeGuidOrNull(json['sharedSpaceSyncGuid']));
+    final bill = await isar.medicalBills
+        .filter()
+        .syncGuidEqualTo(row.billGuid)
+        .findFirst();
+    if (bill == null) {
+      throw const FormatException('Medical appeal bill is missing.');
+    }
+    if (space == null) {
+      if (bill.sharedSpaceId != null) {
+        throw const FormatException('Medical appeal owner needs review.');
+      }
+      row
+        ..sharedSpaceId = null
+        ..profileId = bill.profileId;
+    } else {
+      if (bill.sharedSpaceId != space) {
+        throw const FormatException('Medical appeal owner needs review.');
+      }
+      row
+        ..sharedSpaceId = space
+        ..profileId = null;
+    }
+
+    final existing = await isar.medicalAppeals
+        .filter()
+        .syncGuidEqualTo(row.syncGuid)
+        .findFirst();
+    if (existing != null) {
+      if (existing.operationIdentity != row.operationIdentity) {
+        throw const FormatException('Medical appeal identity needs review.');
+      }
+      row.id = existing.id;
+    }
+    return isar.medicalAppeals.put(row);
+  }
+
+  @override
+  Future<void> delete(Isar isar, int entityLocalId) =>
+      isar.medicalAppeals.delete(entityLocalId);
+}
+
+class MedicalSettlementEventApplier extends EntityApplier {
+  const MedicalSettlementEventApplier();
+
+  @override
+  String get entityType => 'MedicalSettlementEvent';
+
+  @override
+  Future<int> upsert(Isar isar, String payload) async {
+    final json = canonicalJsonDecode(payload);
+    final row = const MedicalSettlementEventCodec().fromJson(json);
+    final bill = await isar.medicalBills
+        .filter()
+        .syncGuidEqualTo(row.billGuid)
+        .findFirst();
+    if (bill == null || bill.sharedSpaceId != null || bill.profileId == null) {
+      throw const FormatException('Medical settlement owner needs review.');
+    }
+    row.profileId = bill.profileId;
+    row.actorId = 0;
+    row.expenseId = row.expenseGuid == null
+        ? null
+        : await SyncIdTranslator(isar)
+            .resolveLocalEntity('Expense', row.expenseGuid);
+    final existing = await isar.medicalSettlements
+        .filter()
+        .syncGuidEqualTo(row.syncGuid)
+        .findFirst();
+    if (existing != null) {
+      if (existing.profileId != row.profileId ||
+          existing.billGuid != row.billGuid ||
+          existing.operationIdentity != row.operationIdentity ||
+          canonicalJsonEncode(
+                  const MedicalSettlementEventCodec().toJson(existing)) !=
+              canonicalJsonEncode(
+                  const MedicalSettlementEventCodec().toJson(row))) {
+        throw const FormatException('Immutable Medical settlement conflict.');
+      }
+      return existing.id;
+    }
+    return isar.medicalSettlements.put(row);
+  }
+
+  @override
+  Future<void> delete(Isar isar, int entityLocalId) async {
+    throw const FormatException('Medical settlement evidence is retained.');
+  }
 }
 
 class MedicalBillApplier extends EntityApplier {

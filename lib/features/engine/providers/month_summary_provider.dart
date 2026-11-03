@@ -6,10 +6,14 @@ import '../../../core/providers/budget_context_provider.dart';
 import '../../../core/providers/selected_month_provider.dart';
 import '../../expenses/repositories/expense_repository.dart';
 import '../../finance/providers/finance_providers.dart';
+import '../../finance/providers/income_source_providers.dart';
 import '../../finance/providers/profile_providers.dart';
 import '../../finance/providers/month_end_providers.dart';
+import 'continuous_balance_provider.dart';
+import '../../../core/services/continuous_balance_service.dart';
 import '../../../core/services/profile_spending_service.dart';
 import '../../../core/services/free_funds.dart';
+import '../../finance/providers/receipt_reconciliation_provider.dart';
 import '../../settings/providers/settings_provider.dart';
 import '../currency_resolution.dart';
 import '../month_summary.dart';
@@ -58,14 +62,41 @@ final monthSummaryProvider = Provider<MonthSummary>((ref) {
   final yearMonth = ref.watch(selectedYearMonthProvider);
   final month = ref.watch(monthFinanceProvider).value;
   final income = ref.watch(resolvedIncomeProvider);
+  final actualSalaryFunding =
+      ref.watch(actualSalaryFundingProvider(yearMonth)).valueOrNull ?? 0.0;
   final main = ref.watch(mainCurrencyProvider);
   final table = ref.watch(rateRegistryProvider).tableFor(yearMonth);
   final display = resolveContextDisplayCurrency(month, main);
   final source = main;
+  final context = ref.watch(budgetContextProvider);
+  final continuous = context.isShared || context.profileId == null
+      ? null
+      : ref
+          .watch(continuousBalanceProvider(
+              (profileId: context.profileId!, yearMonth: yearMonth)))
+          .valueOrNull;
+  final continuousActive =
+      continuous != null && continuous.status == BalanceChainStatus.intact;
+  double displayMinor(int minor) =>
+      toDisplay(Money(minor, source), display, table).majorValue;
   final expenses =
       ref.watch(monthlyExpensesProvider).value ?? const <Expense>[];
   final reimbursements =
       ref.watch(monthlyOriginReimbursementsProvider).value ?? const [];
+  final cashExpenses = mergeCashExpenses(
+      expenses, ref.watch(monthlyCashExpensesProvider).value ?? const []);
+  final cashReimbursements = mergeCreditedReimbursements(reimbursements,
+      ref.watch(monthlyCashReimbursementsProvider).value ?? const []);
+
+  final usesReviewedBank = reimbursements
+          .any((r) => r.medicalReceiptJson != null) ||
+      (ref.watch(actualIncomeLedgerProvider).valueOrNull?.isEmpty == false);
+  final reviewed = usesReviewedBank
+      ? ref.watch(receiptReconciliationProvider).valueOrNull
+      : null;
+  final reviewedBank = reviewed != null && !reviewed.needsReview
+      ? reviewed.cash?.bankMinor
+      : null;
 
   // T144: total allocation and set-aside (unused part) for this month's
   // budget profiles, in minor units of the context currency. Both are
@@ -112,73 +143,115 @@ final monthSummaryProvider = Provider<MonthSummary>((ref) {
     ref.watch(reimbursementTargetExpensesProvider).value ?? const <Expense>[],
   );
 
+  final cashPaidMinor = sumFinancialMinor(cashExpenses
+      .where((e) => {
+            ExpenseStatus.paid,
+            ExpenseStatus.partiallyReimbursed,
+            ExpenseStatus.reimbursed
+          }.contains(e.status))
+      .map((e) => expenseToDisplay(e, source, table, accountingCurrency: source)
+          .minorUnits));
+  final cashReturnedMinor = sumFinancialMinor(cashReimbursements.map((r) =>
+      reimbursementToDisplay(r, source, table, accountingCurrency: source)
+          .minorUnits));
+  final vaultMinor = ref.watch(monthlyVaultCreditProvider);
+
   return MonthSummary.from(
-    resolvedFreeToSpend: toDisplay(
-            Money(
-                freeToSpend(
-                        income:
-                            Money.fromMajor(income.amount, source).minorUnits,
-                        paid: sumFinancialMinor(expenses
-                            .where((e) => {
-                                  ExpenseStatus.paid,
-                                  ExpenseStatus.partiallyReimbursed,
-                                  ExpenseStatus.reimbursed
-                                }.contains(e.status))
-                            .map((e) => expenseToDisplay(e, source, table,
-                                    accountingCurrency: source)
-                                .minorUnits)),
-                        returned: sumFinancialMinor(
-                            reimbursements.map((r) => reimbursementToDisplay(r, source, table, accountingCurrency: source).minorUnits)),
-                        unused: totalSetAsideMinor,
-                        carry: ref.watch(monthEndBalanceProvider).carryShortfall,
-                        incoming: ref.watch(monthEndBalanceProvider).incoming,
-                        released: ref.watch(monthEndBalanceProvider).released,
-                        transfers: ref.watch(monthlyVaultCreditProvider))
-                    .toInt(),
-                source),
-            display,
-            table)
-        .majorValue,
-    vaultTransfers: toDisplay(
-            Money(ref.watch(monthlyVaultCreditProvider), source),
-            display,
-            table)
-        .majorValue,
+    resolvedFreeToSpend: continuousActive
+        ? displayMinor(continuous.freeToUseMinor)
+        : toDisplay(
+                Money(
+                    freeToSpend(
+                            income:
+                                Money.fromMajor(income.amount, source).minorUnits,
+                            paid: cashPaidMinor,
+                            returned: cashReturnedMinor,
+                            unused: totalSetAsideMinor,
+                            carry:
+                                ref.watch(monthEndBalanceProvider).carryShortfall,
+                            incoming: ref.watch(monthEndBalanceProvider).incoming,
+                            released: ref.watch(monthEndBalanceProvider).released,
+                            transfers: ref.watch(monthlyVaultCreditProvider))
+                        .toInt(),
+                    source),
+                display,
+                table)
+            .majorValue,
+    cashPaymentsMade: continuousActive
+        ? displayMinor(continuous.cashOutMinor + vaultMinor)
+        : toDisplay(Money(cashPaidMinor, source), display, table).majorValue,
+    cashMoneyReturned: continuousActive
+        ? 0
+        : toDisplay(Money(cashReturnedMinor, source), display, table).majorValue,
+    vaultTransfers: continuousActive
+        ? displayMinor(vaultMinor)
+        : toDisplay(
+                Money(ref.watch(monthlyVaultCreditProvider), source),
+                display,
+                table)
+            .majorValue,
     yearMonth: yearMonth,
-    income: toDisplay(Money.fromMajor(income.amount, source), display, table)
-        .majorValue,
-    usesOverriddenIncome: income.usesOverride,
+    income: continuousActive
+        ? displayMinor(continuous.cashInMinor)
+        : toDisplay(Money.fromMajor(income.amount, source), display, table)
+            .majorValue,
+    usesOverriddenIncome: continuousActive ? false : income.usesOverride,
     expenses: expenses,
     reimbursements: reimbursements,
     convertExpense: (e) =>
         expenseToDisplay(e, display, table, accountingCurrency: source),
     convertReimbursement: (r) =>
         reimbursementToDisplay(r, display, table, accountingCurrency: source),
-    openingBalance: month != null && month.openingBalanceConfirmed
-        ? toDisplay(Money.fromMajor(month.baseAvailableAmount, source), display,
-                table)
-            .majorValue
-        : null,
+    openingBalance: continuousActive
+        ? displayMinor(continuous.openingMinor)
+        : month != null && month.openingBalanceConfirmed
+            ? toDisplay(
+                    Money.fromMajor(month.baseAvailableAmount, source),
+                    display,
+                    table)
+                .majorValue
+            : null,
     targetPaidAmounts: targetPaidAmounts,
     medicalTargetIds: medicalTargetIds,
+    usesReviewedBank: usesReviewedBank,
+    reviewedBank: reviewedBank == null
+        ? null
+        : toDisplay(Money(reviewedBank, source), display, table).majorValue,
+    convertMedicalAccounting: (money) => toDisplay(money, display, table),
     allocated: toDisplay(Money(totalAllocatedMinor, source), display, table)
         .majorValue,
-    setAside:
-        toDisplay(Money(totalSetAsideMinor, source), display, table).majorValue,
-    carryOver: toDisplay(
-            Money(ref.watch(monthEndBalanceProvider).carryShortfall, source),
-            display,
-            table)
-        .majorValue,
-    carriedIn: toDisplay(
-            Money(ref.watch(monthEndBalanceProvider).incoming, source),
-            display,
-            table)
-        .majorValue,
-    releasedAtMonthEnd: toDisplay(
-            Money(ref.watch(monthEndBalanceProvider).released, source),
-            display,
-            table)
-        .majorValue,
+    setAside: continuousActive
+        ? displayMinor(continuous.allocatedMinor)
+        : toDisplay(Money(totalSetAsideMinor, source), display, table)
+            .majorValue,
+    carryOver: continuousActive
+        ? 0
+        : toDisplay(
+                Money(ref.watch(monthEndBalanceProvider).carryShortfall, source),
+                display,
+                table)
+            .majorValue,
+    carriedIn: continuousActive
+        ? 0
+        : toDisplay(
+                Money(ref.watch(monthEndBalanceProvider).incoming, source),
+                display,
+                table)
+            .majorValue,
+    releasedAtMonthEnd: continuousActive
+        ? 0
+        : toDisplay(
+                Money(ref.watch(monthEndBalanceProvider).released, source),
+                display,
+                table)
+            .majorValue,
+    actualSalaryFunding: Money(actualSalaryFunding.toInt(), source).majorValue,
+    expectedIncome: continuousActive
+        ? toDisplay(
+                Money(ref.watch(expectedIncomeMinorProvider), source),
+                display,
+                table)
+            .majorValue
+        : 0,
   );
 });

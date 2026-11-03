@@ -1,6 +1,5 @@
 import '../../budget_setup/providers/onboarding_readiness_provider.dart';
 import '../../budget_setup/domain/onboarding_startup.dart';
-import '../../budget_setup/providers/onboarding_rollout_provider.dart';
 import '../../budget_setup/presentation/widgets/learning_steps.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -22,10 +21,33 @@ final publicSetupIntroductionDoneProvider = StateProvider<bool>((ref) => false);
 
 class _AppLockGateState extends ConsumerState<AppLockGate> {
   bool _busy = false, _armed = false, _publicHelp = false;
+
+  /// Set on the first frame the session is authenticated. Before that nothing is
+  /// mounted behind the lock; afterwards the live app is kept and only covered,
+  /// so a re-lock returns the user to the exact step they left.
+  bool _everOpened = false;
   String? _error;
   Widget _shut(Widget screen) => Navigator(
       onDidRemovePage: (_) {},
       pages: <Page<void>>[MaterialPage<void>(child: screen)]);
+
+  /// A stable tree: the child always occupies the same slot, so covering and
+  /// uncovering it never remounts the route subtree or resets widget state.
+  Widget _stack(Widget? cover) => Stack(
+        fit: StackFit.expand,
+        children: [
+          Visibility(
+            visible: cover == null,
+            maintainState: true,
+            maintainAnimation: false,
+            maintainInteractivity: false,
+            child: widget.child,
+          ),
+          if (cover != null) Positioned.fill(child: cover),
+        ],
+      );
+
+  Widget _cover(Widget screen) => _everOpened ? _stack(screen) : _shut(screen);
   Future<void> _unlock() async {
     if (_busy) return;
     setState(() {
@@ -61,16 +83,15 @@ class _AppLockGateState extends ConsumerState<AppLockGate> {
     final binding = ref.watch(nativeAccessBindingProvider);
     final native = ref.watch(deviceAuthSessionProvider);
     final snapshot = ref.watch(lockControllerProvider);
+    if (native.authenticated) _everOpened = true;
     if (ref.watch(lockResolutionPendingProvider) || !binding.resolved) {
-      return _shut(
+      return _cover(
           const Scaffold(body: Center(child: Text('Resolving protection...'))));
     }
     final introDone = ref.watch(publicSetupIntroductionDoneProvider);
-    final unified = ref.watch(unifiedOnboardingEnabledProvider);
-    final fresh = unified && !introDone
-        ? ref.watch(onboardingStartupProvider).valueOrNull?.kind ==
-            StartupKind.firstSetup
-        : false;
+    final fresh = !introDone &&
+        ref.watch(onboardingStartupProvider).valueOrNull?.kind ==
+            StartupKind.firstSetup;
     if (fresh && binding.identity == null && binding.key.startsWith('setup:')) {
       return _shut(PublicSetupIntroduction(
           onContinue: () => ref
@@ -84,13 +105,13 @@ class _AppLockGateState extends ConsumerState<AppLockGate> {
           if (mounted) ref.read(deviceKeySessionProvider.notifier).lock();
         });
       }
-      return _shut(LockScreen(subject: snapshot.subject));
+      return _cover(LockScreen(subject: snapshot.subject));
     }
     _armed = false;
     final key = ref.watch(deviceKeySessionProvider);
     final keyRequired = binding.identity != null || binding.isShared;
     if (native.authenticated && (!keyRequired || key != null)) {
-      return widget.child;
+      return _stack(null);
     }
     if (_publicHelp) {
       return _shut(Scaffold(
@@ -111,7 +132,7 @@ class _AppLockGateState extends ConsumerState<AppLockGate> {
                             child: const Text('Return to phone verification')),
                       ]))))));
     }
-    return _shut(Scaffold(
+    return _cover(Scaffold(
         body: SafeArea(
             child: Center(
                 child: SingleChildScrollView(

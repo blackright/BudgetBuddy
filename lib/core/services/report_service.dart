@@ -1,3 +1,4 @@
+import 'income_receipt_ledger.dart';
 import 'dart:convert';
 import 'package:isar/isar.dart';
 import '../models/financial_report.dart';
@@ -6,6 +7,8 @@ import '../models/currency_code.dart';
 import '../models/shared_space.dart';
 import '../models/monthly_budget.dart';
 import '../models/expense.dart';
+import '../models/medical_bill.dart';
+import '../models/medical_withholding_match.dart';
 import '../models/budget_profile.dart';
 import '../models/direct_expense_profile.dart';
 import '../models/income_source.dart';
@@ -22,6 +25,8 @@ import '../../features/vault/models/vault_entry.dart';
 import '../../features/vault/models/savings_vault.dart';
 import 'report_access.dart';
 import 'report_calculation.dart';
+import 'balance_checkpoint_service.dart';
+import '../providers/budget_context_provider.dart';
 import 'free_funds.dart';
 
 /// Read-only report snapshot. Never provisions months or invokes write services.
@@ -94,12 +99,35 @@ class ReportService {
                   ? q.sharedSpaceIdEqualTo(owner.id)
                   : q.sharedSpaceIdIsNull().profileIdEqualTo(owner.id))
               .findAll();
+          final incomeGroups = owner.shared
+              ? <IncomeReceiptLedger>[]
+              : await IncomeReceiptLedger.forOwner(db, owner.id);
+          final incomeCorrections = owner.shared
+              ? <SalaryCorrection>[]
+              : await SalaryCorrection.forOwner(db, owner.id);
           final sources = await db.incomeSources
               .filter()
               .group((q) => owner.shared
                   ? q.sharedSpaceIdEqualTo(owner.id)
                   : q.sharedSpaceIdIsNull().profileIdEqualTo(owner.id))
               .findAll();
+          final withheldExpenseIds = <int>{};
+          if (!owner.shared) {
+            final matches = await db.medicalWithholdingMatchs
+                .filter()
+                .profileIdEqualTo(owner.id)
+                .reversedEqualTo(false)
+                .findAll();
+            for (final match in matches) {
+              final bill = await db.medicalBills
+                  .filter()
+                  .syncGuidEqualTo(match.billGuid)
+                  .findFirst();
+              if (bill?.linkedExpenseId != null) {
+                withheldExpenseIds.add(bill!.linkedExpenseId!);
+              }
+            }
+          }
           final settlements = await db.monthEndRuns
               .filter()
               .group((q) => owner.shared
@@ -225,9 +253,28 @@ class ReportService {
               final defaults = owner.shared
                   ? space!.defaultIncome
                   : reportMajor(user!.defaultNetSalary, currency);
+              final reviewedRequired = refunds.any((r) =>
+                      r.originYearMonth == month &&
+                      r.medicalReceiptJson != null) ||
+                  incomeGroups.isNotEmpty ||
+                  incomeCorrections.isNotEmpty;
+              final reviewedBank = reviewedRequired
+                  ? (await BalanceCheckpointService(db, clock: clock)
+                          .cashInTransaction(
+                              context: owner.shared
+                                  ? ContextRef.shared(
+                                      spaceId: owner.id, yearMonth: month)
+                                  : ContextRef.personal(
+                                      profileId: owner.id, yearMonth: month),
+                              actorId: actor,
+                              isAccessCurrent: () => true))
+                      .bankMinor
+                  : null;
               result = calculateReportMonth(
                   ReportMonthInput(
                       owner: owner,
+                      incomeGroups: incomeGroups,
+                      incomeCorrections: incomeCorrections,
                       name: name,
                       currency: currency,
                       month: found.single,
@@ -240,7 +287,10 @@ class ReportService {
                       settlements: settlements,
                       vault: vault,
                       categories: categories,
-                      recorded: recorded),
+                      recorded: recorded,
+                      requiresReviewedBank: reviewedRequired,
+                      reviewedBankMinor: reviewedBank,
+                      excludedCashExpenseIds: withheldExpenseIds),
                   request,
                   rates);
             } on FormatException catch (e) {

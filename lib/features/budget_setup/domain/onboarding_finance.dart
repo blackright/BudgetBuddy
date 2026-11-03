@@ -133,6 +133,7 @@ class OnboardingFinance {
           currency: currency,
           startDate: source.startDate,
           endDate: source.endDate,
+          nominalDay: source.nominalDay,
           notes: source.notes?.trim().isEmpty == true
               ? null
               : source.notes?.trim()));

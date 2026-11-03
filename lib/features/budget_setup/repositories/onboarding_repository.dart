@@ -6,6 +6,7 @@ import '../../../core/models/currency_code.dart';
 import '../../../core/models/user_profile.dart';
 import '../../../core/models/monthly_budget.dart';
 import '../../../core/models/income_source.dart';
+import '../../../core/models/salary_schedule.dart';
 import '../../../core/models/expense.dart';
 import '../../../core/models/budget_profile.dart';
 import '../../../core/models/direct_expense_profile.dart';
@@ -60,7 +61,8 @@ class OnboardingRepository {
   Future<OnboardingCommitReference> commitCore(OnboardingState reviewed,
           {required String reviewedDigest,
           required int expectedRevision,
-          bool Function()? isAuthorized}) =>
+          bool Function()? isAuthorized,
+          String timezone = 'UTC'}) =>
       isar.writeTxn(() async {
         if (isAuthorized != null && !isAuthorized()) {
           throw const OnboardingCommitException(
@@ -148,6 +150,11 @@ class OnboardingRepository {
           final row = OnboardingFinance.sourceRecord(source,
               profileId: profile.id, at: now);
           await income.saveInTxn(row);
+          await _writeSourceSchedule(isar,
+              profileId: profile.id,
+              source: source,
+              timezone: timezone,
+              at: now);
           ids[row.syncGuid] = row.id;
         }
         final ref = OnboardingCommitReference(
@@ -302,6 +309,34 @@ class _SetupIncomeRepository extends IncomeSourceRepository {
   AuditRepository get audit => setupAudit;
 }
 
+/// Writes the usual receipt day for a recurring onboarding source.
+///
+/// One-time income has no recurring schedule. The write is idempotent so a
+/// correction or retry updates the existing schedule instead of duplicating it.
+Future<void> _writeSourceSchedule(
+  Isar isar, {
+  required int profileId,
+  required OnboardingSourceDraft source,
+  required String timezone,
+  required DateTime at,
+}) async {
+  if (source.frequency == IncomeFrequency.oneTime) return;
+  final existing = await isar.salarySchedules
+      .filter()
+      .sourceGuidEqualTo(source.sourceGuid)
+      .findFirst();
+  final schedule = existing ?? SalarySchedule();
+  schedule
+    ..profileId = profileId
+    ..sourceGuid = source.sourceGuid
+    ..nominalDay = source.nominalDay
+    ..countryCode = ''
+    ..timezone = timezone
+    ..updatedAt = at;
+  if (existing == null) schedule.createdAt = at;
+  await isar.salarySchedules.put(schedule);
+}
+
 /// Recovery commands share the original repository, explicit owner and CAS.
 extension OnboardingRecoveryCommands on OnboardingRepository {
   /// Local navigation checkpoint. It never creates money or grants access.
@@ -319,7 +354,7 @@ extension OnboardingRecoveryCommands on OnboardingRepository {
           throw const OnboardingCommitException(
               'Confirm the financial review first.');
         }
-        if (step.index >= OnboardingStep.overview.index &&
+        if (step.index >= OnboardingStep.activation.index &&
             (current.securityChoice == OnboardingSecurityChoice.pending ||
                 !current.directoryReady ||
                 !current.categoriesReady ||
@@ -646,7 +681,8 @@ extension OnboardingRecoveryCommands on OnboardingRepository {
   Future<OnboardingState> amendCore(OnboardingState edited,
           {required int expectedRevision,
           required String reviewedDigest,
-          bool Function()? isAuthorized}) =>
+          bool Function()? isAuthorized,
+          String timezone = 'UTC'}) =>
       isar.writeTxn(() async {
         if (isAuthorized != null && !isAuthorized()) {
           throw const OnboardingCommitException(
@@ -768,10 +804,20 @@ extension OnboardingRecoveryCommands on OnboardingRepository {
                 canonicalJsonEncode(
                     {...source.toJson()}..remove('amountText'))) {
               ids[source.sourceGuid] = old.id;
+              await _writeSourceSchedule(isar,
+                  profileId: owner.id,
+                  source: source,
+                  timezone: timezone,
+                  at: _nextTime(current));
               continue;
             }
           }
           await income.saveInTxn(row);
+          await _writeSourceSchedule(isar,
+              profileId: owner.id,
+              source: source,
+              timezone: timezone,
+              at: _nextTime(current));
           ids[source.sourceGuid] = row.id;
         }
         final receipt = OnboardingCommitReference(

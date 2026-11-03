@@ -1,3 +1,5 @@
+import '../../../core/services/income_receipt_ledger.dart';
+import '../../../core/models/income_receipt_group.dart';
 import '../../../core/models/transfer.dart';
 import '../../../core/services/fx_booking_service.dart';
 import '../../spaces/repositories/space_write_guard.dart';
@@ -66,6 +68,15 @@ class AuditRepository {
   Future<bool> remove<T>(IsarCollection<T> collection, int id,
       {required String type}) async {
     final old = await collection.get(id);
+    if (old is Reimbursement && old.medicalReceiptJson != null) {
+      throw StateError('Use a reviewed Medical receipt correction.');
+    }
+    if (old is Expense &&
+        (await isar.reimbursements.filter().expenseIdEqualTo(old.id).findAll())
+            .any((r) => r.medicalReceiptJson != null)) {
+      throw StateError(
+          'A payment with Medical receipts cannot be deleted here.');
+    }
     final scope = AuditFinancialScope.of(old as Object?);
     final financialBefore =
         scope == null ? null : await auditFinancialState(isar, scope);
@@ -140,6 +151,12 @@ class AuditRepository {
     if (space == null && profile == null) {
       throw StateError('Cannot audit a financial record without its owner.');
     }
+    if(type=='IncomeReceiptGroup' && after!=null) {
+      final group=await isar.incomeReceiptGroups.get(row['id'] as int);
+      if(group==null)throw StateError('The recorded bank credit is missing.');
+      final ledger=await IncomeReceiptLedger.read(isar,group);
+      after={...after,'salaryMinor':ledger.salaryMinor,'medicalMinor':ledger.medicalMinor};
+    }
     // Spending/count are derived caches. Refreshing a screen is not an action.
     if (['BudgetProfile', 'DirectExpenseProfile'].contains(type) &&
         before != null &&
@@ -194,7 +211,7 @@ class AuditRepository {
                     : '$prefix.${before == null ? 'create' : after == null ? 'delete' : 'update'}'),
         objectType: type,
         objectGuid:
-            (row['syncGuid'] ?? row['operationKey'] ?? '$type:${row['id']}')
+            (row['syncGuid'] ?? row['guid'] ?? row['operationKey'] ?? '$type:${row['id']}')
                 .toString(),
         objectId: row['id'] as int?,
         before: before,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/models/income_source.dart';
 import '../../../../shared/presentation/money_format.dart';
+import '../../../../shared/presentation/widgets/app_card.dart';
 import '../../domain/onboarding_state.dart';
 import '../../domain/onboarding_finance.dart';
 import '../../providers/budget_setup_provider.dart';
@@ -65,14 +66,12 @@ class MonthIncomeStep extends StatelessWidget {
           Text(view.errors['month']!,
               style: TextStyle(color: Theme.of(context).colorScheme.error)),
         const SizedBox(height: 18),
-        Text('Opening money',
-            style: Theme.of(context)
-                .textTheme
-                .titleLarge
-                ?.copyWith(fontWeight: FontWeight.w700)),
-        const SizedBox(height: 8),
-        const Text(
-            'Your balance at the start of this month. Keep this separate from the income you enter below.'),
+        const AppSectionHeader(
+          icon: Icons.savings_outlined,
+          title: 'Opening money',
+          subtitle:
+              'Your balance at the start of this month. Keep this separate from the income you enter below.',
+        ),
         const SizedBox(height: 12),
         SetupValidationTarget(
             error: d.opening.choice == OnboardingOpeningChoice.known
@@ -109,14 +108,12 @@ class MonthIncomeStep extends StatelessWidget {
           Text(view.errors['opening']!,
               style: TextStyle(color: Theme.of(context).colorScheme.error)),
       ])),
-      Text('Set up your income',
-          style: Theme.of(context)
-              .textTheme
-              .titleLarge
-              ?.copyWith(fontWeight: FontWeight.w800)),
-      const SizedBox(height: 8),
-      const Text(
-          'These become real income sources. Each card shows what applies to your selected month.'),
+      const AppSectionHeader(
+        icon: Icons.payments_outlined,
+        title: 'Set up your income',
+        subtitle:
+            'These become real income sources. Each card shows what applies to your selected month.',
+      ),
       const SizedBox(height: 16),
       if (preview != null)
         SetupSurface(
@@ -268,6 +265,26 @@ class MonthIncomeStep extends StatelessWidget {
                     controller.updateSource(source.sourceGuid, frequency: v);
                   }
                 }),
+            if (source.frequency != IncomeFrequency.oneTime) ...[
+              const SizedBox(height: 16),
+              DropdownButtonFormField<int>(
+                  key: Key('sourceNominalDay-${source.sourceGuid}'),
+                  isExpanded: true,
+                  itemHeight: null,
+                  initialValue: source.nominalDay,
+                  decoration: const InputDecoration(
+                      labelText: 'Usual receipt day',
+                      border: OutlineInputBorder()),
+                  items: [
+                    for (var day = 1; day <= 31; day++)
+                      DropdownMenuItem(value: day, child: Text('$day'))
+                  ],
+                  onChanged: (v) {
+                    if (v != null) {
+                      controller.updateSource(source.sourceGuid, nominalDay: v);
+                    }
+                  }),
+            ],
             const SizedBox(height: 12),
             if (source.frequency == IncomeFrequency.weekly)
               const Text(
@@ -278,8 +295,11 @@ class MonthIncomeStep extends StatelessWidget {
                   OutlinedButton.icon(
                       icon: const Icon(Icons.event),
                       label: Text(source.startDate == null
-                          ? 'Choose start date'
-                          : 'Starts ${DateFormat.yMMMd().format(source.startDate!)}'),
+                          ? (source.frequency == IncomeFrequency.oneTime
+                              ? 'Choose receipt date'
+                              : 'Choose next income period')
+                          : '${source.frequency == IncomeFrequency.oneTime ? 'Receipt date' : 'Next period'} '
+                              '${DateFormat.yMMMd().format(source.startDate!)}'),
                       onPressed: () async {
                         final date =
                             await _pick(context, source.startDate ?? month);

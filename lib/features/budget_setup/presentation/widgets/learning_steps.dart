@@ -8,6 +8,7 @@ const setupStageLabels = [
   'Your profile',
   'Your first month',
   'Security',
+  'Income activation',
   'App overview',
   'Finish'
 ];
@@ -16,24 +17,44 @@ class SetupProgress extends StatelessWidget {
   const SetupProgress({super.key, required this.stage});
   final int stage;
   @override
-  Widget build(BuildContext context) => Semantics(
-      label: '${setupStageLabels[stage]}, step ${stage + 1} of 7',
-      header: true,
-      excludeSemantics: true,
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Expanded(
-              child: Text('Step ${stage + 1} of 7',
-                  style: Theme.of(context).textTheme.labelLarge)),
-          Text('${((stage + 1) / 7 * 100).round()}%')
-        ]),
-        const SizedBox(height: 10),
-        ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child:
-                LinearProgressIndicator(value: (stage + 1) / 7, minHeight: 6)),
-        const SizedBox(height: 20),
-      ]));
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context), scheme = theme.colorScheme;
+    return Semantics(
+        label: '${setupStageLabels[stage]}, step ${stage + 1} of 8',
+        header: true,
+        excludeSemantics: true,
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Wrap(
+            spacing: 8,
+            runSpacing: 2,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text('Step ${stage + 1} of 8',
+                  style: theme.textTheme.labelLarge
+                      ?.copyWith(fontWeight: FontWeight.w700)),
+              Text(setupStageLabels[stage],
+                  style: theme.textTheme.labelMedium
+                      ?.copyWith(color: scheme.onSurfaceVariant)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(children: [
+            for (var i = 0; i < 8; i++) ...[
+              if (i > 0) const SizedBox(width: 6),
+              Expanded(
+                child: Container(
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: i <= stage ? scheme.primary : scheme.outlineVariant,
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                ),
+              ),
+            ],
+          ]),
+          const SizedBox(height: 20),
+        ]));
+  }
 }
 
 class SetupWelcomeContent extends StatelessWidget {
@@ -55,15 +76,11 @@ class SetupWelcomeContent extends StatelessWidget {
             'Welcome to BudgetBuddy. Build a plan around your real income, keep purchases organised and grow your savings, one step at a time.'),
         const SizedBox(height: 20),
         const Wrap(spacing: 8, runSpacing: 8, children: [
-          Chip(
-              avatar: Icon(Icons.edit_calendar_outlined),
-              label: Text('Plan your month')),
-          Chip(
-              avatar: Icon(Icons.receipt_long_outlined),
-              label: Text('Track purchases')),
-          Chip(
-              avatar: Icon(Icons.savings_outlined),
-              label: Text('Build savings'))
+          _FeaturePill(
+              icon: Icons.edit_calendar_outlined, label: 'Plan your month'),
+          _FeaturePill(
+              icon: Icons.receipt_long_outlined, label: 'Track purchases'),
+          _FeaturePill(icon: Icons.savings_outlined, label: 'Build savings')
         ]),
         const SizedBox(height: 12),
         Text(replay
@@ -77,6 +94,7 @@ class LearningSteps extends StatelessWidget {
   final bool overview;
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final lessons = overview
         ? const [
             (
@@ -133,6 +151,13 @@ class LearningSteps extends StatelessWidget {
       const SizedBox(height: 20),
       for (final lesson in lessons)
         Card(
+            elevation: 0,
+            color: scheme.surfaceContainerLow,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: BorderSide(
+                  color: scheme.outlineVariant.withValues(alpha: .6)),
+            ),
             clipBehavior: Clip.antiAlias,
             child: ExpansionTile(
                 expansionAnimationStyle: MediaQuery.disableAnimationsOf(context)
@@ -220,4 +245,33 @@ class _PublicSetupIntroductionState extends State<PublicSetupIntroduction> {
                                       child: const Text('Back'))
                                 ]
                               ])))))));
+}
+
+class _FeaturePill extends StatelessWidget {
+  const _FeaturePill({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context), scheme = theme.colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 4,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Icon(icon, size: 18, color: scheme.primary),
+          Text(label, style: theme.textTheme.labelLarge),
+        ],
+      ),
+    );
+  }
 }

@@ -1,3 +1,5 @@
+import '../../../core/services/legacy_medical_reimbursement_guard.dart';
+import '../../../core/models/expense.dart';
 import '../../finance/repositories/audit_repository.dart';
 import '../../sync/repositories/sync_recorder.dart';
 import 'package:isar/isar.dart';
@@ -62,6 +64,13 @@ class ReimbursementRepository {
       await _guardWrite(existing.sharedSpaceId, existing.originYearMonth);
     }
     await _isar.writeTxn(() async {
+      final current = await _isar.reimbursements.get(id);
+      if (current?.expenseId != null) {
+        final expense = await _isar.expenses.get(current!.expenseId!);
+        if (expense != null) {
+          await LegacyMedicalReimbursementGuard.forExpense(_isar, expense);
+        }
+      }
       await AuditRepository(_isar,
               recorder: recorder, actorId: _actingProfileId)
           .remove(_isar.reimbursements, id, type: 'Reimbursement');
@@ -114,6 +123,24 @@ class ReimbursementRepository {
         )
         .and()
         .originYearMonthEqualTo(context.yearMonth)
+        .watch(fireImmediately: true);
+  }
+
+  /// Reimbursements whose actual credit month is [context]'s month.
+  ///
+  /// Only rows with an explicit [Reimbursement.creditYearMonth] appear here; a
+  /// null override keeps the legacy origin-month credit.
+  Stream<List<Reimbursement>> watchReimbursementsByCreditMonth(
+      ContextRef context) {
+    return _isar.reimbursements
+        .filter()
+        .group(
+          (q) => context.isShared
+              ? q.sharedSpaceIdEqualTo(context.spaceId)
+              : q.profileIdEqualTo(context.profileKey),
+        )
+        .and()
+        .creditYearMonthEqualTo(context.yearMonth)
         .watch(fireImmediately: true);
   }
 

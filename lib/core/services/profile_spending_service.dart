@@ -51,6 +51,7 @@ class ProfileSpendingService {
     int Function(Expense expense)? convert,
     List<Reimbursement> reimbursements = const [],
     int Function(Reimbursement reimbursement)? convertReimbursement,
+    Set<int> excludedExpenseIds = const {},
   }) {
     if (budget == null) return 0;
     return spentInYearMonth(
@@ -61,6 +62,7 @@ class ProfileSpendingService {
       convert: convert,
       reimbursements: reimbursements,
       convertReimbursement: convertReimbursement,
+      excludedExpenseIds: excludedExpenseIds,
     );
   }
 
@@ -82,15 +84,19 @@ class ProfileSpendingService {
     int Function(Expense expense)? convert,
     List<Reimbursement> reimbursements = const [],
     int Function(Reimbursement reimbursement)? convertReimbursement,
+    Set<int> excludedExpenseIds = const {},
   }) {
     var total = 0;
     final returnsByExpense = <int, List<Reimbursement>>{};
     for (final row in reimbursements) {
-      if (row.expenseId != null && row.originYearMonth == yearMonth) {
+      if (row.medicalReceiptJson == null &&
+          row.expenseId != null &&
+          row.originYearMonth == yearMonth) {
         (returnsByExpense[row.expenseId!] ??= []).add(row);
       }
     }
     for (final expense in expenses) {
+      if (excludedExpenseIds.contains(expense.id)) continue;
       if (expense.yearMonth != yearMonth) continue;
       // null budgetProfileId means the expense belongs to the Main Profile.
       if (expense.budgetProfileId != profileId) continue;

@@ -19,6 +19,7 @@ enum OnboardingStep {
   profile,
   firstMonth,
   security,
+  activation,
   overview,
   finish
 }
@@ -88,6 +89,7 @@ class OnboardingSourceDraft {
       this.currency,
       this.startDate,
       this.endDate,
+      this.nominalDay = 25,
       this.notes});
   final String sourceGuid;
   final String name;
@@ -99,6 +101,9 @@ class OnboardingSourceDraft {
 
   /// Date-only values preserve the user's calendar day, not a UTC conversion.
   final DateTime? startDate, endDate;
+
+  /// The usual receipt day for recurring income. One-time income ignores it.
+  final int nominalDay;
   final String? notes;
   Map<String, Object?> toJson() => {
         'sourceGuid': sourceGuid,
@@ -110,9 +115,11 @@ class OnboardingSourceDraft {
         'currency': currency?.name.toUpperCase(),
         'startDate': _day(startDate),
         'endDate': _day(endDate),
+        'nominalDay': nominalDay,
         'notes': notes
       };
   static OnboardingSourceDraft read(Object? value) {
+    final hasNominalDay = value is Map && value.containsKey('nominalDay');
     final m = _object(value, [
       'sourceGuid',
       'name',
@@ -123,6 +130,7 @@ class OnboardingSourceDraft {
       'currency',
       'startDate',
       'endDate',
+      if (hasNominalDay) 'nominalDay',
       'notes'
     ]);
     return OnboardingSourceDraft(
@@ -135,6 +143,7 @@ class OnboardingSourceDraft {
         currency: _currency(m['currency']),
         startDate: _date(m['startDate']),
         endDate: _date(m['endDate']),
+        nominalDay: hasNominalDay ? _integer(m['nominalDay']) : 25,
         notes: m['notes'] == null ? null : _string(m['notes']));
   }
 }
@@ -398,6 +407,9 @@ class OnboardingState {
         _invalid();
       }
       _amount(source.amountText, source.minorUnits, source.currency);
+      if (source.nominalDay < 1 || source.nominalDay > 31) {
+        _invalid();
+      }
       for (final date in [source.startDate, source.endDate]) {
         if (date != null &&
             (date.hour != 0 ||

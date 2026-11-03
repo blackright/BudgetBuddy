@@ -21,6 +21,9 @@ import 'package:budget_buddy/features/engine/providers/true_available_provider.d
 import 'package:budget_buddy/features/engine/providers/month_summary_provider.dart';
 import 'package:budget_buddy/features/settings/providers/settings_provider.dart';
 import 'package:budget_buddy/core/models/income_source.dart';
+import 'package:budget_buddy/core/models/income_receipt_group.dart';
+import 'package:budget_buddy/core/models/medical_bill.dart';
+import 'package:budget_buddy/core/models/medical_withholding_match.dart';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:isar/isar.dart';
@@ -38,6 +41,7 @@ import 'package:budget_buddy/core/models/shared_member.dart';
 import 'package:budget_buddy/core/models/month_rate_seal.dart';
 import 'package:budget_buddy/core/providers/budget_context_provider.dart';
 import 'package:budget_buddy/core/services/month_end_service.dart';
+import 'package:budget_buddy/core/services/month_carry_service.dart';
 import 'package:budget_buddy/core/services/month_end_report.dart';
 import 'package:budget_buddy/features/engine/providers/rate_registry_provider.dart';
 import 'package:budget_buddy/features/expenses/models/reimbursement.dart';
@@ -90,6 +94,9 @@ void main() {
       MonthRateSealSchema,
       LiveRateSetSchema,
       IncomeSourceSchema,
+      IncomeReceiptGroupSchema,
+      MedicalBillSchema,
+      MedicalWithholdingMatchSchema,
       SavingsVaultSchema,
       VaultEntrySchema,
       AuditEventSchema,
@@ -213,6 +220,55 @@ void main() {
     expect(await db.monthEndRuns.count(), 0);
     expect(await db.budgetProfiles.count(), 1);
     expect((await db.budgetProfiles.get(1))!.allocation, 100000);
+  });
+
+  test(
+      'an equal auto-carried destination is adopted by month-end without a duplicate',
+      () async {
+    await db.writeTxn(() async {
+      final source = (await db.budgetProfiles.get(1))!
+        ..familyGuid = 'food-family'
+        ..defaultAllocationMinor = 100000
+        ..monthEndRule = MonthEndRule.carryForward
+        ..spent = 80000;
+      await db.budgetProfiles.put(source);
+      await db.monthlyBudgets.put(MonthlyBudget()
+        ..profileId = 1
+        ..yearMonth = '2026-10'
+        ..baseAvailableAmount = 100000
+        ..openingBalanceConfirmed = true
+        ..createdAt = now
+        ..updatedAt = now);
+      final check = (await db.budgetProfiles.get(1))!;
+      expect(check.spent, 80000);
+      expect(check.allocation, 100000);
+      expect(check.allocation - check.spent, 20000);
+      expect(check.defaultAllocationMinor, 100000);
+      await MonthCarryService(db, actorId: 1, clock: () => now)
+          .ensureCarryInTxn(profileId: 1, yearMonth: '2026-10');
+    });
+    final carried = (await db.budgetProfiles
+            .filter()
+            .yearMonthEqualTo('2026-10')
+            .findFirst())!;
+    expect(carried.defaultAllocationMinor, 100000);
+    expect(carried.allocation, 120000);
+    expect(carried.monthEndOriginGuid, startsWith('auto-carry:'));
+
+    final choices = choice();
+    final report = await service().preview('2026-09', choices: choices);
+    expect(report.ready, isTrue);
+    final run = await service().confirm(report, choices: choices);
+
+    final adopted = (await db.budgetProfiles
+            .filter()
+            .syncGuidEqualTo(carried.syncGuid)
+            .findFirst())!;
+    expect(adopted.allocation, 120000);
+    expect(adopted.monthEndOriginGuid, run.syncGuid);
+    expect(await db.allocations.count(), 1,
+        reason: 'auto-carry already wrote the only positive delta');
+    expect(run.destinationMonth, '2026-10');
   });
   for (final rule in MonthEndRule.values) {
     test('$rule uses live net spending, preserves source and applies once',

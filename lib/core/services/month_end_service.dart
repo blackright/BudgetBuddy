@@ -1,4 +1,6 @@
 import 'fx_booking_service.dart';
+import 'medical_receipt_booking_service.dart';
+import 'balance_checkpoint_service.dart';
 import 'audit_financial_state.dart';
 import 'dart:convert';
 import 'dart:math' as math;
@@ -189,6 +191,15 @@ class MonthEndService {
 
     // Validate every money row, including unassigned/direct expenses.
     try {
+      if (returns.any((r) => r.medicalReceiptJson != null)) {
+        await BalanceCheckpointService(isar, clock: clock).cashInTransaction(
+            context: context.isShared
+                ? ContextRef.shared(spaceId: context.spaceId!, yearMonth: month)
+                : ContextRef.personal(
+                    profileId: context.profileId!, yearMonth: month),
+            actorId: actorId,
+            isAccessCurrent: () => true);
+      }
       for (final e in expenses) {
         final m = expenseAccountingMoney(e, expectedCurrency: currency);
         convert(m.minorUnits, m.currency);
@@ -249,6 +260,11 @@ class MonthEndService {
     final capacity = math.max(
         0,
         income +
+            medicalRecoveryForMonth(returns, month, convert: (r) {
+              final value =
+                  reimbursementAccountingMoney(r, expectedCurrency: currency);
+              return convert(value.minorUnits, value.currency);
+            }) +
             (context.isShared
                 ? 0
                 : await readMonthlyVaultCredit(
@@ -318,7 +334,9 @@ class MonthEndService {
           spent: spent,
           defaultAllocation: base ?? 0,
           rule: choice?.rule ?? p.monthEndRule,
-          destinationAllocation: target?.allocation);
+          destinationAllocation: target?.allocation,
+          alreadyCarried:
+              target?.monthEndOriginGuid?.startsWith('auto-carry:') == true);
       lines.add(MonthEndLine(
           sourceGuid: p.syncGuid,
           familyGuid: family,
@@ -508,6 +526,7 @@ Future<void> projectMonthEnd(Isar isar, MonthEndRun run,
         spent: line['spent'] as int,
         defaultAllocation: line['defaultAllocation'] as int,
         destinationAllocation: line['destinationAllocation'] as int?,
+        alreadyCarried: line['alreadyCarried'] == true,
         rule: MonthEndRule.values.byName(line['rule'] as String));
     if (line['nextAllocation'] != amounts.nextAllocation ||
         line['carried'] != amounts.carried ||

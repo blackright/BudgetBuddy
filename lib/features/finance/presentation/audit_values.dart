@@ -26,6 +26,38 @@ String formatAuditValues(String? raw, {String? objectType}) {
         }
       }
 
+      if (objectType == 'MedicalSettlementEvent') {
+        name('kind', const [
+          'Insurer provider settlement',
+          'Share settlement',
+          'Closure',
+          'Correction',
+          'Reversal',
+        ]);
+      }
+      if (objectType == 'MedicalClaimActivity') {
+        for (final pair in [
+          ('beforeMinor', 'beforeJson', 'beforeValue'),
+          ('afterMinor', 'afterJson', 'afterValue')
+        ]) {
+          final minor = data[pair.$1], rawBasis = data[pair.$2];
+          if (minor is int && rawBasis is String) {
+            try {
+              final basis = jsonDecode(rawBasis);
+              final code = basis is Map
+                  ? CurrencyCode.tryParse(basis['currency']?.toString() ?? '')
+                  : null;
+              data[pair.$3] = code == null
+                  ? '$minor (currency not recorded)'
+                  : '${code.code.toUpperCase()} ${formatMinorUnitsInput(minor, code)}';
+              data.remove(pair.$1);
+            } on FormatException {
+              data[pair.$3] = 'Amount needs review';
+              data.remove(pair.$1);
+            }
+          }
+        }
+      }
       if (objectType == 'Expense') {
         final payment = data['paymentMethod'];
         if (payment is String) {
@@ -48,6 +80,28 @@ String formatAuditValues(String? raw, {String? objectType}) {
 }
 
 const _internal = {
+  'guid',
+  'fingerprint',
+  'sourceGuid',
+  'cycleGuid',
+  'groupGuid',
+  'componentReceiptGuids',
+  'componentRevisionRefs',
+  'sourceFactGuid',
+  'sourceRevision',
+  'inclusionReviewRef',
+  'billGuid',
+  'receiptGuid',
+  'previousGuid',
+  'operationIdentity',
+  'inputFingerprint',
+  'evidenceJson',
+  'basisJson',
+  'beforeJson',
+  'afterJson',
+  'medicalReceiptJson',
+  'actorId',
+  'approvalGuid',
   'id',
   'syncGuid',
   'profileId',
@@ -63,6 +117,15 @@ const _internal = {
   'auditEventId'
 };
 const _minor = {
+  'salaryMinor',
+  'medicalMinor',
+  'finalCostMinor',
+  'missingMinor',
+  'approvedMinor',
+  'beforeMinor',
+  'afterMinor',
+  'receivedMinor',
+  'shortfallMinor',
   'receiptTotalMinor',
   'amount',
   'amountMinor',
@@ -99,7 +162,14 @@ String _describe(Object? value, [CurrencyCode? inherited, String? key]) {
         .map((entry) {
       final label = entry.value is Map && entry.value['name'] is String
           ? entry.value['name'] as String
-          : _sentence(entry.key.toString());
+          : {
+                'totalMinor': 'Total received',
+                'salaryMinor': 'Salary received',
+                'medicalMinor': 'Insurance refunds received',
+                'finalCostMinor': 'Final cost',
+                'missingMinor': 'Money not received'
+              }[entry.key.toString()] ??
+              _sentence(entry.key.toString());
       final nested = entry.value is Map || entry.value is List;
       return '$label:${nested ? '\n' : ' '}${_describe(entry.value, currency, entry.key.toString())}';
     }).join('\n');
@@ -128,7 +198,9 @@ String _describe(Object? value, [CurrencyCode? inherited, String? key]) {
     return formatMinorUnits(
         Money.fromMajor(value.toDouble(), inherited).minorUnits, inherited);
   }
-  if (value is int && key != null && (key.endsWith('At') || key == 'date')) {
+  if (value is int &&
+      key != null &&
+      (key.endsWith('At') || key == 'date' || key == 'decisionDate')) {
     try {
       // Native Isar JSON exports epoch microseconds; web uses milliseconds.
       // Modern native values exceed the millisecond range for year 9999.
@@ -154,8 +226,14 @@ String _describe(Object? value, [CurrencyCode? inherited, String? key]) {
   return value.toString();
 }
 
-String _label(String key) => key.replaceAllMapped(
-    RegExp(r'([a-z])([A-Z])'), (m) => '${m[1]} ${m[2]![0].toLowerCase()}');
+String _label(String key) => switch (key) {
+      'approvedMinor' => 'Approved refund',
+      'receivedMinor' => 'Recorded received',
+      'shortfallMinor' => 'Final shortfall',
+      'decisionDate' => 'Approval date',
+      _ => key.replaceAllMapped(RegExp(r'([a-z])([A-Z])'),
+          (m) => '${m[1]} ${m[2]![0].toLowerCase()}'),
+    };
 
 bool _technicalField(String key) =>
     _internal.contains(key) ||
@@ -192,6 +270,14 @@ const _objectLabels = {
   'vaultentry': 'Savings Vault entry',
   'monthendrun': 'Month-End settlement',
   'medicalbill': 'Medical bill',
+  'medicalapproval': 'Insurance approval',
+  'medicalclaimactivity': 'Insurance claim activity',
+  'medicalclaimclosure': 'Insurance claim closure',
+  'medicalsettlementevent': 'Medical settlement',
+  'incomereceiptgroup': 'Bank credit',
+  'salarycycle': 'Salary occurrence',
+  'moneyreceipt': 'Received payment',
+  'receiptrevision': 'Payment history revision',
 };
 
 String auditObjectLabel(String type) =>
@@ -201,6 +287,9 @@ String auditObjectLabel(String type) =>
 String auditActionLabel(String action) {
   final normalized = action.toLowerCase();
   const special = {
+    'incomereceiptgroup.create': 'Bank credit confirmed',
+    'salarycycle.create': 'Salary occurrence confirmed',
+    'salarycycle.update': 'Salary occurrence confirmed',
     'expense.refund': 'Expense refunded',
     'expense.reversal': 'Expense payment reversed',
     'borrowing.deficit.change': 'Borrowing and deficit changed',

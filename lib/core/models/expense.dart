@@ -28,6 +28,11 @@ class Expense {
   @Index()
   late String yearMonth;
 
+  /// Actual `YYYY-MM` month whose Free-to-Use money changes, when it differs
+  /// from [yearMonth]. Null means the expense uses [yearMonth] as before.
+  @Index()
+  String? cashYearMonth;
+
   @enumerated
   ExpenseType type = ExpenseType.standard;
 
@@ -100,6 +105,7 @@ class Expense {
     required this.profileId,
     this.sharedSpaceId,
     required this.yearMonth,
+    this.cashYearMonth,
     this.type = ExpenseType.standard,
     required this.title,
     required this.amount,

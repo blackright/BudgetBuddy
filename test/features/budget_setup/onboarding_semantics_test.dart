@@ -63,7 +63,7 @@ void main() {
             matching: find.byWidgetPredicate(
                 (w) => w is Focus && w.focusNode?.hasFocus == true)),
         findsWidgets);
-    expect(find.textContaining('Starts ').hitTestable(), findsOneWidget);
+    expect(find.textContaining('Next period ').hitTestable(), findsOneWidget);
   });
 
   testWidgets('Retry repeats the failed step and retains entries',
@@ -80,7 +80,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Retry this step'));
     await tester.pumpAndSettle();
-    expect(find.text('Step 4 of 7'), findsOneWidget);
+    expect(find.text('Step 4 of 8'), findsOneWidget);
     expect(find.text('Retry this step'), findsNothing);
   });
   testWidgets(
@@ -145,7 +145,7 @@ void main() {
     final semantics = tester.ensureSemantics();
     try {
       await pumpStage(tester, LayoutController(3), reduced: true);
-      expect(find.bySemanticsLabel('Your first month, step 4 of 7'),
+      expect(find.bySemanticsLabel('Your first month, step 4 of 8'),
           findsOneWidget);
       expect(find.bySemanticsLabel(RegExp('.*Salary.*income source.*')),
           findsOneWidget);

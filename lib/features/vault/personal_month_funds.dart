@@ -1,4 +1,6 @@
 import '../../core/services/fx_booking_service.dart';
+import '../../core/services/balance_checkpoint_service.dart';
+import '../../core/providers/budget_context_provider.dart';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'package:isar/isar.dart';
@@ -15,8 +17,11 @@ import '../../core/services/expense_profile_identity.dart';
 import '../../core/services/free_funds.dart';
 import '../../core/services/income_aggregation_service.dart';
 import '../../core/services/month_end_report.dart';
+import '../../core/models/medical_bill.dart';
+import '../../core/models/medical_withholding_match.dart';
 import '../../core/services/profile_spending_service.dart';
 import '../expenses/models/reimbursement.dart';
+import '../../core/services/medical_receipt_booking_service.dart';
 import '../engine/providers/rate_registry_provider.dart';
 import 'vault_math.dart';
 import 'vault_transfer_ledger.dart';
@@ -81,7 +86,10 @@ Future<Map<String, int>> readPersonalMonthFunds(
     convert(m.minorUnits, m.currency);
   }
   var paid = 0, returned = 0, unused = 0, allocated = 0;
+  final withheldExpenseIds =
+      await _salaryWithheldExpenseIds(db, actor, month);
   for (final e in expenses) {
+    if (withheldExpenseIds.contains(e.id)) continue;
     if ({
       ExpenseStatus.paid,
       ExpenseStatus.reimbursed,
@@ -208,7 +216,22 @@ Future<Map<String, int>> readPersonalMonthFunds(
   }
   final reserve = vaultSum(
       vaultSum(vaultSum(vaultSum(income, incoming), released), -carry),
-      vaultSum(vaultSum(-allocated, -direct), credit));
+      vaultSum(
+          vaultSum(-allocated, -direct),
+          vaultSum(
+              credit,
+              medicalRecoveryForMonth(returns, month, convert: (r) {
+                final money =
+                    reimbursementAccountingMoney(r, expectedCurrency: currency);
+                return convert(money.minorUnits, money.currency);
+              }))));
+  final reviewedBank = returns.any((r) => r.medicalReceiptJson != null)
+      ? (await BalanceCheckpointService(db).cashInTransaction(
+              context: ContextRef.personal(profileId: actor, yearMonth: month),
+              actorId: actor,
+              isAccessCurrent: () => true))
+          .bankMinor
+      : null;
   return {
     'income': income,
     'spent': paid,
@@ -218,10 +241,11 @@ Future<Map<String, int>> readPersonalMonthFunds(
     'incoming': incoming,
     'released': released,
     'vaultTransfers': credit,
-    'bank': vaultSum(
+    'bank': reviewedBank ??
         vaultSum(
-            vaultSum(vaultSum(opening.minorUnits, income), -paid), returned),
-        credit),
+            vaultSum(vaultSum(vaultSum(opening.minorUnits, income), -paid),
+                returned),
+            credit),
     'reserve': reserve,
     'available': freeToSpend(
             income: income,
@@ -234,4 +258,31 @@ Future<Map<String, int>> readPersonalMonthFunds(
             transfers: credit)
         .toInt()
   };
+}
+
+/// Expense IDs whose patient share is already reflected in confirmed net salary.
+/// Cost stays in `spent`; only the cash `paid`/`bank` figures skip these rows.
+Future<Set<int>> _salaryWithheldExpenseIds(
+    Isar db, int actor, String month) async {
+  final matches = await db.medicalWithholdingMatchs
+      .filter()
+      .profileIdEqualTo(actor)
+      .reversedEqualTo(false)
+      .findAll();
+  final ids = <int>{};
+  for (final match in matches) {
+    final bill = await db.medicalBills
+        .filter()
+        .syncGuidEqualTo(match.billGuid)
+        .findFirst();
+    final expenseId = bill?.linkedExpenseId;
+    if (bill == null ||
+        bill.paymentMethod != MedicalPaymentMethod.insurerPaid ||
+        expenseId == null) {
+      continue;
+    }
+    final expense = await db.expenses.get(expenseId);
+    if (expense != null && expense.yearMonth == month) ids.add(expenseId);
+  }
+  return ids;
 }

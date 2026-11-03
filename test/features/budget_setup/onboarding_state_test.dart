@@ -43,6 +43,15 @@ void main() {
     expect(() => result.sources.clear(), throwsUnsupportedError);
   });
 
+  test('usual receipt day round-trips and old drafts default to 25', () {
+    final p = payload();
+    (p['sources'] as List).first['nominalDay'] = 10;
+    expect(OnboardingState.decode(jsonEncode(p)).sources.single.nominalDay, 10);
+
+    (p['sources'] as List).first.remove('nominalDay');
+    expect(OnboardingState.decode(jsonEncode(p)).sources.single.nominalDay, 25);
+  });
+
   test('incomplete draft text remains editable without invented amounts', () {
     final result = OnboardingState.decode(OnboardingState(
       flowId: 'flow-1',

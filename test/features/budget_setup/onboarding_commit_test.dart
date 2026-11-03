@@ -4,6 +4,7 @@ import 'package:budget_buddy/core/models/category.dart';
 import 'package:budget_buddy/core/models/currency_code.dart';
 import 'package:budget_buddy/core/models/income_source.dart';
 import 'package:budget_buddy/core/models/monthly_budget.dart';
+import 'package:budget_buddy/core/models/salary_schedule.dart';
 import 'package:budget_buddy/core/models/user_profile.dart';
 import 'package:budget_buddy/core/providers/active_profile_provider.dart';
 import 'package:budget_buddy/core/providers/active_budget_provider.dart';
@@ -19,7 +20,6 @@ import 'package:budget_buddy/features/engine/providers/rate_registry_provider.da
 import 'package:budget_buddy/features/settings/providers/settings_provider.dart';
 import 'package:budget_buddy/features/vault/providers/vault_providers.dart';
 import 'package:budget_buddy/features/expenses/providers/category_provider.dart';
-import 'package:budget_buddy/features/budget_setup/providers/onboarding_rollout_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:budget_buddy/features/budget_setup/domain/onboarding_finance.dart';
 import 'package:budget_buddy/features/budget_setup/domain/onboarding_state.dart';
@@ -41,11 +41,13 @@ class _LostResponseRepository extends OnboardingRepository {
   Future<OnboardingCommitReference> commitCore(OnboardingState reviewed,
       {required String reviewedDigest,
       required int expectedRevision,
-      bool Function()? isAuthorized}) async {
+      bool Function()? isAuthorized,
+      String timezone = 'UTC'}) async {
     final result = await super.commitCore(reviewed,
         reviewedDigest: reviewedDigest,
         expectedRevision: expectedRevision,
-        isAuthorized: isAuthorized);
+        isAuthorized: isAuthorized,
+        timezone: timezone);
     if (loseResponse) {
       loseResponse = false;
       throw StateError('simulated lost response');
@@ -151,6 +153,36 @@ void main() {
             r.sharedSpaceId == null),
         isTrue);
     expect(ref.sourceIds.keys.toSet(), {'first', 'second'});
+  });
+
+  test('recurring onboarding sources save their usual receipt day', () async {
+    final review = await stage(financialDraft(sources: [
+      const OnboardingSourceDraft(
+          sourceGuid: 'salary-1',
+          name: 'Salary',
+          amountText: '500,000',
+          currency: CurrencyCode.huf,
+          startDate: null,
+          nominalDay: 10),
+      OnboardingSourceDraft(
+          sourceGuid: 'bonus-1',
+          name: 'Bonus',
+          amountText: '100,000',
+          currency: CurrencyCode.huf,
+          frequency: IncomeFrequency.oneTime,
+          startDate: DateTime(2026, 10, 15)),
+    ]));
+    final ref = await OnboardingRepository(h.isar).commitCore(review.normalized,
+        reviewedDigest: review.digest,
+        expectedRevision: 0,
+        timezone: 'Europe/Budapest');
+
+    final schedules = await h.isar.salarySchedules.where().findAll();
+    expect(schedules.length, 1);
+    expect(schedules.single.sourceGuid, 'salary-1');
+    expect(schedules.single.nominalDay, 10);
+    expect(schedules.single.timezone, 'Europe/Budapest');
+    expect(ref.sourceIds.length, 2);
   });
 
   test(
@@ -376,11 +408,8 @@ void main() {
       }
     }
   });
-  test(
-      'policy-aware reads do not seed pending categories; live gate stays legacy',
-      () async {
+  test('policy-aware reads do not seed pending categories', () async {
     final policy = ProviderContainer(overrides: [
-      unifiedOnboardingEnabledProvider.overrideWithValue(true),
       categoryRepositoryProvider.overrideWithValue(CategoryRepository(h.isar))
     ]);
     try {
@@ -388,14 +417,6 @@ void main() {
       expect(await h.isar.categorys.count(), 0);
     } finally {
       policy.dispose();
-    }
-    final live = ProviderContainer(overrides: [
-      categoryRepositoryProvider.overrideWithValue(CategoryRepository(h.isar))
-    ]);
-    try {
-      expect(await live.read(categoriesProvider.future), hasLength(7));
-    } finally {
-      live.dispose();
     }
   });
   test(

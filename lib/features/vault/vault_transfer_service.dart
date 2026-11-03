@@ -6,6 +6,7 @@ import 'package:isar/isar.dart';
 import '../../core/models/budget_profile.dart';
 import '../../core/models/direct_expense_profile.dart';
 import '../../core/models/currency_code.dart';
+import '../../core/logging/app_logger.dart';
 import '../../core/models/expense.dart';
 import '../../core/models/income_source.dart';
 import '../../core/models/month_end_run.dart';
@@ -15,6 +16,7 @@ import '../../core/models/live_rate_set.dart';
 import '../../core/models/user_profile.dart';
 import '../expenses/models/reimbursement.dart';
 import '../engine/providers/rate_registry_provider.dart';
+import '../pending_actions/services/pending_action_service.dart';
 import 'models/savings_vault.dart';
 import 'models/vault_entry.dart';
 import 'vault_math.dart';
@@ -56,10 +58,22 @@ class VaultTransferPreview {
       required this.kind,
       required this.delta,
       required this.note,
-      this.reverses});
+      this.reverses,
+      this.targetWithdrawalMonth,
+      this.completesActionType,
+      this.completesRecordRef,
+      this.completesCycleOrMonth});
   final VaultTransferReadiness state;
   final String requestId, kind, note;
   final String? reverses;
+
+  /// A reminder only: it never reserves or moves money (FR-035).
+  final String? targetWithdrawalMonth;
+
+  /// The Pending Action completed only after this transfer commits.
+  final String? completesActionType;
+  final String? completesRecordRef;
+  final String? completesCycleOrMonth;
   final int delta;
   int get vaultAfter => vaultSum(state.balance, delta);
   int get bankAfter => vaultSum(state.bank, -delta);
@@ -74,6 +88,7 @@ class VaultTransferService {
       {required this.actorId,
       required this.isStillActive,
       this.rates,
+      this.actions,
       DateTime Function()? clock,
       Future<void> Function()? beforeCommit})
       : clock = clock ?? DateTime.now,
@@ -84,6 +99,9 @@ class VaultTransferService {
 
   /// Test seam. Production reloads persisted rate snapshots under the same lock.
   final RateTableRegistry Function()? rates;
+
+  /// Completes a linked Pending Action only after a transfer commits.
+  final PendingActionService? actions;
   final DateTime Function() clock;
   final Future<void> Function()? _beforeCommit;
 
@@ -101,31 +119,93 @@ class VaultTransferService {
 
   String _key(String request) => 'vault:$actorId:transfer:$request';
 
-  Future<VaultTransferReadiness> readiness() => db.txn(_read);
+  /// Creates the Vault on first explicit use. Must run inside the caller's
+  /// write transaction; idempotent (022 contract §Lazy Vault initialisation).
+  Future<SavingsVault> ensureVault(int profileId) async {
+    if (profileId != actorId) {
+      _fail('This vault belongs to another profile.');
+    }
+    var vault = await db.savingsVaults
+        .filter()
+        .profileIdEqualTo(profileId)
+        .findFirst();
+    if (vault == null) {
+      final owner = await db.userProfiles.get(profileId);
+      if (owner == null) {
+        _fail('Open the vault with the owning personal profile first.');
+      }
+      vault = SavingsVault()
+        ..profileId = profileId
+        ..totalMinor = 0
+        ..currency = owner.primaryCurrency.code.code
+        ..lastSweepYearMonth = _month()
+        ..updatedAt = clock();
+      await db.savingsVaults.put(vault);
+    }
+    await seedVaultOpeningInTxn(db, vault, clock());
+    return vault;
+  }
+
+  Future<void> _ensureVaultBeforeRead() async {
+    await db.writeTxn(() async {
+      if (await db.userProfiles.get(actorId) == null) return;
+      await ensureVault(actorId);
+    });
+  }
+
+  Future<VaultTransferReadiness> readiness() async {
+    await _ensureVaultBeforeRead();
+    return db.txn(_read);
+  }
 
   Future<VaultTransferPreview> preview(
           {required String kind,
           required int amount,
           required String requestId,
           String note = '',
-          String? reverses}) =>
-      db.txn(() async {
-        final state = await _read();
-        final delta = await _validate(state, kind, amount, note, reverses);
-        if (!RegExp(r'^[a-zA-Z0-9_-]{1,80}$').hasMatch(requestId)) {
-          _fail('The transfer request is invalid. Reopen the form.');
-        }
-        return VaultTransferPreview(
-            state: state,
-            requestId: requestId,
-            kind: kind,
-            delta: delta,
-            note: note.trim(),
-            reverses: reverses);
-      });
+          String? reverses,
+          String? targetWithdrawalMonth,
+          String? completesActionType,
+          String? completesRecordRef,
+          String? completesCycleOrMonth}) async {
+    await _ensureVaultBeforeRead();
+    return db.txn(() async {
+      final state = await _read();
+      final delta = await _validate(
+          state, kind, amount, note, reverses, targetWithdrawalMonth);
+      if (!RegExp(r'^[a-zA-Z0-9_-]{1,80}$').hasMatch(requestId)) {
+        _fail('The transfer request is invalid. Reopen the form.');
+      }
+      final links = [
+        completesActionType,
+        completesRecordRef,
+        completesCycleOrMonth
+      ];
+      if (links.any((value) => value != null) &&
+          links.any((value) => value == null)) {
+        _fail('The linked reminder is incomplete. Reopen the form.');
+      }
+      return VaultTransferPreview(
+          state: state,
+          requestId: requestId,
+          kind: kind,
+          delta: delta,
+          note: note.trim(),
+          reverses: reverses,
+          targetWithdrawalMonth: targetWithdrawalMonth,
+          completesActionType: completesActionType,
+          completesRecordRef: completesRecordRef,
+          completesCycleOrMonth: completesCycleOrMonth);
+    });
+  }
 
-  Future<int> _validate(VaultTransferReadiness state, String kind, int amount,
-      String note, String? reverses) async {
+  Future<int> _validate(
+      VaultTransferReadiness state,
+      String kind,
+      int amount,
+      String note,
+      String? reverses,
+      String? targetWithdrawalMonth) async {
     if (!validVaultAmount(amount) ||
         amount == 0 ||
         note.trim().length > 120 ||
@@ -165,6 +245,18 @@ class VaultTransferService {
     } else if (reverses != null) {
       _fail('Only a reversal may link an original transfer.');
     }
+    if (targetWithdrawalMonth != null) {
+      if (kind != 'deposit') {
+        _fail('Only a deposit can plan a withdrawal.');
+      }
+      if (!RegExp(r'^\d{4}-(0[1-9]|1[0-2])$')
+          .hasMatch(targetWithdrawalMonth)) {
+        _fail('Choose a valid target withdrawal month.');
+      }
+      if (targetWithdrawalMonth.compareTo(state.month) < 0) {
+        _fail('Choose the current or a future target withdrawal month.');
+      }
+    }
     if (delta > 0 && delta > state.maxDeposit) {
       _fail(
           'The amount exceeds funds available after allocations, carry and borrowing.');
@@ -182,82 +274,102 @@ class VaultTransferService {
     return delta;
   }
 
-  Future<VaultEntry> confirm(VaultTransferPreview preview) =>
-      db.writeTxn(() async {
-        _owner();
-        if (!RegExp(r'^[a-zA-Z0-9_-]{1,80}$').hasMatch(preview.requestId)) {
-          _fail('Invalid transfer request.');
+  Future<VaultEntry> confirm(VaultTransferPreview preview) async {
+    final entry = await db.writeTxn(() async {
+      _owner();
+      if (!RegExp(r'^[a-zA-Z0-9_-]{1,80}$').hasMatch(preview.requestId)) {
+        _fail('Invalid transfer request.');
+      }
+      final key = _key(preview.requestId);
+      final existing =
+          await db.vaultEntrys.filter().operationKeyEqualTo(key).findFirst();
+      if (existing != null) {
+        final details = transferDetails(existing);
+        if (existing.profileId != actorId ||
+            existing.kind != preview.kind ||
+            existing.amountMinor != preview.delta ||
+            existing.yearMonth != preview.state.month ||
+            existing.currency != preview.state.currency.code ||
+            details == null ||
+            details['note'] != preview.note ||
+            details['reverses'] != preview.reverses ||
+            details['targetWithdrawalMonth'] != preview.targetWithdrawalMonth) {
+          _fail('This request already belongs to a different transfer.');
         }
-        final key = _key(preview.requestId);
-        final existing =
-            await db.vaultEntrys.filter().operationKeyEqualTo(key).findFirst();
-        if (existing != null) {
-          final details = transferDetails(existing);
-          if (existing.profileId != actorId ||
-              existing.kind != preview.kind ||
-              existing.amountMinor != preview.delta ||
-              existing.yearMonth != preview.state.month ||
-              existing.currency != preview.state.currency.code ||
-              details == null ||
-              details['note'] != preview.note ||
-              details['reverses'] != preview.reverses) {
-            _fail('This request already belongs to a different transfer.');
-          }
-          return existing;
-        }
-        final current = await _read();
-        if (current.fingerprint != preview.state.fingerprint) {
-          _fail(
-              'The balances or records changed. Review a fresh preview before confirming.');
-        }
-        final delta = await _validate(current, preview.kind,
-            preview.delta.abs(), preview.note, preview.reverses);
-        if (delta != preview.delta) {
-          _fail('The transfer direction changed. Reopen the form.');
-        }
-        final vault = (await db.savingsVaults
-            .filter()
-            .profileIdEqualTo(actorId)
-            .findFirst())!;
-        final entry = VaultEntry()
-          ..profileId = actorId
-          ..operationKey = key
-          ..kind = preview.kind
-          ..yearMonth = current.month
-          ..currency = current.currency.code
-          ..amountMinor = delta
-          ..balanceAfterMinor = vaultSum(current.balance, delta)
-          ..createdAt = clock()
-          ..reason = preview.note.isEmpty ? null : preview.note
-          ..breakdownJson = jsonEncode({
-            'version': 2,
-            'freeBefore': current.freeFunds,
-            'freeAfter': vaultSum(current.freeFunds, -delta),
-            'month': current.month,
-            'currency': current.currency.code,
-            'vaultDelta': delta,
-            'monthDelta': -delta,
-            'vaultBefore': current.balance,
-            'bankBefore': current.bank,
-            'bankAfter': vaultSum(current.bank, -delta),
-            'reserveBefore': current.reserve,
-            'reserveAfter': vaultSum(current.reserve, -delta),
-            'note': preview.note,
-            'reverses': preview.reverses
-          });
-        entry.id = await AuditRepository(db, actorId: actorId)
-            .put(db.vaultEntrys, entry, id: entry.id, type: 'VaultEntry');
-        await _beforeCommit?.call();
-        _owner();
-        if (_month() != current.month) {
-          _fail('The month changed. Review a fresh preview.');
-        }
-        vault
-          ..totalMinor = entry.balanceAfterMinor
-          ..updatedAt = clock();
-        await db.savingsVaults.put(vault);
-        return entry;
-      });
+        return existing;
+      }
+      final vault = await ensureVault(actorId);
+      final current = await _read();
+      if (current.fingerprint != preview.state.fingerprint) {
+        _fail(
+            'The balances or records changed. Review a fresh preview before confirming.');
+      }
+      final delta = await _validate(current, preview.kind, preview.delta.abs(),
+          preview.note, preview.reverses, preview.targetWithdrawalMonth);
+      if (delta != preview.delta) {
+        _fail('The transfer direction changed. Reopen the form.');
+      }
+      final entry = VaultEntry()
+        ..profileId = actorId
+        ..operationKey = key
+        ..kind = preview.kind
+        ..yearMonth = current.month
+        ..currency = current.currency.code
+        ..amountMinor = delta
+        ..balanceAfterMinor = vaultSum(current.balance, delta)
+        ..createdAt = clock()
+        ..reason = preview.note.isEmpty ? null : preview.note
+        ..breakdownJson = jsonEncode({
+          'version': 2,
+          'freeBefore': current.freeFunds,
+          'freeAfter': vaultSum(current.freeFunds, -delta),
+          'month': current.month,
+          'currency': current.currency.code,
+          'vaultDelta': delta,
+          'monthDelta': -delta,
+          'vaultBefore': current.balance,
+          'bankBefore': current.bank,
+          'bankAfter': vaultSum(current.bank, -delta),
+          'reserveBefore': current.reserve,
+          'reserveAfter': vaultSum(current.reserve, -delta),
+          'note': preview.note,
+          'reverses': preview.reverses,
+          'targetWithdrawalMonth': preview.targetWithdrawalMonth
+        });
+      entry.id = await AuditRepository(db, actorId: actorId)
+          .put(db.vaultEntrys, entry, id: entry.id, type: 'VaultEntry');
+      await _beforeCommit?.call();
+      _owner();
+      if (_month() != current.month) {
+        _fail('The month changed. Review a fresh preview.');
+      }
+      vault
+        ..totalMinor = entry.balanceAfterMinor
+        ..updatedAt = clock();
+      await db.savingsVaults.put(vault);
+      return entry;
+    });
+    // Completion happens only after the transfer transaction committed, and it
+    // is idempotent, so a crash between commit and completion retries safely.
+    await _completeLinked(preview);
+    return entry;
+  }
+
+  Future<void> _completeLinked(VaultTransferPreview preview) async {
+    final service = actions;
+    final type = preview.completesActionType;
+    final record = preview.completesRecordRef;
+    final cycle = preview.completesCycleOrMonth;
+    if (service == null || type == null || record == null || cycle == null) {
+      return;
+    }
+    try {
+      await service.completeByRecord(type, record, cycle);
+    } catch (error, stack) {
+      AppLogger.log('The linked reminder could not be completed.',
+          name: 'Vault', error: error, stackTrace: stack, level: 700);
+    }
+  }
 
   Future<VaultTransferReadiness> _read() async {
     _owner();
@@ -285,13 +397,6 @@ class VaultTransferService {
     final problem = vaultEntriesProblem(vault, entries);
     if (problem != null || entries.isEmpty) {
       _fail(problem ?? 'Vault opening history needs review.');
-    }
-    if (!RegExp(r'^\d{4}-(0[1-9]|1[0-2])$')
-            .hasMatch(vault.lastSweepYearMonth) ||
-        vault.lastSweepYearMonth.compareTo(month) > 0 ||
-        entries.any((e) => e.kind == 'sweep' && e.yearMonth == month)) {
-      _fail(
-          'This month was already swept or the saved month position needs review.');
     }
     final budget = await db.monthlyBudgets
         .filter()

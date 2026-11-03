@@ -34,6 +34,15 @@ class Reimbursement {
   @Index()
   String originYearMonth;
 
+  /// Actual `YYYY-MM` salary month whose Free-to-Use money is credited when it
+  /// differs from [originYearMonth]. Null keeps the legacy origin-month credit.
+  @Index()
+  String? creditYearMonth;
+
+  /// What produced this return. Legacy rows default to [ReimbursementSource.standard].
+  @enumerated
+  ReimbursementSource source = ReimbursementSource.standard;
+
   /// Set when the target expense is deleted (FR-035).
   @Index()
   bool orphaned;
@@ -51,21 +60,30 @@ class Reimbursement {
   String? note;
   String? fxHistoryJson;
 
+  /// Version2 Medical cash/funding evidence; null retains legacy semantics.
+  String? medicalReceiptJson;
+
   Reimbursement({
     this.id = Isar.autoIncrement,
     required this.profileId,
     this.sharedSpaceId,
     this.expenseId,
     required this.originYearMonth,
+    this.creditYearMonth,
+    this.source = ReimbursementSource.standard,
     this.orphaned = false,
     required this.amount,
     required this.currency,
     required this.date,
     this.note,
     this.fxHistoryJson,
+    this.medicalReceiptJson,
   });
 
   /// The parsed currency, or `null` for a legacy/unsupported code (FR-021).
   @ignore
   CurrencyCode? get currencyCode => CurrencyCode.tryParse(currency);
 }
+
+/// What produced a return.
+enum ReimbursementSource { standard, medicalInsurance, medicalProviderRefund }

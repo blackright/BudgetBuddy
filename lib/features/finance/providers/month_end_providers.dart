@@ -55,6 +55,10 @@ final monthEndPolicyHistoryProvider = Provider<Map<String, String>>((ref) {
   return result;
 });
 
+/// Legacy fallback only. A personal month with an intact continuous balance
+/// already includes these settlement effects in its derived opening/closing;
+/// never add these terms on top of [ContinuousBalance].
+///
 /// All values are context-currency minor units. Carry funds the next allocation
 /// without becoming income. Source Reset releases the unused envelope once.
 final monthEndBalanceProvider =

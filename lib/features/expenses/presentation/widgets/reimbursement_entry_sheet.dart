@@ -4,24 +4,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/models/currency_code.dart';
 import '../../../../core/models/expense.dart';
 import '../../../../core/models/money.dart';
-import '../../../../core/providers/selected_month_provider.dart';
 import '../../../../shared/presentation/money_format.dart';
 import '../../../../shared/presentation/widgets/money_field.dart';
 import '../../providers/reimbursement_provider.dart';
 import '../../repositories/expense_repository.dart';
 import '../../models/reimbursement.dart';
 
-import '../../../../core/models/medical_bill.dart';
-import '../../../medical/providers/medical_providers.dart';
-
 class ReimbursementEntrySheet extends ConsumerStatefulWidget {
   final Expense expense;
-  final MedicalBill? medicalBill;
 
   const ReimbursementEntrySheet({
     super.key,
     required this.expense,
-    this.medicalBill,
   });
 
   @override
@@ -55,7 +49,10 @@ class _ReimbursementEntrySheetState
     super.dispose();
   }
 
+  bool get _medical => widget.expense.type == ExpenseType.medical;
+
   Future<void> _submit(int maxAllowed) async {
+    if (_medical) return;
     final amount = parseMoneyInput(_amountController.text);
     if (amount == null || amount <= 0) return;
 
@@ -78,13 +75,9 @@ class _ReimbursementEntrySheetState
     try {
       final reimbursement = Reimbursement(
         profileId: widget.expense.profileId,
+        sharedSpaceId: widget.expense.sharedSpaceId,
         expenseId: widget.expense.id,
-        // A medical payout lands with next month's income, so it is credited to
-        // the month after the bill's own month. Generic expense reimbursements
-        // stay in the expense's month.
-        originYearMonth: widget.medicalBill != null
-            ? nextMonth(widget.expense.yearMonth)
-            : widget.expense.yearMonth,
+        originYearMonth: widget.expense.yearMonth,
         amount: amountMinor,
         currency: _currency,
         date: DateTime.now(),
@@ -107,16 +100,6 @@ class _ReimbursementEntrySheetState
 
       await expenseRepo.updateExpense(widget.expense);
 
-      if (widget.medicalBill != null) {
-        final medicalRepo = ref.read(medicalRepositoryProvider);
-        final allReimbursements =
-            await repo.getReimbursementsForExpense(widget.expense.id);
-        final newTotal = allReimbursements.fold(0, (sum, r) => sum + r.amount);
-
-        await medicalRepo.updateMedicalBillReimbursement(
-            widget.medicalBill!, newTotal);
-      }
-
       if (mounted) {
         showFinancialFeedback(context, 'Reimbursement recorded');
         Navigator.pop(context);
@@ -134,6 +117,14 @@ class _ReimbursementEntrySheetState
 
   @override
   Widget build(BuildContext context) {
+    if (_medical) {
+      return const SafeArea(
+          child: Padding(
+              padding: EdgeInsets.all(24),
+              child: Text(
+                  'Record insurance refunds and salary deductions in the Medical bill. '
+                  'This generic reimbursement form is only for non-medical expenses.')));
+    }
     final reimbursementsAsync =
         ref.watch(reimbursementsByExpenseProvider(widget.expense.id));
 
@@ -147,16 +138,6 @@ class _ReimbursementEntrySheetState
         }
 
         var maxAllowed = widget.expense.amount - currentTotal;
-
-        if (widget.medicalBill != null) {
-          // For medical bills, max is the insurer's share (billed amount - patient share)
-          // But since expense.amount is the full charge for self-paid,
-          // the actual maximum expected reimbursement is the insurerPaidAmount.
-          final maxExpected =
-              widget.medicalBill!.insurerPaidAmount - currentTotal;
-          // We cap at maxAllowed (which is the expense amount) but show expected.
-          maxAllowed = maxExpected;
-        }
 
         if (maxAllowed <= 0) {
           return const Padding(
@@ -190,13 +171,6 @@ class _ReimbursementEntrySheetState
                       ),
                     ],
                   ),
-                  if (widget.medicalBill != null) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      'Insurer portion: ${formatMoney(Money(widget.medicalBill!.insurerPaidAmount, expenseCode))}',
-                      style: const TextStyle(fontSize: 12, color: Colors.blue),
-                    ),
-                  ],
                   const SizedBox(height: 24),
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,

@@ -42,6 +42,14 @@ void main() {
         child: MaterialApp(home: MedicalBillForm(existingBill: bill)),
       ),
     );
+    // Phase B places the service picker with Provider & person. Open that
+    // section before checking the preserved archived/missing selected value.
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('Provider & person'), 250,
+        scrollable: find.byType(Scrollable).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Provider & person'));
+    await tester.pumpAndSettle();
   }
 
   testWidgets('an archived service type renders without asserting',

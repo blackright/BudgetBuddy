@@ -10,7 +10,6 @@ import 'package:budget_buddy/core/providers/selected_month_provider.dart';
 import 'package:budget_buddy/core/services/context_navigation.dart';
 import 'package:budget_buddy/shared/presentation/widgets/spaces_dropdown.dart';
 import 'package:budget_buddy/shared/presentation/providers/context_navigation_provider.dart';
-import 'package:budget_buddy/features/budget_setup/presentation/welcome_step.dart';
 
 void main() {
   UserProfile profile(String name) => UserProfile()
@@ -170,27 +169,4 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
-  testWidgets('Welcome validates, previews and emits the chosen name',
-      (tester) async {
-    String? chosen;
-    await tester.pumpWidget(MaterialApp(
-        home: WelcomeStep(name: '', onContinue: (name) => chosen = name)));
-    await tester.scrollUntilVisible(
-        find.byKey(const Key('welcomeContinueButton')), 200,
-        scrollable: find.byType(Scrollable).first);
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('welcomeContinueButton')));
-    await tester.pump();
-    expect(chosen, isNull);
-    expect(find.text('Enter the name you would like to use.'), findsOneWidget);
-    await tester.enterText(find.byKey(const Key('welcomeNameField')), ' José ');
-    await tester.pumpAndSettle();
-    expect(find.text('J'), findsOneWidget);
-    await tester.scrollUntilVisible(
-        find.byKey(const Key('welcomeContinueButton')), 200,
-        scrollable: find.byType(Scrollable).first);
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('welcomeContinueButton')));
-    expect(chosen, 'José');
-  });
 }
