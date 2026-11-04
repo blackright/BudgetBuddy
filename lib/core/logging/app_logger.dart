@@ -10,9 +10,6 @@ class AppLogger {
     StackTrace? stackTrace,
     int level = 800,
   }) {
-    print('[$name] $message');
-    if (error != null) print('[$name] ERROR: $error');
-    if (stackTrace != null) print('[$name] STACK: $stackTrace');
     developer.log(
       message,
       name: name,

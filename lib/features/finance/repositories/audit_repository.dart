@@ -153,8 +153,9 @@ class AuditRepository {
     }
     if (type == 'IncomeReceiptGroup' && after != null) {
       final group = await isar.incomeReceiptGroups.get(row['id'] as int);
-      if (group == null)
+      if (group == null) {
         throw StateError('The recorded bank credit is missing.');
+      }
       final ledger = await IncomeReceiptLedger.read(isar, group);
       after = {
         ...after,

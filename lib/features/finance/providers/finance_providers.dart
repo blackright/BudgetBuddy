@@ -75,8 +75,9 @@ final resolvedIncomeProvider = Provider<ResolvedIncome>((ref) {
     return ResolvedIncome(amount: major, usesOverride: false);
   }
   final actualAsync = ref.watch(actualIncomeLedgerProvider);
-  if (actualAsync.hasError)
+  if (actualAsync.hasError) {
     throw const FormatException('Confirmed income needs review.');
+  }
   final actual = actualAsync.valueOrNull;
   if (actual != null &&
       (actual.groups.any((g) =>
@@ -114,8 +115,9 @@ final incomeSourcesTotalProvider = Provider<double>((ref) {
   // Select the accounting currency before summing minor units. Without this,
   // mixed sources became zero and foreign-only cents were relabelled as HUF.
   final actualAsync = ref.watch(actualIncomeLedgerProvider);
-  if (actualAsync.hasError)
+  if (actualAsync.hasError) {
     throw const FormatException('Confirmed income needs review.');
+  }
   final actual = actualAsync.valueOrNull;
   final confirmed = IncomeReceiptLedger.incomeForMonth(
       actual?.groups ?? const [], sources, context.yearMonth, currency,

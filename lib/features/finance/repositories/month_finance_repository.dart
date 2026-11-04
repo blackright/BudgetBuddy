@@ -435,10 +435,11 @@ class MonthFinanceRepository {
       final confirmed = IncomeReceiptLedger.incomeForMonth(
           actual, sources, context.yearMonth, profile.primaryCurrency.code,
           corrections: corrections);
-      if (confirmed != null)
+      if (confirmed != null) {
         return ResolvedIncome(
             amount: confirmed / profile.primaryCurrency.code.minorUnitsPerMajor,
             usesOverride: false);
+      }
     }
     return ResolvedIncome.resolve(
       override: month?.netSalaryOverride,

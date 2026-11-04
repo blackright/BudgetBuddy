@@ -188,3 +188,6 @@ isar.dll
 !**/ios/**/default.mode2v3
 !**/ios/**/default.pbxuser
 !**/ios/**/default.perspectivev3
+
+# Local audit reports (generated, not application source)
+/audit-reports/
