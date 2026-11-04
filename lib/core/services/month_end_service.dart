@@ -26,6 +26,7 @@ import '../../features/spaces/repositories/space_write_guard.dart';
 import '../../features/sync/repositories/sync_recorder.dart';
 import '../../features/sync/domain/sync_codec.dart';
 import '../../features/vault/models/savings_vault.dart';
+import '../../features/vault/models/vault_entry.dart';
 import 'expense_profile_identity.dart';
 import 'profile_spending_service.dart';
 import 'month_end_report.dart';
@@ -358,11 +359,20 @@ class MonthEndService {
         : (await isar.savingsVaults.where().findAll())
             .where((v) => v.profileId == actorId)
             .toList();
-    if (source.isNotEmpty &&
-        vaults.any((v) => v.lastSweepYearMonth.compareTo(month) > 0) &&
-        completed == null) {
+    // The sweep cursor is also written when a Vault is lazily created, so it is
+    // not evidence that a later month was actually saved. A real legacy sweep
+    // entry is: closing this month would change allocations that sweep used.
+    final laterSweeps = context.isShared
+        ? <VaultEntry>[]
+        : (await isar.vaultEntrys.filter().profileIdEqualTo(actorId).findAll())
+            .where((entry) =>
+                entry.kind == 'sweep' &&
+                entry.yearMonth != null &&
+                entry.yearMonth!.compareTo(month) > 0)
+            .toList();
+    if (source.isNotEmpty && laterSweeps.isNotEmpty && completed == null) {
       blockers.add(
-          'The vault has already passed this month. Review the existing sweep before settlement.');
+          'The vault has already saved a later month. Review the existing sweep before settlement.');
     }
     var canConfirm = true;
     if (context.isShared) {

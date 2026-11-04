@@ -12,6 +12,11 @@ class ReminderNotificationService {
   factory ReminderNotificationService() => _instance;
   ReminderNotificationService._();
 
+  /// Test-only instance so a fake can record `showNow`/`cancelReminder` calls
+  /// without touching the plugin or the production singleton.
+  @visibleForTesting
+  ReminderNotificationService.forTest();
+
   bool get _isTest => Platform.environment.containsKey('FLUTTER_TEST');
 
   final FlutterLocalNotificationsPlugin _plugin =

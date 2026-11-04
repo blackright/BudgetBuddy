@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
 import 'package:isar/isar.dart';
 
 import '../../../core/models/currency_code.dart';
@@ -15,6 +18,56 @@ int pendingActionNotificationId(String guid) {
     hash = (hash * 0x01000193) & 0xFFFFFFFF;
   }
   return hash & 0x7FFFFFFF;
+}
+
+/// The notification payload names the action as well as its route, so a tap can
+/// mark the row read before opening the destination.
+String pendingActionNotificationPayload(PendingAction row) => jsonEncode({
+      'guid': row.guid,
+      if (row.deepLink != null && row.deepLink!.isNotEmpty)
+        'route': row.deepLink,
+    });
+
+/// Decodes a current JSON payload or a legacy bare deep link.
+///
+/// Returns `null` for an empty payload. A bare link keeps its route and has no
+/// action GUID, so old notifications still open normally.
+({String? guid, String? route})? pendingActionNotification(String? payload) {
+  final raw = payload?.trim();
+  if (raw == null || raw.isEmpty) return null;
+  if (!raw.startsWith('{')) return (guid: null, route: raw);
+  try {
+    final data = jsonDecode(raw);
+    if (data is! Map) return null;
+    final guid = data['guid'];
+    final route = data['route'];
+    if (guid is! String && route is! String) return null;
+    return (
+      guid: guid is String && guid.isNotEmpty ? guid : null,
+      route: route is String && route.isNotEmpty ? route : null,
+    );
+  } on FormatException {
+    return null;
+  }
+}
+
+/// Marks the named action read, then returns the route to open.
+///
+/// Read state is best-effort: navigation must still happen when the write fails
+/// or the current context cannot resolve the row.
+Future<String?> openPendingActionNotification(
+    String? payload, PendingActionService Function() service) async {
+  final target = pendingActionNotification(payload);
+  if (target == null) return null;
+  final guid = target.guid;
+  if (guid != null) {
+    try {
+      await service().markRead(guid);
+    } catch (error, stackTrace) {
+      debugPrint('Pending action mark-read failed: $error\n$stackTrace');
+    }
+  }
+  return target.route;
 }
 
 /// The input to [PendingActionService.upsert]. A draft carries no status or
@@ -72,9 +125,11 @@ class PendingActionService {
     this.profileId,
     this.sharedSpaceId,
     this.audit,
+    ReminderNotificationService? notifications,
     DateTime Function()? clock,
   })  : assert((profileId == null) != (sharedSpaceId == null),
             'PendingActionService needs exactly one owner'),
+        notifications = notifications ?? ReminderNotificationService(),
         clock = clock ?? DateTime.now;
 
   final Isar db;
@@ -87,6 +142,10 @@ class PendingActionService {
   /// Personal actions are audited through the existing repository. Shared
   /// actions are signed by the sync recorder when one is supplied.
   final AuditRepository? audit;
+
+  /// Device-notification seam. Terminal transitions cancel the delivered
+  /// notification; tests inject a recorder so the platform plugin is untouched.
+  final ReminderNotificationService notifications;
   final DateTime Function() clock;
 
   int? get _profile => profileId;
@@ -199,10 +258,10 @@ class PendingActionService {
   Future<void> completeByRecord(
       String actionType, String recordRef, String cycleOrMonth) async {
     final key = '$actionType|$recordRef|$cycleOrMonth';
-    await db.writeTxn(() async {
+    final completedGuid = await db.writeTxn<String?>(() async {
       final row =
           await db.pendingActions.filter().dedupeKeyEqualTo(key).findFirst();
-      if (row == null || row.isTerminal) return;
+      if (row == null || row.isTerminal) return null;
       final before = _snapshot(row);
       final now = clock();
       row
@@ -212,7 +271,9 @@ class PendingActionService {
       await db.pendingActions.put(row);
       await _audit(row, 'pendingAction.complete',
           before: before, after: _snapshot(row));
+      return row.guid;
     });
+    if (completedGuid != null) await _cancelNotification(completedGuid);
   }
 
   /// The screen destination for an action.
@@ -265,10 +326,10 @@ class PendingActionService {
     if (reason.trim().isEmpty) {
       _fail('A reason is required.');
     }
-    await db.writeTxn(() async {
+    final closedGuid = await db.writeTxn<String?>(() async {
       final row =
           await db.pendingActions.filter().guidEqualTo(guid).findFirst();
-      if (row == null || row.isTerminal) return;
+      if (row == null || row.isTerminal) return null;
       if (row.profileId != _profile || row.sharedSpaceId != _space) {
         _fail('This action belongs to another profile or space.');
       }
@@ -280,7 +341,20 @@ class PendingActionService {
         ..updatedAt = now;
       await db.pendingActions.put(row);
       await _audit(row, auditAction, before: before, after: _snapshot(row));
+      return row.guid;
     });
+    if (closedGuid != null) await _cancelNotification(closedGuid);
+  }
+
+  /// Cancels the delivered notification after the action write has committed.
+  /// Delivery failure must never make a committed action look failed.
+  Future<void> _cancelNotification(String guid) async {
+    try {
+      await notifications.cancelReminder(pendingActionNotificationId(guid));
+    } catch (error, stackTrace) {
+      debugPrint(
+          'Pending action notification cancel failed: $error\n$stackTrace');
+    }
   }
 
   /// Reading a notification is not doing the task: it never changes [status].
@@ -316,7 +390,7 @@ class PendingActionService {
   /// Reading or receiving it never completes the action.
   Future<int> notifyDue(
       {ReminderNotificationService? notifications, DateTime? now}) async {
-    final target = notifications ?? ReminderNotificationService();
+    final target = notifications ?? this.notifications;
     final at = now ?? clock();
     final rows = await _activeRows();
     final changed = <PendingAction>[];
@@ -341,7 +415,7 @@ class PendingActionService {
         id: pendingActionNotificationId(row.guid),
         title: row.title,
         body: body,
-        payload: row.deepLink,
+        payload: pendingActionNotificationPayload(row),
       );
       row
         ..lastNotifiedAt = at

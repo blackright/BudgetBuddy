@@ -412,20 +412,73 @@ void main() {
         (await service().preview('2026-09', choices: choice())).blockers.join(),
         contains('2026-08 first'));
   });
-  test('already swept month blocks without changing the vault', () async {
+  test('a lazily created vault does not block the previous month', () async {
     await db.writeTxn(() async {
-      await db.savingsVaults.put(SavingsVault()
+      final vault = SavingsVault()
         ..profileId = 1
         ..totalMinor = 20000
         ..currency = 'huf'
         ..lastSweepYearMonth = '2026-10'
-        ..updatedAt = now);
+        ..updatedAt = now;
+      await db.savingsVaults.put(vault);
+      // Opening a Vault writes the current month into the cursor. That is not
+      // evidence that October savings were actually swept.
+      await seedVaultOpeningInTxn(db, vault, now);
+    });
+    final r = await service().preview('2026-09', choices: choice());
+    expect(r.blockers.join(), isNot(contains('vault has already')));
+    expect(r.ready, isTrue);
+    await service().confirm(r, choices: choice());
+    expect((await db.savingsVaults.where().findAll()).single.totalMinor, 20000);
+  });
+  test('a real legacy sweep for a later month still blocks', () async {
+    await db.writeTxn(() async {
+      final vault = SavingsVault()
+        ..profileId = 1
+        ..totalMinor = 20000
+        ..currency = 'huf'
+        ..lastSweepYearMonth = '2026-10'
+        ..updatedAt = now;
+      await db.savingsVaults.put(vault);
+      await seedVaultOpeningInTxn(db, vault, now);
+      await db.vaultEntrys.put(VaultEntry()
+        ..operationKey = 'legacy-sweep-2026-10'
+        ..profileId = 1
+        ..kind = 'sweep'
+        ..yearMonth = '2026-10'
+        ..amountMinor = 20000
+        ..balanceAfterMinor = 20000
+        ..currency = 'huf'
+        ..createdAt = now);
     });
     final r = await service().preview('2026-09', choices: choice());
     expect(r.blockers.join(), contains('vault has already'));
     await expectLater(service().confirm(r, choices: choice()),
         throwsA(isA<MonthEndException>()));
     expect((await db.savingsVaults.where().findAll()).single.totalMinor, 20000);
+  });
+  test('a same-month legacy sweep does not block', () async {
+    await db.writeTxn(() async {
+      final vault = SavingsVault()
+        ..profileId = 1
+        ..totalMinor = 20000
+        ..currency = 'huf'
+        ..lastSweepYearMonth = '2026-09'
+        ..updatedAt = now;
+      await db.savingsVaults.put(vault);
+      await seedVaultOpeningInTxn(db, vault, now);
+      await db.vaultEntrys.put(VaultEntry()
+        ..operationKey = 'legacy-sweep-2026-09'
+        ..profileId = 1
+        ..kind = 'sweep'
+        ..yearMonth = '2026-09'
+        ..amountMinor = 20000
+        ..balanceAfterMinor = 20000
+        ..currency = 'huf'
+        ..createdAt = now);
+    });
+    final r = await service().preview('2026-09', choices: choice());
+    expect(r.blockers.join(), isNot(contains('vault has already')));
   });
   Future<ContextRef> shared(SharedMemberRole role) async {
     await db.writeTxn(() async {

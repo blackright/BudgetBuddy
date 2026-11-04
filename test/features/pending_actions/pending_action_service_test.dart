@@ -2,6 +2,7 @@ import 'package:budget_buddy/core/models/audit_event.dart';
 import 'package:budget_buddy/core/models/expense.dart';
 import 'package:budget_buddy/core/models/monthly_budget.dart';
 import 'package:budget_buddy/core/models/pending_action.dart';
+import 'package:budget_buddy/core/services/reminder_notification_service.dart';
 import 'package:budget_buddy/features/finance/repositories/audit_repository.dart';
 import 'package:budget_buddy/features/pending_actions/services/pending_action_service.dart';
 import 'package:budget_buddy/features/pending_actions/services/pending_action_types.dart';
@@ -26,11 +27,13 @@ void main() {
   PendingActionService service({
     int profileId = 7,
     AuditRepository? audit,
+    ReminderNotificationService? notifications,
   }) =>
       PendingActionService(
         harness.isar,
         profileId: profileId,
         audit: audit,
+        notifications: notifications,
         clock: () => now,
       );
 
@@ -43,6 +46,7 @@ void main() {
     DateTime? expectedAt,
     String? expectedMonth,
     int priority = 1,
+    String? deepLink = '/income_sources',
   }) =>
       PendingActionDraft(
         actionType: 'salary.confirm',
@@ -56,7 +60,7 @@ void main() {
         expectedAt: expectedAt,
         expectedMonth: expectedMonth,
         priority: priority,
-        deepLink: '/income_sources',
+        deepLink: deepLink,
       );
 
   test('upsert creates one action with a stable dedupe key', () async {
@@ -284,4 +288,106 @@ void main() {
     expect(PendingActionService.destinationFor(action),
         '/income_sources?activate=source-guid&period=2026-11');
   });
+
+  test('completeByRecord cancels the delivered notification', () async {
+    final notifications = _RecordingNotifications();
+    final svc = service(notifications: notifications);
+    final row = await svc.upsert(draft());
+
+    await svc.completeByRecord('salary.confirm', 'cycle-1', '2026-10');
+
+    expect(notifications.cancelled, [pendingActionNotificationId(row.guid)]);
+  });
+
+  test('dismiss cancels the delivered notification', () async {
+    final notifications = _RecordingNotifications();
+    final svc = service(notifications: notifications);
+    final row = await svc.upsert(draft());
+
+    await svc.dismiss(row.guid, 'I will handle it later');
+
+    expect(notifications.cancelled, [pendingActionNotificationId(row.guid)]);
+  });
+
+  test('cancel cancels the delivered notification', () async {
+    final notifications = _RecordingNotifications();
+    final svc = service(notifications: notifications);
+    final row = await svc.upsert(draft());
+
+    await svc.cancel(row.guid, 'sourceMissing');
+
+    expect(notifications.cancelled, [pendingActionNotificationId(row.guid)]);
+  });
+
+  test('an already-terminal action does not cancel again', () async {
+    final notifications = _RecordingNotifications();
+    final svc = service(notifications: notifications);
+    final row = await svc.upsert(draft());
+    await svc.completeByRecord('salary.confirm', 'cycle-1', '2026-10');
+    notifications.cancelled.clear();
+
+    await svc.completeByRecord('salary.confirm', 'cycle-1', '2026-10');
+    await svc.dismiss(row.guid, 'later');
+    await svc.cancel(row.guid, 'later');
+
+    expect(notifications.cancelled, isEmpty);
+  });
+
+  test('a missing action does not cancel any notification', () async {
+    final notifications = _RecordingNotifications();
+    final svc = service(notifications: notifications);
+
+    await svc.cancel('missing-guid', 'sourceMissing');
+
+    expect(notifications.cancelled, isEmpty);
+  });
+
+  test('notifyDue carries the action GUID and route', () async {
+    final notifications = _RecordingNotifications();
+    final svc = service(notifications: notifications);
+    final row = await svc.upsert(draft(
+        expectedAt: DateTime(2026, 10, 24, 12),
+        expectedMonth: '2026-10',
+        deepLink: '/month_end?month=2026-09'));
+    await svc.refreshStatuses(now);
+
+    final sent = await svc.notifyDue(now: now);
+
+    expect(sent, 1);
+    final shown = notifications.shown.single;
+    expect(shown.id, pendingActionNotificationId(row.guid));
+    expect(pendingActionNotification(shown.payload),
+        (guid: row.guid, route: '/month_end?month=2026-09'));
+  });
+
+  test('notifyDue still sends at most once per day', () async {
+    final notifications = _RecordingNotifications();
+    final svc = service(notifications: notifications);
+    await svc.upsert(draft(
+        expectedAt: DateTime(2026, 10, 24, 12), expectedMonth: '2026-10'));
+    await svc.refreshStatuses(now);
+
+    expect(await svc.notifyDue(now: now), 1);
+    expect(await svc.notifyDue(now: now.add(const Duration(hours: 1))), 0);
+    expect(notifications.shown, hasLength(1));
+  });
+}
+
+class _RecordingNotifications extends ReminderNotificationService {
+  _RecordingNotifications() : super.forTest();
+
+  final cancelled = <int>[];
+  final shown = <({int id, String title, String body, String? payload})>[];
+
+  @override
+  Future<void> cancelReminder(int id) async => cancelled.add(id);
+
+  @override
+  Future<void> showNow({
+    required int id,
+    required String title,
+    required String body,
+    String? payload,
+  }) async =>
+      shown.add((id: id, title: title, body: body, payload: payload));
 }

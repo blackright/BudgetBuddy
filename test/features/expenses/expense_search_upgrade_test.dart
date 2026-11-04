@@ -1,5 +1,5 @@
-import 'package:budget_buddy/core/models/app_settings.dart';
 import 'dart:io';
+import 'package:budget_buddy/core/database/isar_helper.dart';
 import 'package:budget_buddy/core/database/schema_migrations.dart';
 import 'package:budget_buddy/core/models/expense.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -34,8 +34,7 @@ void main() {
         ..value = '27');
     });
     await db.close();
-    db = await Isar.open(
-        [AppSettingsSchema, ExpenseSchema, SchemaMigrationStampSchema],
+    db = await Isar.open(IsarHelper.schemas,
         directory: dir.path, name: 'search-upgrade');
     try {
       await runSchemaMigrations(db);

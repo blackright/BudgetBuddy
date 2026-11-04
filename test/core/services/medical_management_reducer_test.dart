@@ -80,7 +80,7 @@ void main() {
         reducer
             .resolve(bill(overall: MedicalOverallStatus.cancelled))
             .primaryAction,
-        MedicalManagementAction.reopenBill);
+        MedicalManagementAction.viewActivity);
     final review = reducer.resolve(bill(needsReview: true));
     expect(review.stage, MedicalManagementStage.needsReview);
     expect(review.primaryAction, MedicalManagementAction.reviewBill);

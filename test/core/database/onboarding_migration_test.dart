@@ -1,6 +1,7 @@
 import 'package:budget_buddy/core/models/lock_setting.dart';
 import 'dart:io';
 
+import 'package:budget_buddy/core/database/isar_helper.dart';
 import 'package:budget_buddy/core/database/schema_migrations.dart';
 import 'package:budget_buddy/core/models/app_settings.dart';
 import 'package:budget_buddy/core/models/category.dart';
@@ -29,7 +30,7 @@ void main() {
           ..updatedAt = now));
     await writeSchemaVersion(db, 31);
     await db.close();
-    db = await Isar.open([AppSettingsSchema, SchemaMigrationStampSchema],
+    db = await Isar.open(IsarHelper.schemas,
         directory: dir.path, name: 'onboarding-upgrade');
     try {
       final before = (await db.appSettings.get(1))!;
@@ -47,7 +48,7 @@ void main() {
       expect(row.updatedAt.toUtc(), now);
       expect(row.onboardingStateJson, isNull);
       expect(row.starterCategoryPolicy, 'preserveExisting');
-      expect(await readSchemaVersion(db), 32);
+      expect(await readSchemaVersion(db), schemaVersion);
     } finally {
       await db.close(deleteFromDisk: true);
       expect(

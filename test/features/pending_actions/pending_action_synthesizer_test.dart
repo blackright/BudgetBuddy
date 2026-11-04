@@ -1,5 +1,6 @@
 import 'package:budget_buddy/core/models/budget_profile.dart';
 import 'package:budget_buddy/core/models/income_source.dart';
+import 'package:budget_buddy/core/models/month_end_run.dart';
 import 'package:budget_buddy/core/models/monthly_budget.dart';
 import 'package:budget_buddy/core/models/pending_action.dart';
 import 'package:budget_buddy/core/models/salary_cycle.dart';
@@ -104,6 +105,34 @@ void main() {
             .singleWhere((row) => row.actionType == 'allocation.overspent')
             .expectedAmountMinor,
         50);
+    expect(
+        rows.singleWhere((row) => row.actionType == 'monthend.close').deepLink,
+        '/month_end?month=2026-09');
+  });
+
+  test('a month-end conflict deep link carries the run month', () async {
+    await h.isar.writeTxn(() async {
+      await h.isar.monthEndRuns.put(MonthEndRun()
+        ..syncGuid = 'run-conflict'
+        ..profileId = 1
+        ..contextGuid = 'personal:1'
+        ..yearMonth = '2026-09'
+        ..destinationMonth = '2026-10'
+        ..currency = 'usd'
+        ..reportJson = '{"lines":[]}'
+        ..fingerprint = 'fingerprint'
+        ..actor = 'profile:1'
+        ..createdAt = now
+        ..hasConflict = true
+        ..applied = false);
+    });
+
+    await (await synthesizer()).synthesize();
+
+    final action = (await h.isar.pendingActions.where().findAll())
+        .singleWhere((row) => row.actionType == 'monthend.conflict');
+    expect(action.deepLink, '/month_end?month=2026-09');
+    expect(action.expectedMonth, '2026-09');
   });
 
   test('a second synthesis produces the same rows', () async {

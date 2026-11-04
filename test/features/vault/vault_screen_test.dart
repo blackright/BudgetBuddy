@@ -31,7 +31,11 @@ Future<void> settle(WidgetTester tester) async {
     await tester.pump();
     await Future<void>.delayed(const Duration(milliseconds: 25));
   }
-  await tester.pumpAndSettle();
+  for (var i = 0; i < 40; i++) {
+    if (!tester.binding.hasScheduledFrame) break;
+    await tester.pump(const Duration(milliseconds: 50));
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+  }
 }
 
 void main() {
@@ -74,7 +78,8 @@ void main() {
         'The transfer did not finish: ${tester.widgetList<Text>(find.byType(Text)).map((t) => t.data).join('\n')}');
   }
 
-  Future<void> open(WidgetTester tester, {bool shared = false}) async {
+  Future<void> open(WidgetTester tester,
+      {bool shared = false, bool waitForTransfer = false}) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final container = ProviderContainer(overrides: [
@@ -104,6 +109,13 @@ void main() {
     await tester.pumpWidget(UncontrolledProviderScope(
         container: container, child: const MaterialApp(home: VaultScreen())));
     await settle(tester);
+    if (waitForTransfer && !shared) {
+      await container.read(vaultTransferReadinessProvider.future).timeout(
+          const Duration(seconds: 10),
+          onTimeout: () => throw StateError(
+              'Vault transfer readiness did not resolve within 10 seconds.'));
+      await settle(tester);
+    }
   }
 
   testWidgets(
@@ -121,7 +133,7 @@ void main() {
           ..createdAt = DateTime(2026)
           ..updatedAt = DateTime(2026));
       });
-      await open(tester);
+      await open(tester, waitForTransfer: true);
       expect(find.text('Maximum deposit: Ft 100,000'), findsOneWidget,
           reason: tester
               .widgetList<Text>(find.byType(Text))

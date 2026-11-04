@@ -1,10 +1,6 @@
-import 'package:budget_buddy/core/models/app_settings.dart';
-import 'package:budget_buddy/core/models/live_rate_set.dart';
 import '../../support/audit_test_support.dart';
-import 'package:budget_buddy/core/models/month_end_run.dart';
-import 'package:budget_buddy/features/vault/models/vault_entry.dart';
-import 'package:budget_buddy/features/vault/models/savings_vault.dart';
 import 'dart:io';
+import 'package:budget_buddy/core/database/isar_helper.dart';
 import 'package:budget_buddy/core/database/schema_migrations.dart';
 import 'package:budget_buddy/features/sync/domain/codecs/expense_codec.dart';
 import 'package:budget_buddy/features/sync/domain/entity_applier.dart';
@@ -15,8 +11,6 @@ import 'package:budget_buddy/core/models/audit_event.dart';
 import 'package:budget_buddy/core/models/budget_profile.dart';
 import 'package:budget_buddy/core/models/direct_expense_profile.dart';
 import 'package:budget_buddy/core/models/expense.dart';
-import 'package:budget_buddy/core/models/identity.dart';
-import 'package:budget_buddy/core/models/income_source.dart';
 import 'package:budget_buddy/core/models/month_rate_seal.dart';
 import 'package:budget_buddy/core/models/monthly_budget.dart';
 import 'package:budget_buddy/core/models/shared_member.dart';
@@ -69,27 +63,8 @@ void main() {
   late SyncRecorder auditRecorder;
   setUp(() async {
     directory = Directory.systemTemp.createTempSync('budget_buddy_refunds_');
-    isar = await Isar.open([
-      UserProfileSchema,
-      MonthlyBudgetSchema,
-      ExpenseSchema,
-      ReimbursementSchema,
-      BudgetProfileSchema,
-      MonthEndRunSchema,
-      DirectExpenseProfileSchema,
-      IncomeSourceSchema,
-      VaultEntrySchema,
-      SavingsVaultSchema,
-      AuditEventSchema,
-      SharedSpaceSchema,
-      SharedMemberSchema,
-      IdentitySchema,
-      MonthRateSealSchema,
-      LiveRateSetSchema,
-      ChangeRecordSchema,
-      AppSettingsSchema,
-      SchemaMigrationStampSchema
-    ], directory: directory.path, name: 'refund_${serial++}');
+    isar = await Isar.open(IsarHelper.schemas,
+        directory: directory.path, name: 'refund_${serial++}');
     auditRecorder = await auditTestRecorder(isar);
     await isar.writeTxn(() async {
       await isar.userProfiles.put(UserProfile()

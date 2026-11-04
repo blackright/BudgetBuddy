@@ -380,40 +380,57 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('check payslip prefills next bill month and the 1st',
+  testWidgets(
+      'check payslip prefills the next bill month and the 1st for every month',
       (tester) async {
-    const billId = 100;
-    addTearDown(
-        () => MedicalManagementDrafts.clear(billId, 'recordSettlement'));
     final now = DateTime.now();
-    final billMonth = DateTime(now.year, now.month + 1);
-    final expected = DateTime(billMonth.year, billMonth.month + 1);
-    final bill = MedicalBill()
-      ..id = billId
-      ..profileId = 1
-      ..billedAmount = 10000
-      ..patientSharePercent = 20
-      ..currency = 'usd'
-      ..yearMonth =
-          '${billMonth.year.toString().padLeft(4, '0')}-${billMonth.month.toString().padLeft(2, '0')}'
-      ..settlementAmountMinor = 8000;
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(body: MedicalRefundSheet(bill: bill)),
-    ));
-    await tester.pumpAndSettle();
 
-    final dropdowns = tester
-        .widgetList<DropdownButtonFormField<int>>(
-            find.byType(DropdownButtonFormField<int>))
-        .toList();
-    expect(dropdowns.first.initialValue, expected.month);
-    expect(dropdowns.last.initialValue, expected.year);
-    expect(find.text('Received date'), findsOneWidget);
-    expect(find.textContaining('${expected.year}'), findsWidgets);
-    expect(
+    for (var offset = 0; offset < 12; offset++) {
+      final sourceMonth = DateTime(now.year, now.month + offset);
+      final expected = DateTime(sourceMonth.year, sourceMonth.month + 1);
+      final billId = 100 + offset;
+      addTearDown(
+          () => MedicalManagementDrafts.clear(billId, 'recordSettlement'));
+
+      final bill = MedicalBill()
+        ..id = billId
+        ..profileId = 1
+        ..billedAmount = 10000
+        ..patientSharePercent = 20
+        ..currency = 'usd'
+        ..yearMonth =
+            '${sourceMonth.year.toString().padLeft(4, '0')}-${sourceMonth.month.toString().padLeft(2, '0')}'
+        ..settlementAmountMinor = 8000;
+
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: MedicalRefundSheet(
+            key: ValueKey(billId),
+            bill: bill,
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      final dropdowns = tester
+          .widgetList<DropdownButtonFormField<int>>(
+              find.byType(DropdownButtonFormField<int>))
+          .toList();
+      final reason = 'source ${bill.yearMonth} should prefill '
+          '${expected.month}/${expected.year}';
+
+      expect(dropdowns, hasLength(2), reason: reason);
+      expect(dropdowns.first.initialValue, expected.month, reason: reason);
+      expect(dropdowns.last.initialValue, expected.year, reason: reason);
+      expect(find.text('Received date'), findsOneWidget);
+      expect(find.textContaining('${expected.year}'), findsWidgets);
+      expect(
         find.text(DateFormat.yMMMd()
             .format(DateTime(expected.year, expected.month, 1))),
-        findsOneWidget);
-    expect(tester.takeException(), isNull);
+        findsOneWidget,
+        reason: reason,
+      );
+      expect(tester.takeException(), isNull, reason: reason);
+    }
   });
 }

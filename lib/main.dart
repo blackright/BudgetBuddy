@@ -29,6 +29,7 @@ import 'features/sync/repositories/sync_coordinator.dart';
 import 'core/services/reminder_notification_service.dart';
 import 'features/vault/providers/vault_providers.dart';
 import 'features/pending_actions/providers/pending_actions_providers.dart';
+import 'features/pending_actions/services/pending_action_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -285,8 +286,10 @@ class MyApp extends ConsumerWidget {
 
   Widget _buildRouterApp(BuildContext context, WidgetRef ref) {
     final router = ref.watch(routerProvider);
-    ReminderNotificationService().onPendingActionTap = (payload) {
-      if (payload != null && payload.isNotEmpty) router.go(payload);
+    ReminderNotificationService().onPendingActionTap = (payload) async {
+      final route = await openPendingActionNotification(
+          payload, () => ref.read(pendingActionServiceProvider));
+      if (route != null && route.isNotEmpty) router.go(route);
     };
     final activeProfileAsync = ref.watch(activeProfileProvider);
     final AppFontFamily familySelection =

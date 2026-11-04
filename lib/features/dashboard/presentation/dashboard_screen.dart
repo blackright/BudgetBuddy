@@ -8,6 +8,7 @@ import '../../../core/models/expense.dart';
 import '../../../core/providers/active_budget_provider.dart';
 import '../../../core/providers/active_profile_provider.dart';
 import '../../../core/providers/active_space_provider.dart';
+import '../../../core/providers/budget_context_provider.dart';
 import '../../../core/providers/selected_month_provider.dart';
 import '../../../shared/presentation/widgets/month_incomplete_banner.dart';
 import '../../../shared/presentation/widgets/sync_status_chip.dart';
@@ -50,6 +51,7 @@ class DashboardScreen extends ConsumerWidget {
     }
     final canEdit = ref.watch(activeContextCanEditProvider);
     final activeSpaceId = ref.watch(activeSpaceIdProvider);
+    final personal = !ref.watch(budgetContextProvider).isShared;
     final display =
         resolveDisplayCurrency(month: activeBudget, profile: profile);
     final symbol = display.symbol;
@@ -210,6 +212,15 @@ class DashboardScreen extends ConsumerWidget {
                             color: Colors.teal,
                             onTap: () => context.go('/medical'),
                           ),
+                          if (personal)
+                            _QuickAction(
+                              key: const Key('vaultQuickAction'),
+                              icon: Icons.savings_outlined,
+                              label: 'Savings Vault',
+                              hint: 'Your saved money and history',
+                              color: Colors.indigo,
+                              onTap: () => context.push('/vault'),
+                            ),
                           _QuickAction(
                             icon: Icons.history,
                             label: 'History',
@@ -229,7 +240,8 @@ class DashboardScreen extends ConsumerWidget {
                             for (final action in actions)
                               SizedBox(
                                 width: width,
-                                child: _QuickActionCard(action: action),
+                                child: _QuickActionCard(
+                                    key: action.key, action: action),
                               ),
                           ],
                         );
@@ -248,6 +260,7 @@ class DashboardScreen extends ConsumerWidget {
 
 class _QuickAction {
   const _QuickAction({
+    this.key,
     required this.icon,
     required this.label,
     required this.hint,
@@ -255,6 +268,7 @@ class _QuickAction {
     required this.onTap,
   });
 
+  final Key? key;
   final IconData icon;
   final String label;
   final String hint;
@@ -263,7 +277,7 @@ class _QuickAction {
 }
 
 class _QuickActionCard extends StatelessWidget {
-  const _QuickActionCard({required this.action});
+  const _QuickActionCard({super.key, required this.action});
 
   final _QuickAction action;
 

@@ -136,7 +136,14 @@ GoRouter createAppRouter(
         GoRoute(
             path: '/month_end',
             parentNavigatorKey: rootNavigatorKey,
-            builder: (context, state) => const MonthEndScreen()),
+            builder: (context, state) {
+              final rawMonth = state.uri.queryParameters['month'];
+              final month = rawMonth != null &&
+                      RegExp(r'^\d{4}-(0[1-9]|1[0-2])$').hasMatch(rawMonth)
+                  ? rawMonth
+                  : null;
+              return MonthEndScreen(initialMonth: month);
+            }),
         GoRoute(
           path: '/allocations',
           parentNavigatorKey: rootNavigatorKey,

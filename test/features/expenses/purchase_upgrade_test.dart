@@ -1,7 +1,7 @@
-import 'package:budget_buddy/core/models/app_settings.dart';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:isar/isar.dart';
+import 'package:budget_buddy/core/database/isar_helper.dart';
 import 'package:budget_buddy/core/database/schema_migrations.dart';
 import 'package:budget_buddy/core/models/expense.dart';
 import 'package:budget_buddy/core/models/expense_purchase.dart';
@@ -35,12 +35,11 @@ void main() {
     });
     await writeSchemaVersion(db, 29);
     await db.close();
-    db = (await Isar.open([
-      AppSettingsSchema,
-      ExpenseSchema,
-      ExpensePurchaseSchema,
-      SchemaMigrationStampSchema
-    ], directory: dir.path, name: 'purchase-upgrade'));
+    db = (await Isar.open(
+      IsarHelper.schemas,
+      directory: dir.path,
+      name: 'purchase-upgrade',
+    ));
     try {
       await runSchemaMigrations(db);
       final row = (await db.expenses.get(old.id))!;

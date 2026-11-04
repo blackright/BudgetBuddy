@@ -2523,7 +2523,9 @@ class _MonthYearField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final years = [for (var y = DateTime.now().year; y >= 2000; y--) y];
+    final currentYear = DateTime.now().year;
+    final newestYear = year > currentYear + 1 ? year : currentYear + 1;
+    final years = [for (var y = newestYear; y >= 2000; y--) y];
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(

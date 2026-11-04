@@ -76,10 +76,12 @@ class IsarHelper {
   /// lets [instance] fail loudly with a plain `StateError`.
   static Isar? get maybeInstance => _isarValue;
 
-  static Future<void> init() async {
-    final dir = await getApplicationDocumentsDirectory();
-    _isarValue = await Isar.open(
-      [
+  /// The complete current database inventory.
+  ///
+  /// Production and current-schema tests use this single list. Tests that
+  /// deliberately prove a legacy shape (the `Previous...` first opens) must keep
+  /// their own reduced subset and must not use this getter for that phase.
+  static List<CollectionSchema> get schemas => [
         UserProfileSchema,
         FinancialAdoptionSchema,
         MedicalApprovalSchema,
@@ -135,7 +137,12 @@ class IsarHelper {
         PendingActionSchema,
         AuditEventSchema,
         AppSettingsSchema,
-      ],
+      ];
+
+  static Future<void> init() async {
+    final dir = await getApplicationDocumentsDirectory();
+    _isarValue = await Isar.open(
+      schemas,
       directory: dir.path,
     );
 

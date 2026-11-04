@@ -42,6 +42,9 @@ void main() {
       );
 
   Future<void> open(WidgetTester tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pump();
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
   }
@@ -54,7 +57,12 @@ void main() {
   }
 
   Future<void> submit(WidgetTester tester) async {
-    await tester.tap(find.byKey(const Key('pinSubmit')));
+    final button = find.byKey(const Key('pinSubmit'));
+    await tester.ensureVisible(button);
+    await tester.pump();
+    expect(tester.widget<IconButton>(button).onPressed, isNotNull,
+        reason: 'Enter a PIN before submitting.');
+    await tester.tap(button);
     await tester.pump();
   }
 

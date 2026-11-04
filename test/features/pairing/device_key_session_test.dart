@@ -232,6 +232,7 @@ void main() {
       ..updatedAt = DateTime(2026, 3, 5);
     final container = ProviderContainer(
       overrides: [
+        nativeAccessBindingProvider.overrideWith(nativeFixtureBinding),
         deviceAuthenticatorProvider.overrideWithValue(authenticator),
         identityKeyLoaderProvider.overrideWithValue(loader),
         identityProvider.overrideWith((ref) => Stream.value(identity)),

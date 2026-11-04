@@ -3,6 +3,7 @@ import 'package:budget_buddy/core/models/app_settings.dart';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:isar/isar.dart';
+import 'package:budget_buddy/core/database/isar_helper.dart';
 import 'package:budget_buddy/core/database/schema_migrations.dart';
 import 'package:budget_buddy/core/database/money_integrity.dart';
 import 'package:budget_buddy/core/models/user_profile.dart';
@@ -46,12 +47,11 @@ void main() {
       });
       await writeSchemaVersion(db, 25);
       await db.close();
-      db = await Isar.open([
-        AppSettingsSchema,
-        SavingsVaultSchema,
-        VaultEntrySchema,
-        SchemaMigrationStampSchema
-      ], directory: directory.path, name: 'goal_upgrade');
+      db = await Isar.open(
+        IsarHelper.schemas,
+        directory: directory.path,
+        name: 'goal_upgrade',
+      );
       await runSchemaMigrations(db);
       final vault = (await db.savingsVaults.where().findAll()).single;
       expect(vault.goalTargetYearMonth, isNull);

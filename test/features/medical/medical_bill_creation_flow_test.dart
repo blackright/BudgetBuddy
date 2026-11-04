@@ -170,12 +170,13 @@ void main() {
 
   Future<void> chooseInsurer(WidgetTester tester) async {
     final target = find.text('Insurance pays the provider');
-    if (target.evaluate().isEmpty) {
-      await tester.scrollUntilVisible(target, -250,
-          scrollable: find.byType(Scrollable).first);
-      await tester.pumpAndSettle();
-    }
+    final scrollable = find.byType(Scrollable).first;
+    tester.state<ScrollableState>(scrollable).position.jumpTo(0);
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(target, 250, scrollable: scrollable);
+    await tester.pumpAndSettle();
     await tester.ensureVisible(target);
+    await tester.pumpAndSettle();
     await tester.tap(target);
     await tester.pumpAndSettle();
   }

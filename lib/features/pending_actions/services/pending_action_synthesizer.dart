@@ -451,7 +451,7 @@ class PendingActionSynthesizer {
         cycleOrMonth: previous,
         expectedMonth: previous,
         priority: 1,
-        deepLink: '/month_end',
+        deepLink: '/month_end?month=$previous',
       ));
     }
     if (runs.any((r) => r.applied && r.yearMonth == previous)) {
@@ -472,7 +472,7 @@ class PendingActionSynthesizer {
         cycleOrMonth: run.yearMonth,
         expectedMonth: run.yearMonth,
         priority: 2,
-        deepLink: '/month_end',
+        deepLink: '/month_end?month=${run.yearMonth}',
       ));
     }
     await _cancelMissing(
