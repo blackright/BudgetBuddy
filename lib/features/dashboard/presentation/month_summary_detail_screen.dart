@@ -140,6 +140,12 @@ class MonthSummaryDetailScreen extends ConsumerWidget {
                     color: MedicalTheme.semantic(context, MedicalTheme.moneyIn),
                     onTap: () => context.push('/income_sources'),
                   ),
+                  if (summary.expectedIncome > 0)
+                    _DetailRow(
+                      label: 'Expected salary',
+                      value: _money(summary.expectedIncome, currency),
+                      color: MedicalTheme.semantic(context, MedicalTheme.bank),
+                    ),
                   if (summary.vaultTransfers != 0)
                     _DetailRow(
                       label: 'Vault transfers (withdrawals - deposits)',

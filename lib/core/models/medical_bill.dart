@@ -7,10 +7,10 @@ part 'medical_bill.g.dart';
 
 /// A medical service the user paid for (or plans to pay for).
 ///
-/// The bill's own [state] is the single authority for both its insurance meaning
-/// and its effect on the budget. There is no separate claim workflow: asking
-/// whether a bill counts as paid and asking whether the insurer has answered are
-/// the same question, so they cannot disagree.
+/// [state] retains the legacy cost mapping and whole-space shared workflow.
+/// Personal provider payment is read from the linked expense; insurer decisions,
+/// submission and cancellation are separate immutable claim records. Do not
+/// reinterpret an old Waiting bill as unpaid or infer its submission date.
 @collection
 class MedicalBill {
   Id id = Isar.autoIncrement;
@@ -57,6 +57,76 @@ class MedicalBill {
 
   @enumerated
   MedicalBillState state = MedicalBillState.waiting;
+
+  /// The bill's overall resolution, independent of the workflow trackers.
+  @enumerated
+  @Index()
+  MedicalOverallStatus overallStatus = MedicalOverallStatus.open;
+
+  /// Whether and how the provider was paid. Insurer-paid bills use
+  /// [MedicalProviderPaymentStatus.notRequired].
+  @enumerated
+  @Index()
+  MedicalProviderPaymentStatus providerPaymentStatus =
+      MedicalProviderPaymentStatus.notConfirmed;
+
+  /// Where the insurance request currently sits. Independent of provider
+  /// payment and salary settlement.
+  @enumerated
+  @Index()
+  MedicalInsuranceRequestStatus insuranceRequestStatus =
+      MedicalInsuranceRequestStatus.notSubmitted;
+
+  /// What kind of salary settlement this bill expects.
+  @enumerated
+  MedicalSalarySettlementType salarySettlementType =
+      MedicalSalarySettlementType.none;
+
+  /// Where the refund or salary deduction currently sits.
+  @enumerated
+  @Index()
+  MedicalSalarySettlementStatus salarySettlementStatus =
+      MedicalSalarySettlementStatus.notRequired;
+
+  /// When the user submitted the insurance request.
+  DateTime? submissionDate;
+
+  /// When the user confirmed insurance received the request.
+  DateTime? receiptConfirmedDate;
+
+  /// Optional insurer reference.
+  String? insuranceReference;
+
+  /// Expected `YYYY-MM` salary month for the refund or deduction.
+  String? expectedSalaryMonth;
+
+  /// Actual `YYYY-MM` salary month when money moved.
+  String? actualSalaryMonth;
+
+  /// Expected or approved amount for the current settlement, in minor units.
+  int? settlementAmountMinor;
+
+  /// Actual confirmed amount for the current settlement, in minor units.
+  int? settledAmountMinor;
+
+  /// Actual received/deducted date when known.
+  DateTime? settledDate;
+
+  /// How a rejection was resolved.
+  @enumerated
+  MedicalRejectionResolution rejectionResolution =
+      MedicalRejectionResolution.none;
+
+  /// Set when legacy or ambiguous money must be reviewed before the new
+  /// workflow can act. Such bills stay readable and are never auto-converted.
+  @Index()
+  bool needsReview = false;
+
+  /// Last tracker update. Null for records created before the trackers existed.
+  DateTime? lastUpdatedAt;
+
+  DateTime? closedAt;
+  String? closeReason;
 
   /// Owning month (`YYYY-MM`), derived from [serviceDate] unless the user
   /// overrides it, and mirrored onto the linked expense (FR-055).
@@ -109,6 +179,50 @@ class MedicalBill {
   /// The insurer's portion of the charge, in the bill's own currency.
   @ignore
   int get insurerPaidAmount => billedAmount - patientShareAmount;
+
+  /// Percentage of the bill insurance is expected to cover (0–100).
+  ///
+  /// Bill Creation asks for coverage; the stored field stays
+  /// [patientSharePercent] so existing data and the `100 - share` invariant do
+  /// not change (Bill Creation PRD §8.2).
+  @ignore
+  double get insuranceCoveragePercent =>
+      (100.0 - patientSharePercent).clamp(0.0, 100.0);
+
+  /// Sets coverage, clamping to 0–100 and storing the inverted share.
+  ///
+  /// This is a convenience for the creation form only; it keeps the stored
+  /// invariant in one place instead of repeating the inversion at call sites.
+  void setInsuranceCoverage(double coveragePercent) {
+    patientSharePercent = (100.0 - coveragePercent).clamp(0.0, 100.0);
+  }
+
+  /// What the user expects insurance to reimburse after paying in full.
+  ///
+  /// Zero for an insurer-paid bill: there is no refund to the user, only a
+  /// direct payment to the provider (Bill Creation PRD §10.3).
+  @ignore
+  int get expectedInsuranceRefund =>
+      paymentMethod == MedicalPaymentMethod.selfPaid ? insurerPaidAmount : 0;
+
+  /// What insurance is expected to pay the provider directly.
+  ///
+  /// Zero for a self-paid bill, where the user pays first and claims back
+  /// (Bill Creation PRD §10.2).
+  @ignore
+  int get insurancePaysProviderAmount =>
+      paymentMethod == MedicalPaymentMethod.insurerPaid ? insurerPaidAmount : 0;
+
+  /// The amount expected to affect the budget once payment is confirmed.
+  ///
+  /// Creation only plans the bill, so this is a planning value and must not be
+  /// mistaken for [fundsImpact], which is zero while the bill is `planned`
+  /// (Bill Creation PRD §17.2).
+  @ignore
+  int get plannedBudgetEffect => switch (paymentMethod) {
+        MedicalPaymentMethod.insurerPaid => patientShareAmount,
+        MedicalPaymentMethod.selfPaid => billedAmount,
+      };
 
   /// How much this bill removes from available funds.
   ///
@@ -195,4 +309,50 @@ extension MedicalBillStateLabel on MedicalBillState {
   /// States that count against available funds.
   bool get isSettled =>
       this != MedicalBillState.planned && this != MedicalBillState.waiting;
+}
+
+/// Overall resolution, separate from the detailed workflow trackers.
+enum MedicalOverallStatus { open, closed, cancelled }
+
+/// Whether and how the healthcare provider was paid.
+enum MedicalProviderPaymentStatus { notConfirmed, paid, refunded, notRequired }
+
+/// The insurance request stage. Appeals are repeatable records, not new states.
+enum MedicalInsuranceRequestStatus {
+  notSubmitted,
+  submitted,
+  receiptPending,
+  inProgress,
+  approved,
+  rejected,
+  appealSubmitted,
+  appealInProgress,
+  appealApproved,
+  appealRejected,
+  requestCancelled,
+  completed,
+}
+
+/// The kind of money expected from or owed to salary.
+enum MedicalSalarySettlementType { none, insuranceRefund, userShareDeduction }
+
+/// The salary settlement stage.
+enum MedicalSalarySettlementStatus {
+  notRequired,
+  waitingForPayslip,
+  received,
+  deducted,
+  notReceived,
+  notDeducted,
+}
+
+/// How a rejected insurance-paid request was resolved.
+enum MedicalRejectionResolution {
+  none,
+  accepted,
+  appeal,
+  providerCancelled,
+  userPaidProvider,
+  adjustedDeduction,
+  other,
 }

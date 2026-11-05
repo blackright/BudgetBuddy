@@ -1,4 +1,8 @@
 import 'codecs/merchant_codec.dart';
+import 'codecs/medical_approval_codec.dart';
+import 'codecs/medical_appeal_codec.dart';
+import 'codecs/medical_claim_activity_codec.dart';
+import 'codecs/medical_settlement_event_codec.dart';
 import 'codecs/expense_purchase_codec.dart';
 import 'codecs/expense_evidence_chunk_codec.dart';
 import 'codecs/audit_event_codec.dart';
@@ -35,6 +39,10 @@ const List<SyncCodec<dynamic>> syncCodecs = [
   ExpensePurchaseCodec(),
   ReimbursementCodec(),
   MedicalBillCodec(),
+  MedicalApprovalCodec(),
+  MedicalClaimActivityCodec(),
+  MedicalAppealCodec(),
+  MedicalSettlementEventCodec(),
   FamilyMemberCodec(),
   MedicalProviderCodec(),
   MedicalServiceTypeCodec(),

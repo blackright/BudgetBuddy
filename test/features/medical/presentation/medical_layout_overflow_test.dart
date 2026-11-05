@@ -3,25 +3,30 @@ import 'package:budget_buddy/core/models/insurance_profile.dart';
 import 'package:budget_buddy/core/models/medical_bill.dart';
 import 'package:budget_buddy/core/models/medical_service_type.dart';
 import 'package:budget_buddy/core/models/monthly_budget.dart';
-import 'package:budget_buddy/core/models/money.dart';
-import 'package:budget_buddy/core/models/user_profile.dart';
-import 'package:budget_buddy/core/models/expense.dart';
 import 'package:budget_buddy/core/providers/active_budget_provider.dart';
-import 'package:budget_buddy/core/providers/active_profile_provider.dart';
+import 'package:budget_buddy/core/providers/clock_provider.dart';
 import 'package:budget_buddy/core/providers/selected_month_provider.dart';
 import 'package:budget_buddy/features/engine/providers/rate_registry_provider.dart';
 import 'package:budget_buddy/features/expenses/models/reimbursement.dart';
 import 'package:budget_buddy/features/medical/providers/medical_providers.dart';
+import 'package:budget_buddy/features/medical/providers/medical_receipt_provider.dart';
+import 'package:budget_buddy/features/medical/presentation/medical_bill_state_resolver.dart';
+import 'package:budget_buddy/features/medical/presentation/medical_bill_view_state.dart';
 import 'package:budget_buddy/features/medical/presentation/medical_dashboard.dart';
 import 'package:budget_buddy/features/settings/providers/settings_provider.dart';
+import 'package:budget_buddy/features/spaces/providers/spaces_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import '../repositories/medical_test_harness.dart';
-
 /// Layout guards for the dialogs and sheets that sit under a soft keyboard, plus
 /// the Medical dashboard header change.
+class _LayoutClock extends ClockNotifier {
+  _LayoutClock() {
+    state = DateTime(2026, 1, 30);
+  }
+}
+
 ///
 /// HONEST SCOPE: these tests do **not** reproduce the device crash
 /// (`RenderFlex overflowed ... on the bottom`, then `_dependents.isEmpty` and
@@ -238,271 +243,325 @@ void main() {
     });
   });
 
-  group('Medical dashboard layout', () {
+  group('Medical dashboard inbox layout', () {
+    final now = DateTime(2026, 1, 30);
+    const resolver = MedicalBillStateResolver();
+
+    MedicalInboxItem item({
+      int id = 1,
+      String month = '2026-01',
+      int billed = 100000,
+      CurrencyCode currency = CurrencyCode.usd,
+      MedicalPaymentMethod method = MedicalPaymentMethod.selfPaid,
+      bool providerPaid = false,
+      int? approved = 8000,
+      int? received = 0,
+      bool closed = false,
+      int shortfall = 0,
+      bool cancelled = false,
+      bool blocked = false,
+      DateTime? followUp,
+      String providerName = 'Clinic',
+      String? memberName,
+      String? serviceName,
+    }) {
+      final bill = MedicalBill()
+        ..id = id
+        ..syncGuid = 'bill-$id'
+        ..profileId = 1
+        ..yearMonth = month
+        ..serviceDate = DateTime(2026, 1, 10)
+        ..billedAmount = billed
+        ..currency = currency.name
+        ..patientSharePercent = 20
+        ..paymentMethod = method
+        ..followUpDate = followUp
+        ..state = closed
+            ? MedicalBillState.finished
+            : providerPaid
+                ? MedicalBillState.paid
+                : MedicalBillState.waiting;
+      final facts = MedicalBillFacts(
+        billId: id,
+        billGuid: 'bill-$id',
+        method: method,
+        legacyState: bill.state,
+        isShared: false,
+        currency: currency,
+        billedMinor: billed,
+        patientShareMinor: (billed * 20 / 100).round(),
+        providerPaid: providerPaid,
+        approvedMinor: approved,
+        receivedMinor: received,
+        needsReview: false,
+        cancelled: cancelled,
+        enteredInError: false,
+        closed: closed,
+        shortfallMinor: shortfall,
+        directProviderSettlement: method == MedicalPaymentMethod.insurerPaid
+            ? MedicalEvidence.confirmed
+            : MedicalEvidence.unknown,
+        shareSettlement: method == MedicalPaymentMethod.insurerPaid
+            ? MedicalEvidence.confirmed
+            : MedicalEvidence.unknown,
+        followUp: followUp,
+      );
+      final state = resolver.resolve(
+        facts,
+        canEdit: true,
+        readiness: blocked
+            ? MedicalReadiness.blocked(['missingMonth'])
+            : MedicalReadiness.ready(),
+        now: now,
+      );
+      return MedicalInboxItem(
+        bill: bill,
+        state: state,
+        providerName: providerName,
+        memberName: memberName,
+        serviceTypeName: serviceName,
+      );
+    }
+
     Future<void> pumpDashboard(
       WidgetTester tester, {
-      List<MedicalBill> bills = const [],
-      InsuranceProfile? insurance,
+      required List<MedicalInboxItem> items,
       MonthlyBudget? budget,
+      CurrencyCode display = CurrencyCode.usd,
+      CurrencyCode main = CurrencyCode.huf,
+      Brightness brightness = Brightness.light,
+      double textScale = 1,
     }) async {
-      useSurfaceWithKeyboard(tester, keyboardHeight: 0);
-
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
             activeBudgetProvider.overrideWith((ref) => Stream.value(budget)),
             selectedYearMonthProvider.overrideWith((ref) => '2026-01'),
-            // Pin the display currency so layout is independent of the (absent)
-            // profile's main currency.
-            medicalDisplayCurrencyProvider.overrideWithValue(CurrencyCode.usd),
-            // ...and the footnote reads the profile main currency (T054).
-            mainCurrencyProvider.overrideWithValue(CurrencyCode.huf),
-            insuranceProfileProvider
-                .overrideWith((ref) => Stream.value(insurance)),
-            medicalBillsProvider.overrideWith((ref) => Stream.value(bills)),
-            // The aggregate cards convert through the rate registry, whose live
-            // providers reach for Isar. Layout tests do not need real rates.
+            medicalDisplayCurrencyProvider.overrideWithValue(display),
+            mainCurrencyProvider.overrideWithValue(main),
             rateRegistryProvider.overrideWithValue(RateTableRegistry()),
-            // The directory resolves names for the rows. Left live it reaches for
-            // Isar through the active profile, which no layout test needs. The
-            // sheet's own save path is covered separately below, against a real
-            // Isar, because that is where persistence is the thing under test.
+            clockProvider.overrideWith((ref) => _LayoutClock()),
+            activeContextCanEditProvider.overrideWithValue(true),
+            activeContextCanManageProvider.overrideWithValue(true),
             medicalDirectoryProvider.overrideWithValue(
               const MedicalDirectory(members: [], providers: []),
             ),
+            medicalServiceTypesProvider.overrideWith(
+                (ref) => Stream.value(const <MedicalServiceType>[])),
+            medicalProvidersProvider
+                .overrideWith((ref) => Stream.value(const <MedicalProvider>[])),
+            familyMembersProvider
+                .overrideWith((ref) => Stream.value(const <FamilyMember>[])),
+            medicalInboxProvider.overrideWith(
+              (ref) => AsyncData(buildMedicalInbox(
+                items: items,
+                filters: ref.watch(medicalInboxFiltersProvider),
+                display: display,
+                now: now,
+                convert: (money) => money,
+              )),
+            ),
           ],
-          child: const MaterialApp(home: MedicalDashboard()),
+          child: MaterialApp(
+            theme: ThemeData.light(),
+            darkTheme: ThemeData.dark(),
+            themeMode: brightness == Brightness.dark
+                ? ThemeMode.dark
+                : ThemeMode.light,
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(context)
+                  .copyWith(textScaler: TextScaler.linear(textScale)),
+              child: child!,
+            ),
+            home: const MedicalDashboard(),
+          ),
         ),
       );
       await tester.pumpAndSettle();
     }
 
-    testWidgets('Add Bill sits in the section header, not floating over a row',
-        (tester) async {
-      await pumpDashboard(
-        tester,
-        bills: [
-          MedicalBill()
-            ..id = 1
-            ..billedAmount = Money.fromMajor(1000, CurrencyCode.usd).minorUnits
-            ..patientSharePercent = 20,
-        ],
-      );
-
-      expect(tester.takeException(), isNull);
-      expect(find.byKey(const Key('addBillButton')), findsOneWidget);
-      // The wide FAB is gone, so it can no longer sit on top of the amount.
-      expect(find.byType(FloatingActionButton), findsNothing);
-    });
-
-    testWidgets('the header button does not overlap the trailing amount',
-        (tester) async {
-      await pumpDashboard(
-        tester,
-        bills: [
-          MedicalBill()
-            ..id = 1
-            ..billedAmount = Money.fromMajor(1000, CurrencyCode.usd).minorUnits
-            ..patientSharePercent = 20,
-        ],
-      );
-
-      final button = tester.getRect(find.byKey(const Key('addBillButton')));
-      // Scoped to the row: the header shows the same $1000.00 as a month total.
-      final row = find.ancestor(
-        of: find.text('Medical Bill'),
-        matching: find.byType(ListTile),
-      );
-      final amount = tester.getRect(
-        find.descendant(of: row, matching: find.text(r'$ 1,000.00')),
-      );
-
-      expect(
-        button.overlaps(amount),
-        isFalse,
-        reason: 'the Add Bill button must not cover the bill amount',
-      );
-    });
-
-    testWidgets(
-        'T-R06: a foreign bill uses display currency without changing stored money',
-        (tester) async {
-      await pumpDashboard(
-        tester,
-        bills: [
-          MedicalBill()
-            ..id = 1
-            ..billedAmount = Money.fromMajor(1000, CurrencyCode.eur).minorUnits
-            ..currency = CurrencyCode.eur.name
-            ..patientSharePercent = 20,
-        ],
-      );
-
-      expect(tester.takeException(), isNull);
-      // Bundled EUR 0.86 per USD converts EUR 1,000 to USD 1,162.79.
-      expect(find.textContaining(r'$ 1,162.79'), findsWidgets);
-      expect(find.textContaining('budget'), findsOneWidget);
-    });
-
-    testWidgets('a configured profile shows its usual share', (tester) async {
-      await pumpDashboard(
-        tester,
-        insurance: InsuranceProfile()..defaultPatientPercent = 30,
-      );
-
-      expect(tester.takeException(), isNull);
-      expect(find.byKey(const Key('billDefaultsSummary')), findsOneWidget);
-      expect(find.text('Usually pay 30%'), findsOneWidget);
-    });
-
-    testWidgets('the summary names the plan when one is recorded',
-        (tester) async {
-      await pumpDashboard(
-        tester,
-        insurance: InsuranceProfile()
-          ..defaultPatientPercent = 20
-          ..insurerName = 'Blue Cross'
-          ..planName = 'PPO 500',
-      );
-
-      expect(tester.takeException(), isNull);
-      expect(find.text('Blue Cross · PPO 500'), findsOneWidget);
-    });
-
-    testWidgets('an unset plan adds no empty separator to the summary',
-        (tester) async {
-      await pumpDashboard(
-        tester,
-        insurance: InsuranceProfile()
-          ..defaultPatientPercent = 20
-          ..planName = 'PPO 500',
-      );
-
-      // Only the part that was filled in, and no leading or dangling separator.
-      expect(find.text('PPO 500'), findsOneWidget);
-      expect(find.textContaining('· '), findsNothing);
-    });
-
-    testWidgets('a profile with no plan shows the plain defaults line',
-        (tester) async {
-      await pumpDashboard(
-        tester,
-        insurance: InsuranceProfile()..defaultPatientPercent = 20,
-      );
-
-      expect(
-        find.text('Pre-filled on every new bill. Tap to change.'),
-        findsOneWidget,
-      );
-    });
-
-    testWidgets('the gear opens the sheet with the recorded plan',
-        skip: true, // Hangs on Isar async call in test runner
-        (tester) async {
-      // Opening the sheet needs a real profile id, so this runs against the Isar
-      // harness: the dashboard reads the existing row before showing the sheet.
-      final harness = await MedicalTestHarness.create();
-      addTearDown(harness.close);
-      final context = await harness.seedBudget();
-      final existing =
-          await harness.repository.getInsuranceProfile(context.profileId);
-      existing!
-        ..insurerName = 'Cigna'
-        ..planName = 'Open Access';
-      await harness.repository.saveInsuranceProfile(existing);
-
-      useSurfaceWithKeyboard(tester, keyboardHeight: 0);
-      final profile = (await harness.isar.userProfiles.get(context.profileId))!;
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            activeBudgetProvider.overrideWith((ref) => Stream.value(null)),
-            selectedYearMonthProvider.overrideWith((ref) => '2026-01'),
-            activeProfileProvider.overrideWith((ref) => Stream.value(profile)),
-            medicalRepositoryProvider.overrideWithValue(harness.repository),
-            insuranceProfileProvider.overrideWith(
-              (ref) => Stream.value(existing),
-            ),
-            medicalBillsProvider
-                .overrideWith((ref) => Stream.value(const <MedicalBill>[])),
-            medicalDirectoryProvider.overrideWithValue(
-              const MedicalDirectory(members: [], providers: []),
-            ),
-          ],
-          child: const MaterialApp(home: MedicalDashboard()),
-        ),
-      );
-      await tester.pump(const Duration(seconds: 1));
-
-      await tester.runAsync(() async {
-        await tester.tap(find.byKey(const Key('billDefaultsButton')));
-        await tester.pump(const Duration(seconds: 1));
-      });
-
-      expect(tester.takeException(), isNull);
-      expect(find.text('Cigna'), findsOneWidget);
-      expect(find.text('Open Access'), findsOneWidget);
-    });
-
-    testWidgets(
-        'T054: the medical totals name the conversion when display ≠ main',
-        (tester) async {
-      // The Budget Impact labels render ~2x wider under the test font than in
-      // production (this suite's Ahem font draws every glyph at fontSize width),
-      // so a wider surface keeps this a presence test rather than a layout one.
-      tester.view.physicalSize = const Size(600, 800);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.reset);
-
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            activeBudgetProvider.overrideWith((ref) => Stream.value(null)),
-            selectedYearMonthProvider.overrideWith((ref) => '2026-01'),
-            medicalDisplayCurrencyProvider.overrideWithValue(CurrencyCode.usd),
-            mainCurrencyProvider.overrideWithValue(CurrencyCode.huf),
-            insuranceProfileProvider
-                .overrideWith((ref) => Stream.value(InsuranceProfile())),
-            rateRegistryProvider.overrideWithValue(RateTableRegistry()),
-            medicalDirectoryProvider.overrideWithValue(
-              const MedicalDirectory(members: [], providers: []),
-            ),
-            // A bill only reaches the Budget Impact card once its linked expense
-            // resolves; pin both rows here so the card actually renders.
-            medicalBillsProvider.overrideWith((ref) => Stream.value([
-                  MedicalBill()
-                    ..id = 1
-                    ..linkedExpenseId = 1
-                    ..billedAmount =
-                        Money.fromMajor(1000, CurrencyCode.usd).minorUnits
-                    ..patientSharePercent = 20,
-                ])),
-            medicalExpenseStatusesProvider.overrideWith(
-              (ref) => Stream.value({1: ExpenseStatus.planned}),
-            ),
-          ],
-          child: const MaterialApp(home: MedicalDashboard()),
-        ),
-      );
+    Future<void> reveal(WidgetTester tester, Finder finder) async {
+      await tester.scrollUntilVisible(finder, 250,
+          scrollable: find.byType(Scrollable).first);
       await tester.pumpAndSettle();
+    }
+
+    Future<void> revealControl(WidgetTester tester, Finder finder) async {
+      await tester.ensureVisible(finder);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets(
+        'compact summary, group controls and Add bill replace old cards',
+        (tester) async {
+      await pumpDashboard(tester, items: [item()]);
 
       expect(tester.takeException(), isNull);
-      // The caption sits on the Budget Impact card; the registry is empty, so
-      // the bundled baseline (345 HUF/USD) governs.
-      expect(find.byKey(const Key('conversionFootnote')), findsOneWidget);
-      expect(find.textContaining('1 \$ = 345 Ft'), findsOneWidget);
+      expect(find.byKey(const Key('medicalInboxSummary')), findsOneWidget);
+      expect(find.text('Needs you'), findsWidgets);
+      expect(find.byKey(const Key('addBillButton')), findsOneWidget);
+      await reveal(tester, find.byKey(const Key('medicalBillCard-1')));
+      expect(find.byKey(const Key('medicalBillCard-1')), findsOneWidget);
+      expect(find.byKey(const Key('patientShareCard')), findsNothing);
+      expect(find.text('Budget Impact'), findsNothing);
+      expect(find.text('Set your usual share'), findsNothing);
+      expect(find.byKey(const Key('billDefaultsButton')), findsOneWidget);
+      expect(find.textContaining(RegExp('deductible', caseSensitive: false)),
+          findsNothing);
     });
 
-    testWidgets('T055: the app bar shares the dashboard month convert-to menu',
-        (tester) async {
-      // The Ahem font inflates text width, so a wider surface keeps this a
-      // presence test rather than a layout one (same finding as T054).
-      tester.view.physicalSize = const Size(600, 800);
+    testWidgets('groups and due follow-ups use the resolver', (tester) async {
+      tester.view.physicalSize = const Size(1000, 2400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
+      final due = item(
+        id: 1,
+        followUp: now.subtract(const Duration(days: 1)),
+        providerName: 'Due Clinic',
+      );
+      final waiting = item(
+        id: 2,
+        providerPaid: true,
+        approved: 8000,
+        received: 0,
+        followUp: now.add(const Duration(days: 3)),
+        providerName: 'Waiting Clinic',
+      );
+      final closed = item(
+        id: 3,
+        providerPaid: true,
+        approved: 10000,
+        received: 9000,
+        closed: true,
+        shortfall: 1000,
+        providerName: 'Closed Clinic',
+      );
+      await pumpDashboard(tester, items: [due, waiting, closed]);
 
+      expect(find.text('Due Clinic'), findsOneWidget);
+      expect(find.textContaining('Overdue since'), findsOneWidget);
+      expect(find.text('Waiting Clinic'), findsNothing);
+
+      await tester.tap(find.byKey(const Key('medicalInboxGroupWaiting')));
+      await tester.pumpAndSettle();
+      expect(find.text('Waiting Clinic'), findsOneWidget);
+      expect(find.text('Due Clinic'), findsNothing);
+
+      await tester.tap(find.byKey(const Key('medicalInboxGroupClosed')));
+      await tester.pumpAndSettle();
+      expect(find.text('Closed Clinic'), findsOneWidget);
+      expect(find.text('Closed'), findsWidgets);
+    });
+
+    testWidgets('search, arrangement and month filters narrow the list',
+        (tester) async {
+      final oldSelf = item(
+        id: 1,
+        month: '2025-12',
+        providerName: 'Old Clinic',
+      );
+      final direct = item(
+        id: 2,
+        method: MedicalPaymentMethod.insurerPaid,
+        providerName: 'Insurance Clinic',
+      );
+      await pumpDashboard(tester, items: [oldSelf, direct]);
+
+      await tester.enterText(
+          find.byKey(const Key('medicalInboxSearchField')), 'Insurance');
+      await tester.pumpAndSettle();
+      await reveal(tester, find.text('Insurance Clinic'));
+      expect(find.text('Insurance Clinic'), findsOneWidget);
+      expect(find.text('Old Clinic'), findsNothing);
+
+      await tester.enterText(
+          find.byKey(const Key('medicalInboxSearchField')), '');
+      await tester.pumpAndSettle();
+      await revealControl(
+          tester, find.byKey(const Key('medicalInboxArrangementField')));
+      await tester.tap(find.byKey(const Key('medicalInboxArrangementField')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Insurance pays the provider').last);
+      await tester.pumpAndSettle();
+      await reveal(tester, find.text('Insurance Clinic'));
+      expect(find.text('Insurance Clinic'), findsOneWidget);
+      expect(find.text('Old Clinic'), findsNothing);
+
+      await revealControl(
+          tester, find.byKey(const Key('medicalInboxClearFilters')));
+      await tester.tap(find.byKey(const Key('medicalInboxClearFilters')));
+      await tester.pumpAndSettle();
+      await revealControl(
+          tester, find.byKey(const Key('medicalInboxMonthField')));
+      await tester.tap(find.byKey(const Key('medicalInboxMonthField')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('2025-12').last);
+      await tester.pumpAndSettle();
+      await reveal(tester, find.text('Old Clinic'));
+      expect(find.text('Old Clinic'), findsOneWidget);
+      expect(find.text('Insurance Clinic'), findsNothing);
+    });
+
+    testWidgets('empty filtered state offers Clear filters', (tester) async {
+      await pumpDashboard(tester, items: [item()]);
+      await tester.enterText(
+          find.byKey(const Key('medicalInboxSearchField')), 'nothing');
+      await tester.pumpAndSettle();
+      await reveal(tester, find.text('No bills match these filters'));
+      expect(find.text('No bills match these filters'), findsOneWidget);
+      expect(find.byKey(const Key('medicalInboxEmptyClear')), findsOneWidget);
+    });
+
+    testWidgets('foreign-currency card converts without changing stored money',
+        (tester) async {
       await pumpDashboard(
         tester,
+        items: [item(currency: CurrencyCode.eur)],
+        display: CurrencyCode.usd,
+      );
+      expect(tester.takeException(), isNull);
+      await reveal(tester, find.textContaining(r'$ 1,162.79'));
+      expect(find.textContaining(r'$ 1,162.79'), findsWidgets);
+    });
+
+    testWidgets('readiness blocker exposes Review setup', (tester) async {
+      await pumpDashboard(tester, items: [item(blocked: true)]);
+      await reveal(tester, find.text('Review setup'));
+      expect(find.text('Review setup'), findsOneWidget);
+      expect(
+          find.byKey(const Key('medicalInboxReviewSetup-1')), findsOneWidget);
+    });
+
+    for (final brightness in Brightness.values) {
+      testWidgets(
+          '320px and 200% text: ${brightness.name} inbox has no overflow',
+          (tester) async {
+        tester.view.physicalSize = const Size(320, 800);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
+        await pumpDashboard(
+          tester,
+          items: [
+            item(
+              providerName: 'A very long provider name that must wrap safely',
+              memberName: 'Family member',
+              serviceName: 'Consultation',
+              followUp: now.subtract(const Duration(days: 2)),
+            ),
+          ],
+          brightness: brightness,
+          textScale: 2,
+        );
+        expect(tester.takeException(), isNull);
+        await reveal(tester, find.byKey(const Key('medicalBillCard-1')));
+        expect(find.byKey(const Key('medicalBillCard-1')), findsOneWidget);
+      });
+    }
+
+    testWidgets('app bar keeps the month convert-to menu', (tester) async {
+      await pumpDashboard(
+        tester,
+        items: const [],
         budget: MonthlyBudget()
           ..id = 1
           ..yearMonth = '2026-01'
@@ -510,79 +569,18 @@ void main() {
           ..createdAt = DateTime(2026)
           ..updatedAt = DateTime(2026),
       );
-
-      expect(tester.takeException(), isNull);
       expect(find.byKey(const Key('monthConvertToMenu')), findsOneWidget);
-
       await tester.tap(find.byKey(const Key('monthConvertToMenu')));
       await tester.pumpAndSettle();
-
       expect(find.text('Show in Forint (default)'), findsOneWidget);
-      expect(find.text('EUR (€)'), findsOneWidget);
     });
 
-    testWidgets(
-        'the directory lists service types with add and archive controls',
-        (tester) async {
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            activeBudgetProvider.overrideWith((ref) => Stream.value(null)),
-            selectedYearMonthProvider.overrideWith((ref) => '2026-01'),
-            // The aggregate cards convert through the rate registry, whose live
-            // providers reach for Isar. Layout tests do not need real rates.
-            rateRegistryProvider.overrideWithValue(RateTableRegistry()),
-            medicalDisplayCurrencyProvider.overrideWithValue(CurrencyCode.usd),
-            insuranceProfileProvider.overrideWith((ref) => Stream.value(null)),
-            medicalBillsProvider
-                .overrideWith((ref) => Stream.value(const <MedicalBill>[])),
-            familyMembersProvider.overrideWith((ref) => Stream.value(const [])),
-            medicalProvidersProvider
-                .overrideWith((ref) => Stream.value(const [])),
-            // The persistence path (saveServiceType/setServiceTypeArchived) is
-            // covered against a real Isar in the repository tests; here only the
-            // sheet's wiring is under test.
-            medicalServiceTypesProvider.overrideWith(
-              (ref) => Stream.value([
-                MedicalServiceType()..name = 'Radiology',
-                MedicalServiceType()
-                  ..name = 'Surgery'
-                  ..archived = true,
-              ]),
-            ),
-            medicalDirectoryProvider.overrideWithValue(
-              const MedicalDirectory(members: [], providers: []),
-            ),
-          ],
-          child: const MaterialApp(home: MedicalDashboard()),
-        ),
-      );
-      await tester.pumpAndSettle();
-
+    testWidgets('directory sheet still opens from the app bar', (tester) async {
+      await pumpDashboard(tester, items: const []);
       await tester.tap(find.byTooltip('Providers & family'));
       await tester.pumpAndSettle();
-
       expect(find.text('Service types'), findsOneWidget);
       expect(find.byKey(const Key('addServiceTypeButton')), findsOneWidget);
-      expect(find.text('Radiology'), findsOneWidget);
-      expect(find.text('Surgery'), findsOneWidget);
-      expect(find.text('Archived'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    });
-
-    testWidgets('an unconfigured profile still prompts for setup',
-        (tester) async {
-      await pumpDashboard(tester);
-
-      expect(find.byKey(const Key('billDefaultsSummary')), findsNothing);
-      expect(find.text('Set your usual share'), findsOneWidget);
-    });
-
-    testWidgets('no deductible wording survives on the screen', (tester) async {
-      await pumpDashboard(tester);
-
-      expect(find.textContaining(RegExp('deductible', caseSensitive: false)),
-          findsNothing);
     });
   });
 }

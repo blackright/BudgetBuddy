@@ -1,3 +1,5 @@
+import '../models/user_profile.dart';
+import '../../features/budget_setup/presentation/introduction_screen.dart';
 import '../../features/finance/presentation/audit_history_screen.dart';
 import '../../features/finance/presentation/month_end_screen.dart';
 import 'package:flutter/material.dart';
@@ -6,7 +8,6 @@ import '../providers/budget_context_provider.dart';
 import '../providers/active_profile_provider.dart';
 import 'package:go_router/go_router.dart';
 import '../database/isar_helper.dart';
-import '../../core/models/monthly_budget.dart';
 import '../../features/budget_setup/presentation/budget_setup_screen.dart';
 import '../../features/dashboard/presentation/dashboard_screen.dart';
 import '../../features/dashboard/presentation/month_summary_detail_screen.dart';
@@ -32,6 +33,7 @@ import '../../features/finance/presentation/allocations_screen.dart';
 import '../../features/finance/presentation/income_sources_screen.dart';
 import '../../features/finance/presentation/profiles_screen.dart';
 import '../../features/finance/presentation/transfer_screen.dart';
+import '../../features/pending_actions/presentation/pending_actions_screen.dart';
 import '../models/expense.dart';
 import '../models/category.dart';
 
@@ -50,20 +52,33 @@ final shellNavigatorSettingsKey =
     GlobalKey<NavigatorState>(debugLabel: 'settingsShell');
 
 String _getInitialLocation() {
-  final hasBudget = IsarHelper.instance.monthlyBudgets.countSync() > 0;
-  return hasBudget ? '/dashboard' : '/setup';
+  // A missing month is provisioned normally; it is not a missing identity.
+  final hasProfile = IsarHelper.instance.userProfiles.countSync() > 0;
+  return hasProfile ? '/dashboard' : '/setup';
 }
 
-GoRouter createAppRouter({String? initialLocation}) => GoRouter(
+GoRouter createAppRouter(
+        {String? initialLocation,
+        Listenable? refreshListenable,
+        GoRouterRedirect? redirect,
+        WidgetBuilder? setupBuilder,
+        WidgetBuilder? dashboardBuilder}) =>
+    GoRouter(
       navigatorKey: rootNavigatorKey,
+      refreshListenable: refreshListenable,
+      redirect: redirect,
       initialLocation: initialLocation ?? _getInitialLocation(),
       routes: [
+        GoRoute(
+            path: '/introduction',
+            builder: (context, state) => const IntroductionScreen()),
         GoRoute(
             path: '/profile',
             builder: (context, state) => const ProfileScreen()),
         GoRoute(
           path: '/setup',
-          builder: (context, state) => const BudgetSetupScreen(),
+          builder: (context, state) =>
+              setupBuilder?.call(context) ?? const BudgetSetupScreen(),
         ),
         GoRoute(
           path: '/settings',
@@ -78,9 +93,26 @@ GoRouter createAppRouter({String? initialLocation}) => GoRouter(
           builder: (context, state) => const VaultScreen(),
         ),
         GoRoute(
+          path: '/pending_actions',
+          parentNavigatorKey: rootNavigatorKey,
+          builder: (context, state) => const PendingActionsScreen(),
+        ),
+        GoRoute(
           path: '/income_sources',
           parentNavigatorKey: rootNavigatorKey,
-          builder: (context, state) => const IncomeSourcesScreen(),
+          builder: (context, state) {
+            final id = int.tryParse(state.uri.queryParameters['bill'] ?? '');
+            final activate = state.uri.queryParameters['activate'];
+            final rawPeriod = state.uri.queryParameters['period'];
+            final period = rawPeriod != null &&
+                    RegExp(r'^\d{4}-(0[1-9]|1[0-2])$').hasMatch(rawPeriod)
+                ? rawPeriod
+                : null;
+            return IncomeSourcesScreen(
+                focusedBillId: id != null && id > 0 ? id : null,
+                activationGuid: activate,
+                activationPeriod: period);
+          },
         ),
         GoRoute(
           path: '/profiles',
@@ -104,7 +136,14 @@ GoRouter createAppRouter({String? initialLocation}) => GoRouter(
         GoRoute(
             path: '/month_end',
             parentNavigatorKey: rootNavigatorKey,
-            builder: (context, state) => const MonthEndScreen()),
+            builder: (context, state) {
+              final rawMonth = state.uri.queryParameters['month'];
+              final month = rawMonth != null &&
+                      RegExp(r'^\d{4}-(0[1-9]|1[0-2])$').hasMatch(rawMonth)
+                  ? rawMonth
+                  : null;
+              return MonthEndScreen(initialMonth: month);
+            }),
         GoRoute(
           path: '/allocations',
           parentNavigatorKey: rootNavigatorKey,
@@ -155,8 +194,13 @@ GoRouter createAppRouter({String? initialLocation}) => GoRouter(
         GoRoute(
           path: '/medical_detail',
           parentNavigatorKey: rootNavigatorKey,
-          builder: (context, state) =>
-              MedicalDetailScreen(billId: state.extra as int),
+          builder: (context, state) {
+            final extra = state.extra;
+            final id = extra is int
+                ? extra
+                : int.tryParse(state.uri.queryParameters['bill'] ?? '') ?? 0;
+            return MedicalDetailScreen(billId: id);
+          },
         ),
         GoRoute(
           path: '/medical_bill_form',
@@ -180,8 +224,9 @@ GoRouter createAppRouter({String? initialLocation}) => GoRouter(
               routes: [
                 GoRoute(
                   path: '/dashboard',
-                  builder: (context, state) =>
-                      const _ContextRoot(child: DashboardScreen()),
+                  builder: (context, state) => _ContextRoot(
+                      child: dashboardBuilder?.call(context) ??
+                          const DashboardScreen()),
                 ),
               ],
             ),
@@ -252,8 +297,6 @@ GoRouter createAppRouter({String? initialLocation}) => GoRouter(
         ),
       ],
     );
-
-final goRouter = createAppRouter();
 
 /// Recreate owner-bound page state even in inactive cached shell branches.
 class _ContextRoot extends ConsumerStatefulWidget {

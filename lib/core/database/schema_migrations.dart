@@ -1,4 +1,24 @@
 import 'package:isar/isar.dart';
+import '../../core/models/expense_template.dart';
+import '../models/category.dart';
+import '../models/month_rate_seal.dart';
+import '../models/live_rate_set.dart';
+import '../models/identity.dart';
+import '../models/consent_record.dart';
+import '../models/lock_setting.dart';
+import '../models/paired_peer.dart';
+import '../models/paired_context.dart';
+import '../models/pairing_token.dart';
+import '../models/income_source.dart';
+import '../models/month_end_run.dart';
+import '../models/allocation.dart';
+import '../models/transfer.dart';
+import '../models/merchant.dart';
+import '../models/expense_evidence_chunk.dart';
+import '../models/expense_purchase.dart';
+import '../models/pending_action.dart';
+import '../models/audit_event.dart';
+import '../models/app_settings.dart';
 
 import '../models/currency_code.dart';
 import '../models/change_record.dart';
@@ -17,6 +37,8 @@ import '../models/user_profile.dart';
 import '../../features/expenses/models/reimbursement.dart';
 import '../../features/sync/domain/sync_guid.dart';
 import '../models/medical_bill.dart';
+import '../models/medical_approval.dart';
+import '../models/medical_withholding_match.dart';
 import '../../features/vault/models/savings_vault.dart';
 import '../../features/vault/models/vault_entry.dart';
 import '../../features/vault/vault_math.dart';
@@ -26,7 +48,7 @@ part 'schema_migrations.g.dart';
 
 /// Schema version this build expects. Bump whenever a numbered step is added to
 /// [_applySteps]; databases stamped at or above it are left untouched.
-const int schemaVersion = 31;
+const int schemaVersion = 42;
 
 const String schemaVersionKey = 'schema_version';
 
@@ -84,7 +106,21 @@ Future<void> runSchemaMigrations(Isar isar) async {
     final current = int.tryParse(stamp?.value ?? '') ?? 0;
     if (current >= schemaVersion) return;
 
+    // Decide freshness before historic steps seed service types or other rows.
+    final starterPolicy = current < 32
+        ? await _starterPolicyBeforeMigration(isar, current)
+        : null;
     await _applySteps(isar, current);
+    if (starterPolicy != null) {
+      final now = DateTime.now();
+      final settings = await isar.appSettings.get(1) ??
+          (AppSettings()
+            ..id = 1
+            ..createdAt = now
+            ..updatedAt = now);
+      settings.starterCategoryPolicy = starterPolicy;
+      await isar.appSettings.put(settings);
+    }
 
     await isar.schemaMigrationStamps.put(
       SchemaMigrationStamp()
@@ -92,6 +128,83 @@ Future<void> runSchemaMigrations(Isar isar) async {
         ..value = '$schemaVersion',
     );
   });
+}
+
+/// Local marker only. Unknown future markers are preserved conservatively and
+/// never turned into fresh-install permission. No historical money is repaired.
+Future<String> _starterPolicyBeforeMigration(Isar isar, int current) async {
+  final settings = await isar.appSettings.get(1);
+  final marker = settings?.starterCategoryPolicy;
+  if (marker != null) return marker;
+  if (current > 0 ||
+      (settings?.transferToggle ?? false) ||
+      settings?.decimalPreferences != null ||
+      settings?.onboardingStateJson != null) {
+    return StarterCategoryPolicy.preserveExisting.name;
+  }
+  final settingsCount = await isar.appSettings.count();
+  if (settingsCount > (settings == null ? 0 : 1)) {
+    return StarterCategoryPolicy.preserveExisting.name;
+  }
+  final stamps = await isar.schemaMigrationStamps.where().findAll();
+  if (stamps
+      .any((stamp) => stamp.key != schemaVersionKey || stamp.value != '0')) {
+    return StarterCategoryPolicy.preserveExisting.name;
+  }
+  // Every production user collection participates. Missing schema registration
+  // is an error, not proof of an empty store; tests must register real schemas.
+  final counts = <Future<int> Function()>[
+    () => isar.collection<UserProfile>().count(),
+    () => isar.collection<MonthlyBudget>().count(),
+    () => isar.collection<Expense>().count(),
+    () => isar.collection<ExpenseTemplate>().count(),
+    () => isar.collection<Reimbursement>().count(),
+    () => isar.collection<SavingsVault>().count(),
+    () => isar.collection<VaultEntry>().count(),
+    () => isar.collection<Category>().count(),
+    () => isar.collection<MedicalBill>().count(),
+    () => isar.collection<InsuranceProfile>().count(),
+    () => isar.collection<FamilyMember>().count(),
+    () => isar.collection<MedicalProvider>().count(),
+    () => isar.collection<MedicalServiceType>().count(),
+    () => isar.collection<MonthRateSeal>().count(),
+    () => isar.collection<LiveRateSet>().count(),
+    () => isar.collection<SharedSpace>().count(),
+    () => isar.collection<SharedMember>().count(),
+    () => isar.collection<Identity>().count(),
+    () => isar.collection<ConsentRecord>().count(),
+    () => isar.collection<PairedPeer>().count(),
+    () => isar.collection<PairedContext>().count(),
+    () => isar.collection<PairingToken>().count(),
+    () => isar.collection<ChangeRecord>().count(),
+    () => isar.collection<SyncCursor>().count(),
+    () => isar.collection<LockSetting>().count(),
+    () => isar.collection<IncomeSource>().count(),
+    () => isar.collection<BudgetProfile>().count(),
+    () => isar.collection<MonthEndRun>().count(),
+    () => isar.collection<DirectExpenseProfile>().count(),
+    () => isar.collection<Allocation>().count(),
+    () => isar.collection<Transfer>().count(),
+    () => isar.collection<Merchant>().count(),
+    () => isar.collection<ExpenseEvidenceChunk>().count(),
+    () => isar.collection<ExpensePurchase>().count(),
+    () => isar.collection<AuditEvent>().count(),
+  ];
+  for (final count in counts) {
+    if (await count() != 0) return StarterCategoryPolicy.preserveExisting.name;
+  }
+  // Step 42 adds PendingAction. It holds no money, and a legacy harness may
+  // open an older schema without registering it — that is not proof of a fresh
+  // install, but it also means no attention row can exist yet. Count it only
+  // when the collection is present.
+  try {
+    if (await isar.collection<PendingAction>().count() != 0) {
+      return StarterCategoryPolicy.preserveExisting.name;
+    }
+  } on IsarError {
+    // Collection not registered in this database.
+  }
+  return StarterCategoryPolicy.unifiedPending.name;
 }
 
 /// The numbered steps, in execution order. A later step may rely on fields an
@@ -103,6 +216,19 @@ Future<void> runSchemaMigrations(Isar isar) async {
 /// and the steps are ordered so each one reads fields that still hold their
 /// pre-migration values.
 Future<void> _applySteps(Isar isar, int current) async {
+  // Step40 adds immutable personal Medical settlement evidence on open. It is
+  // additive only: no legacy Paid/Waiting row is backfilled with a provider
+  // payment, share payment or closure. Missing evidence stays Needs review.
+  // Step36 adds personal claim activities and nullable approval basis evidence.
+  // No legacy statuses, payments, submission dates or amounts are backfilled.
+  // Step35 adds immutable Medical approval/receipt history and a nullable
+  // compatibility projection envelope. No legacy money/FX/date is rewritten,
+  // approval is not cash and the Phase2a combined flow is not activated.
+  // Step 34 adds checkpoint/inclusion/funding-assignment collections on open.
+  // No legacy opening balance, payment date, or actual income is inferred.
+  // Step 33 adds FinancialAdoption on open. Do not create adoption records,
+  // infer receipt dates, or rewrite historical financial/FX data. Explicit
+  // owner review is required; the new capability remains inactive.
   // Step 31 adds nullable FX history. Never invent an old transaction's rate.
   // Step 30 is additive: purchase membership is never inferred for old rows.
   // Step 29: nullable expense evidence and immutable document chunks are added
@@ -152,6 +278,21 @@ Future<void> _applySteps(Isar isar, int current) async {
       await seedVaultOpeningInTxn(isar, vault, DateTime.now());
     }
   }
+  if (current < 41) await backfillMedicalManagementTrackers(isar);
+  if (current < 42) await _step42AddPendingActions(isar);
+}
+
+/// Step 42 (022-salary-vault-pending-actions, data-model §New Collection) —
+/// additive only: the `PendingAction` collection and its indexes appear on open.
+///
+/// Isar reconciles the stored schema before this runs, so the collection simply
+/// starts empty. No attention item is inferred from existing rows: a missing
+/// action means "the user has not been shown it yet", never "nothing is owed".
+/// No salary, Vault, allocation, month-end or opening-balance row is rewritten,
+/// and no money is moved. The step exists so the version stamp records the
+/// upgrade and the specification's numbering stays visible.
+Future<void> _step42AddPendingActions(Isar isar) async {
+  // Intentionally empty: additive schema only — see doc comment.
 }
 
 /// Step 23: preserve ambiguous IDs for explicit user review. No money changes.
@@ -1000,4 +1141,145 @@ Future<void> migrateLegacyVaultToMinorUnits(Isar isar) async {
   }
 
   if (changed.isNotEmpty) await isar.savingsVaults.putAll(changed);
+}
+
+/// Step 41: map the legacy five-state Medical lifecycle onto the four
+/// management trackers.
+///
+/// This is a read-and-annotate migration. It never changes money, status money
+/// rows, re-dates an event or closes a bill on the user's behalf. Legacy
+/// partial or ambiguous settlement evidence is preserved and marked
+/// [MedicalBill.needsReview] so later phases cannot act on it silently.
+Future<void> backfillMedicalManagementTrackers(Isar isar) async {
+  final bills = await isar.medicalBills.where().findAll();
+  if (bills.isEmpty) return;
+
+  final expenses = <int, Expense>{
+    for (final expense in await isar.expenses.where().findAll())
+      expense.id: expense,
+  };
+  final approvals = await isar.medicalApprovals.where().findAll();
+  final activities = await isar.medicalClaimActivitys.where().findAll();
+  final reimbursements = await isar.reimbursements.where().findAll();
+  final withholdings = await isar.medicalWithholdingMatchs
+      .filter()
+      .reversedEqualTo(false)
+      .findAll();
+  final closures = await isar.medicalClaimClosures.where().findAll();
+
+  DateTime latest(Iterable<DateTime> dates) =>
+      dates.reduce((a, b) => a.isAfter(b) ? a : b);
+
+  for (final bill in bills) {
+    final billActivities = activities
+        .where((activity) => activity.billGuid == bill.syncGuid)
+        .toList();
+    final billApprovals = approvals
+        .where((approval) => approval.billGuid == bill.syncGuid)
+        .toList()
+      ..sort((a, b) {
+        final byRevision = a.revision.compareTo(b.revision);
+        return byRevision != 0
+            ? byRevision
+            : a.recordedAt.compareTo(b.recordedAt);
+      });
+    final approval = billApprovals.isEmpty ? null : billApprovals.last;
+    final billClosures = closures
+        .where((closure) => closure.billGuid == bill.syncGuid)
+        .toList()
+      ..sort((a, b) => a.recordedAt.compareTo(b.recordedAt));
+    final closure = billClosures.isEmpty ? null : billClosures.last;
+    final expense =
+        bill.linkedExpenseId == null ? null : expenses[bill.linkedExpenseId];
+    final received = reimbursements
+        .where((row) => row.expenseId == bill.linkedExpenseId)
+        .fold<int>(0, (sum, row) => sum + row.amount);
+    final withheld = withholdings.any((row) => row.billGuid == bill.syncGuid);
+
+    final direct = bill.paymentMethod == MedicalPaymentMethod.insurerPaid;
+    final finished = bill.state == MedicalBillState.finished;
+    final rejected = bill.state == MedicalBillState.rejected;
+    final expensePaid = expense != null &&
+        {
+          ExpenseStatus.paid,
+          ExpenseStatus.reimbursed,
+          ExpenseStatus.partiallyReimbursed,
+        }.contains(expense.status);
+    final submitted =
+        billActivities.any((activity) => activity.kind == 'submitted');
+
+    var request = MedicalInsuranceRequestStatus.notSubmitted;
+    if (rejected) {
+      request = MedicalInsuranceRequestStatus.rejected;
+    } else if (approval != null) {
+      request = finished
+          ? MedicalInsuranceRequestStatus.completed
+          : MedicalInsuranceRequestStatus.approved;
+    } else if (submitted) {
+      request = finished
+          ? MedicalInsuranceRequestStatus.completed
+          : MedicalInsuranceRequestStatus.submitted;
+    } else if (finished) {
+      request = MedicalInsuranceRequestStatus.completed;
+    }
+
+    final approvedInsurance = approval == null
+        ? null
+        : approval.approvedInsuranceMinor > 0
+            ? approval.approvedInsuranceMinor
+            : approval.approvedMinor;
+    final expectedSettlement = approvedInsurance ??
+        (direct ? bill.patientShareAmount : bill.insurerPaidAmount);
+
+    var settlement = MedicalSalarySettlementStatus.notRequired;
+    int? settledAmount;
+    var needsReview = false;
+    if (received > 0) {
+      settledAmount = received;
+      settlement = expectedSettlement > 0 && received >= expectedSettlement
+          ? MedicalSalarySettlementStatus.received
+          : MedicalSalarySettlementStatus.notReceived;
+      // Legacy receipts have no recorded actual salary month.
+      needsReview = true;
+    } else if (withheld) {
+      settlement = MedicalSalarySettlementStatus.deducted;
+      // The withheld month is not stored on the legacy bill.
+      needsReview = true;
+    } else if (!finished && approval != null) {
+      settlement = MedicalSalarySettlementStatus.waitingForPayslip;
+      // The expected salary month was never captured on legacy rows.
+      needsReview = true;
+    }
+
+    final submittedRows = billActivities
+        .where((activity) => activity.kind == 'submitted')
+        .map((activity) => activity.recordedAt)
+        .toList();
+
+    bill
+      ..overallStatus =
+          finished ? MedicalOverallStatus.closed : MedicalOverallStatus.open
+      ..providerPaymentStatus = direct
+          ? MedicalProviderPaymentStatus.notRequired
+          : expensePaid
+              ? MedicalProviderPaymentStatus.paid
+              : MedicalProviderPaymentStatus.notConfirmed
+      ..insuranceRequestStatus = request
+      ..salarySettlementType = direct
+          ? MedicalSalarySettlementType.userShareDeduction
+          : MedicalSalarySettlementType.insuranceRefund
+      ..salarySettlementStatus = settlement
+      ..settlementAmountMinor = expectedSettlement
+      ..settledAmountMinor = settledAmount
+      ..needsReview = bill.needsReview || needsReview
+      ..submissionDate = submittedRows.isEmpty ? null : latest(submittedRows);
+
+    if (finished && closure != null) {
+      bill
+        ..closedAt = closure.recordedAt
+        ..closeReason = closure.reason;
+    }
+
+    await isar.medicalBills.put(bill);
+  }
 }

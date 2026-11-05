@@ -1,4 +1,9 @@
 import '../../../core/models/merchant.dart';
+import '../../../core/models/medical_approval.dart';
+import '../../../core/models/medical_appeal.dart';
+import '../domain/codecs/medical_approval_codec.dart';
+import '../domain/codecs/medical_appeal_codec.dart';
+import '../domain/codecs/medical_claim_activity_codec.dart';
 import '../../../core/models/expense_purchase.dart';
 import '../domain/codecs/expense_purchase_codec.dart';
 import '../../../core/models/expense_evidence_chunk.dart';
@@ -77,6 +82,49 @@ class SyncRecorder {
 
   /// Whether recording can happen at all (a signer is attached).
   bool get enabled => _signer != null;
+
+  Future<ChangeRecord?> recordMedicalApproval(MedicalApproval approval) async {
+    final space = approval.sharedSpaceId;
+    if (space == null) return null;
+    final json = const MedicalApprovalCodec().toJson(approval);
+    _putRef(json, 'sharedSpaceSyncGuid', await _spaceGuid(space));
+    return record(
+        contextKind: ContextKind.shared,
+        contextLocalId: space,
+        entityType: 'MedicalApproval',
+        entitySyncGuid: approval.syncGuid,
+        entityLocalId: approval.id,
+        payload: canonicalJsonEncode(json));
+  }
+
+  Future<ChangeRecord?> recordMedicalClaimActivity(
+      MedicalClaimActivity activity) async {
+    final space = activity.sharedSpaceId;
+    if (space == null) return null;
+    final json = const MedicalClaimActivityCodec().toJson(activity);
+    _putRef(json, 'sharedSpaceSyncGuid', await _spaceGuid(space));
+    return record(
+        contextKind: ContextKind.shared,
+        contextLocalId: space,
+        entityType: 'MedicalClaimActivity',
+        entitySyncGuid: activity.syncGuid,
+        entityLocalId: activity.id,
+        payload: canonicalJsonEncode(json));
+  }
+
+  Future<ChangeRecord?> recordMedicalAppeal(MedicalAppeal appeal) async {
+    final space = appeal.sharedSpaceId;
+    if (space == null) return null;
+    final json = const MedicalAppealCodec().toJson(appeal);
+    _putRef(json, 'sharedSpaceSyncGuid', await _spaceGuid(space));
+    return record(
+        contextKind: ContextKind.shared,
+        contextLocalId: space,
+        entityType: 'MedicalAppeal',
+        entitySyncGuid: appeal.syncGuid,
+        entityLocalId: appeal.id,
+        payload: canonicalJsonEncode(json));
+  }
 
   /// The attached signer, or `null` while recording is inert. Exposed so the
   /// spaces data layer can author signed, versioned membership rows with the same

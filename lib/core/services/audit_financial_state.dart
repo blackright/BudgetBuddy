@@ -1,4 +1,7 @@
+import '../models/income_receipt_group.dart';
+import 'income_receipt_ledger.dart';
 import 'fx_booking_service.dart';
+import 'medical_receipt_booking_service.dart';
 import 'free_funds.dart';
 import 'dart:convert';
 import 'dart:math' as math;
@@ -32,6 +35,8 @@ class AuditFinancialScope {
   final int? profile, space;
   final String? month;
   static AuditFinancialScope? of(Object? value) => switch (value) {
+        IncomeReceiptGroup g =>
+          AuditFinancialScope(g.profileId, null, g.destinationMonth),
         Expense e => AuditFinancialScope(e.profileId, e.sharedSpaceId, null),
         BudgetProfile p =>
           AuditFinancialScope(p.profileId, p.sharedSpaceId, p.yearMonth),
@@ -74,6 +79,12 @@ Future<Map<String, Object?>> auditFinancialState(
     final returns = (await db.reimbursements.where().findAll())
         .where((r) => scope.owns(r.profileId, r.sharedSpaceId))
         .toList();
+    final incomeGroups = scope.space == null && scope.profile != null
+        ? await IncomeReceiptLedger.forOwner(db, scope.profile!)
+        : <IncomeReceiptLedger>[];
+    final incomeCorrections = scope.space == null && scope.profile != null
+        ? await SalaryCorrection.forOwner(db, scope.profile!)
+        : <SalaryCorrection>[];
     final sources = (await db.incomeSources.where().findAll())
         .where((s) => scope.owns(s.profileId, s.sharedSpaceId))
         .toList();
@@ -138,15 +149,20 @@ Future<Map<String, Object?>> auditFinancialState(
       sumFinancialMinor(sources.map((s) => s.amount * 4));
       final income = const IncomeAggregationService()
           .monthlyTotal(sources, key, currency: currency);
-      final resolved = scope.space != null
-          ? month.sharedIncomeOverride ??
-              (income > 0 ? income : space!.defaultIncome)
-          : month.netSalaryOverride != null
-              ? Money.fromMajor(month.netSalaryOverride!, currency).minorUnits
-              : income > 0
-                  ? income
-                  : Money.fromMajor(user!.defaultNetSalary, currency)
-                      .minorUnits;
+      final actual = IncomeReceiptLedger.incomeForMonth(
+          incomeGroups, sources, key, currency,
+          corrections: incomeCorrections);
+      final resolved = actual ??
+          (scope.space != null
+              ? month.sharedIncomeOverride ??
+                  (income > 0 ? income : space!.defaultIncome)
+              : month.netSalaryOverride != null
+                  ? Money.fromMajor(month.netSalaryOverride!, currency)
+                      .minorUnits
+                  : income > 0
+                      ? income
+                      : Money.fromMajor(user!.defaultNetSalary, currency)
+                          .minorUnits);
       var settlement = 0;
       for (final run in settlements) {
         if (run.destinationMonth == key) {
@@ -175,6 +191,11 @@ Future<Map<String, Object?>> auditFinancialState(
           : 0;
       final reserve = sumFinancialMinor([
         resolved,
+        medicalRecoveryForMonth(returns, key, convert: (r) {
+          final money =
+              reimbursementAccountingMoney(r, expectedCurrency: currency);
+          return convert(money.minorUnits, money.currency.code);
+        }),
         settlement,
         vault,
         -sumFinancialMinor(budgets.map((p) => p.allocation)),

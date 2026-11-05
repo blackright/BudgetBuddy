@@ -1,6 +1,7 @@
 import '../../core/models/expense.dart';
 import '../../core/models/money.dart';
 import '../../core/services/free_funds.dart';
+import '../../core/services/medical_receipt_booking_service.dart';
 import '../../features/expenses/models/reimbursement.dart';
 
 /// The financial verdict for exactly one calendar month.
@@ -37,6 +38,8 @@ class MonthSummary {
     this.insuranceReturned = 0.0,
     this.expenseReturned = 0.0,
     this.openingBalance,
+    this.usesReviewedBank = false,
+    this.reviewedBank,
     // T143: allocation data. `allocated` is the total set aside across every
     // budget profile; `setAside` is the part of that which has not been spent
     // yet (allocation - spent, never below zero). `kept` subtracts `setAside`
@@ -53,6 +56,10 @@ class MonthSummary {
     this.releasedAtMonthEnd = 0.0,
     this.vaultTransfers = 0.0,
     this.resolvedFreeToSpend,
+    this.actualSalaryFunding = 0.0,
+    this.cashPaymentsMade,
+    this.cashMoneyReturned,
+    this.expectedIncome = 0.0,
   });
 
   /// Assembles a summary for [yearMonth].
@@ -79,8 +86,11 @@ class MonthSummary {
     required Money Function(Expense expense) convertExpense,
     required Money Function(Reimbursement reimbursement) convertReimbursement,
     double? openingBalance,
+    bool usesReviewedBank = false,
+    double? reviewedBank,
     Map<int, double> targetPaidAmounts = const {},
     Set<int> medicalTargetIds = const {},
+    Money Function(Money)? convertMedicalAccounting,
     // T143/T144: allocation inputs. `allocated` is the total set aside across
     // every budget profile; `setAside` is the unused portion (allocation -
     // spent, never below zero), both in the display currency. `carryOver` is
@@ -92,6 +102,10 @@ class MonthSummary {
     double releasedAtMonthEnd = 0.0,
     double vaultTransfers = 0.0,
     double? resolvedFreeToSpend,
+    double actualSalaryFunding = 0.0,
+    double? cashPaymentsMade,
+    double? cashMoneyReturned,
+    double expectedIncome = 0.0,
   }) {
     var paymentsMade = 0.0;
     var planned = 0.0;
@@ -125,10 +139,23 @@ class MonthSummary {
       // medical bill is an insurance return; a payout against an ordinary
       // expense — or one whose target was deleted — is an expense return. The
       // two always sum back to [moneyReturned].
-      if (target != null && medicalTargetIds.contains(target)) {
+      if (reimbursement.medicalReceiptJson != null ||
+          (target != null && medicalTargetIds.contains(target))) {
         insuranceReturned += converted;
       } else {
         expenseReturned += converted;
+      }
+      final medical = MedicalReceiptEvidence.of(reimbursement);
+      if (medical != null) {
+        final excess =
+            Money(medical.number('excessBaseMinor'), medical.accounting);
+        if (excess.minorUnits > 0) {
+          if (convertMedicalAccounting == null) {
+            throw const MedicalReceiptException('missingAccountingConverter');
+          }
+          excessReturned += convertMedicalAccounting(excess).majorValue;
+        }
+        continue;
       }
       if (target == null) continue;
       // A target the caller does not know about lives in another month (a
@@ -154,6 +181,8 @@ class MonthSummary {
       insuranceReturned: insuranceReturned,
       expenseReturned: expenseReturned,
       openingBalance: openingBalance,
+      usesReviewedBank: usesReviewedBank,
+      reviewedBank: reviewedBank,
       allocated: allocated,
       setAside: setAside,
       carryOver: carryOver,
@@ -161,6 +190,10 @@ class MonthSummary {
       releasedAtMonthEnd: releasedAtMonthEnd,
       vaultTransfers: vaultTransfers,
       resolvedFreeToSpend: resolvedFreeToSpend,
+      actualSalaryFunding: actualSalaryFunding,
+      cashPaymentsMade: cashPaymentsMade,
+      cashMoneyReturned: cashMoneyReturned,
+      expectedIncome: expectedIncome,
     );
   }
 
@@ -179,6 +212,11 @@ class MonthSummary {
 
   /// Σ reimbursements attributed to this month (FR-032).
   final double moneyReturned;
+
+  /// Cash-basis amounts for availability. When null, the service-month
+  /// [paymentsMade]/[moneyReturned] keep the legacy meaning.
+  final double? cashPaymentsMade;
+  final double? cashMoneyReturned;
 
   /// Σ planned expense amounts. Never affects [kept] or [moneyInBank]
   /// (FR-014, FR-015).
@@ -208,6 +246,8 @@ class MonthSummary {
   /// Money in the bank at the start of the month, or `null` when the user has
   /// never confirmed one (FR-006, FR-010).
   final double? openingBalance;
+  final bool usesReviewedBank;
+  final double? reviewedBank;
 
   /// Total allocated across every budget profile this month, in the display
   /// currency (T143, FR-003). Reference only — it is `setAside` that
@@ -234,15 +274,20 @@ class MonthSummary {
 
   /// Accounting-currency verdict converted once at the display boundary.
   final double? resolvedFreeToSpend;
+  final double actualSalaryFunding;
+
+  /// Forecast salary for the month. Display-only; never part of [kept].
+  final double expectedIncome;
 
   /// `income - paymentsMade + moneyReturned - setAside - carryOver` (FR-012,
-  /// T143). This is the free money — the reserve overspending draws from.
+  /// T143). Availability uses the cash-basis figures when supplied, while the
+  /// reporting fields above stay on the service/origin month.
   double get kept =>
       resolvedFreeToSpend ??
       freeToSpend(
               income: income,
-              paid: paymentsMade,
-              returned: moneyReturned,
+              paid: cashPaymentsMade ?? paymentsMade,
+              returned: cashMoneyReturned ?? moneyReturned,
               unused: setAside,
               carry: carryOver,
               incoming: carriedIn,
@@ -253,12 +298,16 @@ class MonthSummary {
   /// The same calculation without the allocation carve-out, so `moneyInBank`
   /// keeps its old meaning (actual money in the bank, not earmarked money).
   double get keptBeforeAllocations =>
-      income - paymentsMade + moneyReturned + vaultTransfers;
+      income -
+      (cashPaymentsMade ?? paymentsMade) +
+      (cashMoneyReturned ?? moneyReturned) +
+      vaultTransfers;
 
   /// `openingBalance + keptBeforeAllocations`, or `null` when there is no
   /// confirmed opening balance — the app prompts rather than assuming a figure
   /// (FR-008, FR-010).
   double? get moneyInBank {
+    if (usesReviewedBank) return reviewedBank;
     final opening = openingBalance;
     if (opening == null) return null;
     return opening + keptBeforeAllocations;

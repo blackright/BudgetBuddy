@@ -191,14 +191,14 @@ void main() {
 
       expect(find.text('secret app'), findsNothing,
           reason: 'not one frame of the app may leak behind the lock');
-      expect(find.text('BudgetBuddy is locked'), findsOneWidget);
+      expect(find.text('Resolving protection...'), findsOneWidget);
       expect(find.byKey(const Key('unlockButton')), findsNothing,
           reason: 'the window names no subject, so it offers no way in');
     });
   });
 
-  group('T015: with no lock the gate shows the app', () {
-    testWidgets('the first frame paints the app', (tester) async {
+  group('T015 / T099: no app PIN still requires phone verification', () {
+    testWidgets('the first frame hides the app', (tester) async {
       final container = containerWith(
         space: Stream.value(null),
         profile: Stream.value(null),
@@ -206,7 +206,7 @@ void main() {
 
       await tester.pumpWidget(app(container));
 
-      expect(find.text('secret app'), findsOneWidget);
+      expect(find.text('secret app'), findsNothing);
       expect(find.text('BudgetBuddy is locked'), findsNothing);
     });
   });

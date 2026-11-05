@@ -1,7 +1,9 @@
 // ignore_for_file: deprecated_member_use_from_same_package
+import 'package:budget_buddy/core/models/app_settings.dart';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:isar/isar.dart';
+import 'package:budget_buddy/core/database/isar_helper.dart';
 import 'package:budget_buddy/core/database/schema_migrations.dart';
 import 'package:budget_buddy/core/database/money_integrity.dart';
 import 'package:budget_buddy/core/models/user_profile.dart';
@@ -46,8 +48,10 @@ void main() {
       await writeSchemaVersion(db, 25);
       await db.close();
       db = await Isar.open(
-          [SavingsVaultSchema, VaultEntrySchema, SchemaMigrationStampSchema],
-          directory: directory.path, name: 'goal_upgrade');
+        IsarHelper.schemas,
+        directory: directory.path,
+        name: 'goal_upgrade',
+      );
       await runSchemaMigrations(db);
       final vault = (await db.savingsVaults.where().findAll()).single;
       expect(vault.goalTargetYearMonth, isNull);
@@ -89,9 +93,12 @@ void main() {
             ..updatedAt = DateTime(2026));
         });
         await db.close();
-        db = await Isar.open(
-            [SavingsVaultSchema, VaultEntrySchema, UserProfileSchema],
-            directory: directory.path, name: name);
+        db = await Isar.open([
+          AppSettingsSchema,
+          SavingsVaultSchema,
+          VaultEntrySchema,
+          UserProfileSchema
+        ], directory: directory.path, name: name);
         final before = (await db.savingsVaults.where().findAll()).single;
         expect(before.totalMinor, corruptedMinorSentinel,
             reason:

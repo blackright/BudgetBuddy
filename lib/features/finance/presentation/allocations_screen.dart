@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/models/budget_profile.dart';
+import '../../../core/models/allocation.dart';
 import '../../../core/models/currency_code.dart';
 import '../../../core/models/direct_expense_profile.dart';
 import '../../../core/models/money.dart';
@@ -22,6 +23,7 @@ import '../../../shared/presentation/input_formatters/thousands_separator_input_
 import '../../../shared/presentation/money_format.dart';
 import '../../dashboard/providers/dashboard_providers.dart';
 import '../../dashboard/presentation/budget_status.dart';
+import '../../spaces/providers/spaces_providers.dart';
 import '../providers/profile_providers.dart';
 import '../providers/month_end_providers.dart';
 import '../providers/reserve_providers.dart';
@@ -409,6 +411,10 @@ class _BudgetProfileRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final history = ref.watch(allocationHistoryProvider).value ?? const [];
+    final allocationState = _state(history);
+    final canEdit = !ref.watch(budgetContextProvider).isShared &&
+        ref.watch(activeContextCanEditProvider);
     final state = ProfileBorrowingState(
       allocation: profile.allocation,
       spent: spent,
@@ -441,7 +447,7 @@ class _BudgetProfileRow extends ConsumerWidget {
                   ),
                 ),
                 Text(
-                  status.label,
+                  '${status.label} · $allocationState',
                   style:
                       theme.textTheme.labelSmall?.copyWith(color: status.color),
                 ),
@@ -479,8 +485,10 @@ class _BudgetProfileRow extends ConsumerWidget {
                 bold: true,
               ),
             const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
+            Wrap(
+              spacing: 4,
+              runSpacing: 4,
+              alignment: WrapAlignment.end,
               children: [
                 TextButton.icon(
                   onPressed: () => _editAllocation(context, ref, profile,
@@ -488,6 +496,31 @@ class _BudgetProfileRow extends ConsumerWidget {
                   icon: const Icon(Icons.edit, size: 16),
                   label: const Text('Edit'),
                 ),
+                if (canEdit)
+                  TextButton.icon(
+                    onPressed: () => _reserve(context, ref),
+                    icon: const Icon(Icons.add_card, size: 16),
+                    label: const Text('Reserve'),
+                  ),
+                if (canEdit && state.remaining > 0)
+                  TextButton.icon(
+                    onPressed: () => _release(context, ref, state.remaining),
+                    icon: const Icon(Icons.undo, size: 16),
+                    label: const Text('Release'),
+                  ),
+                if (canEdit)
+                  TextButton.icon(
+                    onPressed: () => _correct(context, ref),
+                    icon: const Icon(Icons.edit_note, size: 16),
+                    label: const Text('Correct'),
+                  ),
+                if (canEdit && state.remaining > 0)
+                  TextButton.icon(
+                    onPressed: () =>
+                        _moveToVault(context, ref, state.remaining),
+                    icon: const Icon(Icons.savings_outlined, size: 16),
+                    label: const Text('Move to Vault'),
+                  ),
                 TextButton.icon(
                   onPressed: () => context.push('/transfers'),
                   icon: const Icon(Icons.swap_horiz, size: 16),
@@ -495,6 +528,27 @@ class _BudgetProfileRow extends ConsumerWidget {
                 ),
               ],
             ),
+            if (_carriedFrom != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  'Carried ${formatMinorUnits(_carriedMinor ?? 0, contextCurrency)} '
+                  'from ${_carriedFrom!}',
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                ),
+              ),
+            if (history.any((row) =>
+                row.budgetProfileId == profile.id &&
+                row.syncGuid.startsWith('allocation.correct:')))
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  'Corrected ${_correctionLabel(history)} · reason in audit history',
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                ),
+              ),
             Padding(
               padding: const EdgeInsets.only(top: 4),
               child: Text(
@@ -506,6 +560,267 @@ class _BudgetProfileRow extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  String? get _carriedFrom {
+    final origin = profile.monthEndOriginGuid;
+    if (origin == null || !origin.startsWith('auto-carry:')) return null;
+    final parts = origin.split(':');
+    return parts.length >= 3 ? parts[1] : null;
+  }
+
+  int? get _carriedMinor {
+    final fingerprint = profile.monthEndFingerprint;
+    if (fingerprint == null) return null;
+    final parts = fingerprint.split('|');
+    return parts.length >= 6 ? int.tryParse(parts[4]) : null;
+  }
+
+  String _state(List<Allocation> history) {
+    final released = history.any((row) =>
+        row.budgetProfileId == profile.id &&
+        row.amount < 0 &&
+        row.syncGuid.startsWith('allocation.release:'));
+    final remaining = profile.allocation - spent;
+    if (profile.allocation <= 0 && released) return 'Released';
+    if (remaining <= 0 && spent > 0) return 'Fully used';
+    if (spent > 0) return 'Partially used';
+    return 'Active';
+  }
+
+  Future<void> _reserve(BuildContext context, WidgetRef ref) async {
+    final controller = TextEditingController();
+    final operationKey = DateTime.now().microsecondsSinceEpoch.toString();
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Reserve for ${profile.name}'),
+        content: TextField(
+          controller: controller,
+          decoration: InputDecoration(
+            labelText: 'Amount (${contextCurrency.code.toUpperCase()})',
+            helperText:
+                '${formatMinorUnits(availableReserve, contextCurrency)} free to use',
+          ),
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          inputFormatters: const [ThousandsSeparatorInputFormatter()],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel')),
+          TextButton(
+            onPressed: () async {
+              final value = parseMoneyInput(controller.text) ?? 0;
+              final minor =
+                  (value * contextCurrency.minorUnitsPerMajor).round();
+              if (minor <= 0) return;
+              final saved = await runFinancialAction(context,
+                  action: () => ref.read(profileActionsProvider).reserve(
+                      profile: profile,
+                      amount: minor,
+                      operationKey: operationKey),
+                  success: 'Money reserved',
+                  failure: 'The reserve could not be saved. Check the amount.');
+              if (saved && dialogContext.mounted) {
+                Navigator.of(dialogContext).pop();
+              }
+            },
+            child: const Text('Reserve'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+  }
+
+  Future<void> _release(
+      BuildContext context, WidgetRef ref, int remaining) async {
+    final controller = TextEditingController(
+        text: formatMinorUnitsInput(remaining, contextCurrency));
+    final reason = TextEditingController();
+    final operationKey = DateTime.now().microsecondsSinceEpoch.toString();
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Release from ${profile.name}'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(
+            controller: controller,
+            decoration: InputDecoration(
+              labelText: 'Amount (${contextCurrency.code.toUpperCase()})',
+            ),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: const [ThousandsSeparatorInputFormatter()],
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: reason,
+            decoration: const InputDecoration(labelText: 'Reason (optional)'),
+          ),
+        ]),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel')),
+          TextButton(
+            onPressed: () async {
+              final value = parseMoneyInput(controller.text) ?? 0;
+              final minor =
+                  (value * contextCurrency.minorUnitsPerMajor).round();
+              if (minor <= 0) return;
+              final saved = await runFinancialAction(context,
+                  action: () => ref.read(profileActionsProvider).release(
+                      profile: profile,
+                      amount: minor,
+                      reason: reason.text,
+                      operationKey: operationKey),
+                  success: 'Money released',
+                  failure: 'The release could not be saved. Check the amount.');
+              if (saved && dialogContext.mounted) {
+                Navigator.of(dialogContext).pop();
+              }
+            },
+            child: const Text('Release'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    reason.dispose();
+  }
+
+  Future<void> _moveToVault(
+      BuildContext context, WidgetRef ref, int remaining) async {
+    final controller = TextEditingController(
+        text: formatMinorUnitsInput(remaining, contextCurrency));
+    final note = TextEditingController();
+    final operationKey = DateTime.now().microsecondsSinceEpoch.toString();
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Move ${profile.name} to Vault'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Text(
+              'The allocation goes down and the Vault goes up. Free-to-use stays unchanged.'),
+          const SizedBox(height: 8),
+          TextField(
+            controller: controller,
+            decoration: InputDecoration(
+              labelText: 'Amount (${contextCurrency.code.toUpperCase()})',
+            ),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: const [ThousandsSeparatorInputFormatter()],
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: note,
+            decoration: const InputDecoration(labelText: 'Note (optional)'),
+          ),
+        ]),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel')),
+          TextButton(
+            onPressed: () async {
+              final value = parseMoneyInput(controller.text) ?? 0;
+              final minor =
+                  (value * contextCurrency.minorUnitsPerMajor).round();
+              if (minor <= 0) return;
+              final saved = await runFinancialAction(context,
+                  action: () => ref.read(profileActionsProvider).moveToVault(
+                      profile: profile,
+                      amount: minor,
+                      operationKey: operationKey,
+                      note: note.text),
+                  success: 'Moved to Vault',
+                  failure:
+                      'The allocation could not be moved to Vault. Check the amount.');
+              if (saved && dialogContext.mounted) {
+                Navigator.of(dialogContext).pop();
+              }
+            },
+            child: const Text('Move to Vault'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    note.dispose();
+  }
+
+  String _correctionLabel(List<Allocation> history) {
+    final total = history
+        .where((row) =>
+            row.budgetProfileId == profile.id &&
+            row.syncGuid.startsWith('allocation.correct:'))
+        .fold<int>(0, (sum, row) => sum + row.amount);
+    final sign = total >= 0 ? '+' : '-';
+    return 'by $sign${formatMinorUnits(total.abs(), contextCurrency)}';
+  }
+
+  Future<void> _correct(BuildContext context, WidgetRef ref) async {
+    final amount = TextEditingController(
+        text: formatMinorUnitsInput(profile.allocation, contextCurrency));
+    final reason = TextEditingController();
+    final operationKey = DateTime.now().microsecondsSinceEpoch.toString();
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Correct ${profile.name}'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Text(
+              'The original allocation and its history stay visible. Only the difference is recorded.'),
+          const SizedBox(height: 8),
+          TextField(
+            controller: amount,
+            decoration: InputDecoration(
+              labelText:
+                  'Corrected allocation (${contextCurrency.code.toUpperCase()})',
+            ),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: const [ThousandsSeparatorInputFormatter()],
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: reason,
+            decoration: const InputDecoration(labelText: 'Reason'),
+          ),
+        ]),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel')),
+          TextButton(
+            onPressed: () async {
+              final value = parseMoneyInput(amount.text) ?? 0;
+              final newAllocation =
+                  (value * contextCurrency.minorUnitsPerMajor).round();
+              final delta = newAllocation - profile.allocation;
+              if (delta == 0 || reason.text.trim().isEmpty) return;
+              final saved = await runFinancialAction(context,
+                  action: () => ref
+                      .read(profileActionsProvider)
+                      .correctAllocation(
+                          profile: profile,
+                          amount: delta,
+                          reason: reason.text,
+                          operationKey: operationKey),
+                  success: 'Allocation corrected',
+                  failure:
+                      'The correction could not be saved. Check the amount and reason.');
+              if (saved && dialogContext.mounted) {
+                Navigator.of(dialogContext).pop();
+              }
+            },
+            child: const Text('Correct'),
+          ),
+        ],
+      ),
+    );
+    amount.dispose();
+    reason.dispose();
   }
 
   Future<void> _editAllocation(

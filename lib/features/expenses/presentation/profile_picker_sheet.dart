@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/models/budget_profile.dart';
 import '../../../core/models/expense.dart';
 import '../../../core/models/direct_expense_profile.dart';
+import '../../../shared/presentation/profile_identity_color.dart';
 import '../../finance/providers/profile_providers.dart';
 
 /// The result of the profile picker: the chosen profile id, or `null` for
@@ -116,11 +117,17 @@ class _ProfilePickerSheetState extends ConsumerState<ProfilePickerSheet> {
               child: ListView(
                 shrinkWrap: true,
                 children: [
-                  // The Main Profile: the money that is not in a profile.
+                  // The unbudgeted destination: money that is not in a profile.
                   ListTile(
-                    leading: const Icon(Icons.account_balance_wallet),
-                    title: const Text('None — Main Profile'),
-                    subtitle: const Text('This expense is not in a profile'),
+                    key: const Key('mainProfileOption'),
+                    leading: CircleAvatar(
+                      backgroundColor: theme.colorScheme.errorContainer,
+                      child: Icon(Icons.account_balance_wallet,
+                          color: theme.colorScheme.onErrorContainer),
+                    ),
+                    title: const Text('No budget — free-to-use'),
+                    subtitle:
+                        const Text("Paid from this month's free-to-use money"),
                     trailing: widget.selectedProfileId == null
                         ? const Icon(Icons.check)
                         : null,
@@ -132,7 +139,16 @@ class _ProfilePickerSheetState extends ConsumerState<ProfilePickerSheet> {
                     const _GroupLabel(label: 'Budget Profiles'),
                     for (final profile in budget)
                       ListTile(
-                        leading: const Icon(Icons.account_balance_wallet),
+                        leading: CircleAvatar(
+                          backgroundColor: profileIdentity(context,
+                                  syncGuid: profile.syncGuid,
+                                  name: profile.name)
+                              .withValues(alpha: .16),
+                          child: Icon(Icons.account_balance_wallet,
+                              color: profileIdentity(context,
+                                  syncGuid: profile.syncGuid,
+                                  name: profile.name)),
+                        ),
                         title: Text(profile.name),
                         trailing: widget.selectedProfileId == profile.id &&
                                 widget.selectedProfileType ==
@@ -150,7 +166,16 @@ class _ProfilePickerSheetState extends ConsumerState<ProfilePickerSheet> {
                     const _GroupLabel(label: 'Direct Expense Profiles'),
                     for (final profile in direct)
                       ListTile(
-                        leading: const Icon(Icons.receipt_long),
+                        leading: CircleAvatar(
+                          backgroundColor: profileIdentity(context,
+                                  syncGuid: profile.syncGuid,
+                                  name: profile.name)
+                              .withValues(alpha: .16),
+                          child: Icon(Icons.receipt_long,
+                              color: profileIdentity(context,
+                                  syncGuid: profile.syncGuid,
+                                  name: profile.name)),
+                        ),
                         title: Text(profile.name),
                         trailing: widget.selectedProfileId == profile.id &&
                                 widget.selectedProfileType ==

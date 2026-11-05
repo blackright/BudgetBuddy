@@ -13,8 +13,10 @@ class EmotionSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+    return Wrap(
+      alignment: WrapAlignment.spaceEvenly,
+      spacing: 12,
+      runSpacing: 12,
       children: [
         _buildEmotionOption(
           GuiltLevel.essential,

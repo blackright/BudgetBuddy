@@ -1,3 +1,15 @@
+import 'package:budget_buddy/core/models/income_receipt_group.dart';
+import 'package:budget_buddy/core/models/salary_cycle.dart';
+import 'package:budget_buddy/core/models/money_receipt.dart';
+import 'package:budget_buddy/core/models/financial_adoption.dart';
+import 'package:budget_buddy/core/models/balance_checkpoint.dart';
+import 'package:budget_buddy/core/models/period_funding_assignment.dart';
+import 'package:budget_buddy/core/models/medical_approval.dart';
+import 'package:budget_buddy/core/models/medical_appeal.dart';
+import 'package:budget_buddy/core/models/medical_settlement_event.dart';
+import 'package:budget_buddy/core/models/medical_withholding_match.dart';
+import 'package:budget_buddy/core/models/lock_setting.dart';
+import 'package:budget_buddy/core/models/expense_template.dart';
 import 'package:budget_buddy/core/models/merchant.dart';
 import 'package:budget_buddy/core/models/expense_evidence_chunk.dart';
 import 'package:budget_buddy/core/models/expense_purchase.dart';
@@ -5,11 +17,13 @@ import 'package:budget_buddy/core/models/app_settings.dart';
 import 'package:budget_buddy/core/models/allocation.dart';
 import 'package:budget_buddy/core/models/transfer.dart';
 import 'package:budget_buddy/core/models/audit_event.dart';
+import 'package:budget_buddy/core/models/pending_action.dart';
 import 'package:budget_buddy/features/vault/models/vault_entry.dart';
 import 'package:budget_buddy/core/models/month_end_run.dart';
 import 'dart:io';
 import 'package:budget_buddy/core/models/budget_profile.dart';
 import 'package:budget_buddy/core/models/income_source.dart';
+import 'package:budget_buddy/core/models/salary_schedule.dart';
 import 'package:budget_buddy/core/models/direct_expense_profile.dart';
 
 import 'package:budget_buddy/core/database/schema_migrations.dart';
@@ -40,6 +54,8 @@ import 'package:budget_buddy/features/medical/repositories/medical_repository.da
 import 'package:flutter_test/flutter_test.dart';
 import 'package:isar/isar.dart';
 
+import '../management/fixtures.dart' as management_fixtures;
+
 /// Shared Isar harness for the medical tests.
 ///
 /// The engine math that FR-003/004/005 depend on only exists once real rows sit
@@ -55,18 +71,36 @@ class MedicalTestHarness {
   static final RateTableRegistry rates = RateTableRegistry();
 
   static List<CollectionSchema> get schemas => [
+        IncomeReceiptGroupSchema,
+        SalaryCycleSchema,
+        FinancialAdoptionSchema,
+        BalanceCheckpointSchema,
+        MovementInclusionSchema,
+        PeriodFundingAssignmentSchema,
+        MedicalApprovalSchema,
+        MedicalClaimActivitySchema,
+        MedicalAppealSchema,
+        MedicalClaimClosureSchema,
+        MedicalWithholdingMatchSchema,
+        MedicalSettlementEventSchema,
+        MoneyReceiptSchema,
+        ReceiptRevisionSchema,
         AppSettingsSchema,
+        LockSettingSchema,
+        ExpenseTemplateSchema,
         MerchantSchema,
         ExpenseEvidenceChunkSchema,
         ExpensePurchaseSchema,
         AllocationSchema,
         TransferSchema,
         AuditEventSchema,
+        PendingActionSchema,
         UserProfileSchema,
         MonthlyBudgetSchema,
         ExpenseSchema,
         BudgetProfileSchema,
         IncomeSourceSchema,
+        SalaryScheduleSchema,
         MonthEndRunSchema,
         DirectExpenseProfileSchema,
         ReimbursementSchema,
@@ -208,6 +242,37 @@ class MedicalTestHarness {
       yearMonth: yearMonth,
       primaryCurrency: 'USD',
       rateTable: rates.tableFor(yearMonth),
+    );
+  }
+
+  /// Seeds a bill and its linked expense through the shared management fixture.
+  ///
+  /// Pass the context returned by [seedBudget]. The fixture keeps Phase 1 on the
+  /// current schema; later phases extend it with the tracker fields.
+  Future<management_fixtures.SeededManagementBill> seedManagementBill({
+    required MedicalBillContext context,
+    int billedAmount = 10000,
+    double patientSharePercent = 20,
+    MedicalPaymentMethod paymentMethod = MedicalPaymentMethod.selfPaid,
+    MedicalBillState state = MedicalBillState.planned,
+    DateTime? serviceDate,
+    DateTime? paidAt,
+    int reimbursedAmount = 0,
+  }) {
+    return management_fixtures.seedManagementBill(
+      isar,
+      profileId: context.profileId,
+      sharedSpaceId: context.sharedSpaceId,
+      budgetId: context.budgetId,
+      billedAmount: billedAmount,
+      patientSharePercent: patientSharePercent,
+      paymentMethod: paymentMethod,
+      state: state,
+      currency: context.primaryCurrency.toLowerCase(),
+      yearMonth: context.yearMonth,
+      serviceDate: serviceDate,
+      paidAt: paidAt,
+      reimbursedAmount: reimbursedAmount,
     );
   }
 

@@ -4,7 +4,6 @@ import 'package:budget_buddy/core/database/money_integrity.dart';
 import 'package:budget_buddy/core/providers/database_integrity_provider.dart';
 import 'package:budget_buddy/core/routing/router_providers.dart';
 import 'package:budget_buddy/main.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -33,11 +32,13 @@ void main() {
     expect(find.textContaining('private database details'), findsNothing);
     expect(routerReads, 0);
 
+    await tester.ensureVisible(find.text('Retry'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Retry'));
     await tester.pump();
     await tester.pump();
     expect(scans, 2);
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.text('Checking saved data...'), findsOneWidget);
     expect(find.text('Retry'), findsNothing);
     expect(routerReads, 0);
 

@@ -1,4 +1,9 @@
+import 'legacy_medical_reimbursement_guard.dart';
 import 'package:isar/isar.dart';
+import 'medical_receipt_booking_service.dart';
+import '../models/medical_approval.dart';
+import '../models/money_receipt.dart';
+import '../models/medical_bill.dart';
 import '../models/expense.dart';
 import '../models/fx_revision.dart';
 import '../models/currency_code.dart';
@@ -56,6 +61,13 @@ Money expenseAccountingMoney(Expense e, {CurrencyCode? expectedCurrency}) {
 
 Money reimbursementAccountingMoney(Reimbursement r,
     {CurrencyCode? expectedCurrency}) {
+  final medical = MedicalReceiptEvidence.of(r);
+  if (medical != null) {
+    if (expectedCurrency != null && medical.accounting != expectedCurrency) {
+      throw const FormatException('Medical accounting currency needs review.');
+    }
+    return medical.money;
+  }
   final booked = reimbursementFx(r)?.current.money;
   if (booked != null &&
       expectedCurrency != null &&
@@ -81,8 +93,179 @@ Future<RateTableRegistry> readFxRates(Isar db) async =>
 class FxBookingService {
   const FxBookingService(this.db);
   final Isar db;
+
+  Future<void> _preserveMedicalPayment(Expense value, Expense? previous) async {
+    if (previous == null) return;
+    if (value.amount == previous.amount &&
+        value.currencyCode == previous.currencyCode &&
+        value.yearMonth == previous.yearMonth &&
+        value.type == previous.type &&
+        fxPaid(value.status) == fxPaid(previous.status) &&
+        value.profileId == previous.profileId &&
+        value.sharedSpaceId == previous.sharedSpaceId) {
+      return;
+    }
+    final rows = await db.reimbursements
+        .filter()
+        .expenseIdEqualTo(previous.id)
+        .findAll();
+    if (rows.any((r) => r.medicalReceiptJson != null)) {
+      throw StateError(
+          'A payment with Medical receipts needs a reviewed correction.');
+    }
+  }
+
+  Future<void> _validateMedical(Reimbursement value, Reimbursement? previous,
+      {required bool remote}) async {
+    final evidence = MedicalReceiptEvidence.of(value)!;
+    final parent = value.expenseId == null
+        ? null
+        : await db.expenses.get(value.expenseId!);
+    final bill = await db.medicalBills
+        .filter()
+        .syncGuidEqualTo(evidence.text('billGuid'))
+        .findFirst();
+    final approval = await db.medicalApprovals
+        .filter()
+        .syncGuidEqualTo(evidence.text('approvalGuid'))
+        .findFirst();
+    final (currency, _) = await _context(value.profileId, value.sharedSpaceId);
+    if (parent == null ||
+        parent.type != ExpenseType.medical ||
+        bill == null ||
+        !bill.canBeReimbursed ||
+        bill.linkedExpenseId != parent.id ||
+        bill.sharedSpaceId != value.sharedSpaceId ||
+        parent.sharedSpaceId != value.sharedSpaceId ||
+        (value.sharedSpaceId == null &&
+            (parent.profileId != value.profileId ||
+                bill.profileId != value.profileId)) ||
+        evidence.text('expenseGuid') != parent.syncGuid ||
+        evidence.text('costMonth') != parent.yearMonth ||
+        parent.amount != evidence.number('paidMinor') ||
+        parent.currencyCode != value.currencyCode ||
+        evidence.accounting != currency ||
+        approval == null ||
+        approval.billGuid != bill.syncGuid ||
+        approval.sharedSpaceId != value.sharedSpaceId ||
+        (value.sharedSpaceId == null &&
+            approval.profileId != value.profileId) ||
+        approval.approvedMinor != evidence.number('approvalMinor') ||
+        (value.sharedSpaceId != null && evidence.json['groupGuid'] != null)) {
+      throw StateError('Medical receipt source needs review.');
+    }
+    final booked = expenseAccountingMoney(parent, expectedCurrency: currency);
+    if (booked.currency != currency ||
+        booked.minorUnits != evidence.number('paidBaseMinor') ||
+        (expenseFx(parent)?.current.hash ?? 'legacy-same-currency') !=
+            evidence.text('originalFxHash')) {
+      throw StateError('Original Medical booking changed.');
+    }
+    final previousEvidence =
+        previous == null ? null : MedicalReceiptEvidence.of(previous);
+    if (previousEvidence?.encode() == evidence.encode()) return;
+    final prior =
+        await db.reimbursements.filter().expenseIdEqualTo(parent.id).findAll();
+    var original = 0, base = 0, total = 0;
+    for (final other in prior.where((r) => r.id != previous?.id)) {
+      if (other.sharedSpaceId != value.sharedSpaceId ||
+          (value.sharedSpaceId == null && other.profileId != value.profileId)) {
+        throw StateError('Receipt owner changed.');
+      }
+      final old = MedicalReceiptEvidence.of(other);
+      if (old != null &&
+          old.number('sequence') == evidence.number('sequence')) {
+        throw StateError('Conflicting Medical receipt order.');
+      }
+      if (old == null || old.number('sequence') < evidence.number('sequence')) {
+        original = checkedFxMinor(
+            original + (old?.number('principalMinor') ?? other.amount));
+        base = checkedFxMinor(base +
+            (old?.number('principalBaseMinor') ??
+                reimbursementAccountingMoney(other, expectedCurrency: currency)
+                    .minorUnits));
+      }
+      total = checkedFxMinor(total + other.amount);
+    }
+    if (original != evidence.number('priorPrincipalMinor') ||
+        base != evidence.number('priorPrincipalBaseMinor') ||
+        checkedFxMinor(total + value.amount) > approval.approvedMinor) {
+      throw StateError('Medical receipt totals changed.');
+    }
+    final old = previous == null ? null : MedicalReceiptEvidence.of(previous);
+    if (previous != null && old == null) {
+      throw StateError('Legacy refunds cannot be silently converted.');
+    }
+    if (old != null) {
+      if (old.encode() == evidence.encode()) return;
+      if (evidence.number('revision') != old.number('revision') + 1 ||
+          evidence.json['previousRevisionGuid'] != old.text('revisionGuid') ||
+          old.text('originalFxHash') != evidence.text('originalFxHash')) {
+        throw StateError('Medical revision chain needs review.');
+      }
+    }
+    if (!remote) {
+      final stored = await db.receiptRevisions
+          .filter()
+          .syncGuidEqualTo(evidence.text('revisionGuid'))
+          .findFirst();
+      if (stored == null ||
+          stored.receiptGuid != value.syncGuid ||
+          stored.evidenceJson != value.medicalReceiptJson) {
+        throw StateError('Missing canonical Medical receipt.');
+      }
+    } else {
+      // Remote value/attribution evidence is inside the signed projection.
+      // Canonical local IDs remain local; no private salary group is imported.
+      var receipt = await db.moneyReceipts
+          .filter()
+          .syncGuidEqualTo(value.syncGuid)
+          .findFirst();
+      receipt ??= MoneyReceipt()
+        ..syncGuid = value.syncGuid
+        ..billGuid = bill.syncGuid
+        ..profileId = null
+        ..sharedSpaceId = value.sharedSpaceId
+        ..createdAt = value.date
+        ..actorId = 0
+        ..operationIdentity = 'remote-medical:${value.syncGuid}'
+        ..inputFingerprint = evidence.text('revisionGuid');
+      if (receipt.billGuid != bill.syncGuid ||
+          receipt.sharedSpaceId != value.sharedSpaceId) {
+        throw StateError('Receipt identity changed owner.');
+      }
+      receipt.id = await db.moneyReceipts.put(receipt);
+      final existing = await db.receiptRevisions
+          .filter()
+          .syncGuidEqualTo(evidence.text('revisionGuid'))
+          .findFirst();
+      if (existing != null &&
+          existing.evidenceJson != value.medicalReceiptJson) {
+        throw StateError('Immutable Medical revision conflict.');
+      }
+      if (existing == null) {
+        await db.receiptRevisions.put(ReceiptRevision()
+          ..syncGuid = evidence.text('revisionGuid')
+          ..receiptGuid = value.syncGuid
+          ..billGuid = bill.syncGuid
+          ..profileId = null
+          ..sharedSpaceId = value.sharedSpaceId
+          ..yearMonth = value.originYearMonth
+          ..revision = evidence.number('revision')
+          ..previousGuid = evidence.json['previousRevisionGuid'] as String?
+          ..evidenceJson = value.medicalReceiptJson!
+          ..recordedAt = DateTime.now().toUtc()
+          ..actorId = 0
+          ..operationIdentity =
+              'remote-medical-revision:${evidence.text('revisionGuid')}'
+          ..inputFingerprint = evidence.text('revisionGuid'));
+      }
+    }
+  }
+
   Future<void> validateRemoteExpense(Expense value, Expense? previous,
       {required bool carriesFx}) async {
+    await _preserveMedicalPayment(value, previous);
     if (!carriesFx && previous?.fxHistoryJson != null) {
       if (previous!.amount != value.amount ||
           previous.currencyCode != value.currencyCode ||
@@ -120,6 +303,14 @@ class FxBookingService {
   Future<void> validateRemoteRefund(
       Reimbursement value, Reimbursement? previous,
       {required bool carriesFx}) async {
+    if (previous?.medicalReceiptJson != null &&
+        value.medicalReceiptJson == null) {
+      throw StateError('A receipt-compatible app is required.');
+    }
+    if (value.medicalReceiptJson != null) {
+      await _validateMedical(value, previous, remote: true);
+      return;
+    }
     if (!carriesFx && previous?.fxHistoryJson != null) {
       if (previous!.amount != value.amount ||
           previous.currencyCode != value.currencyCode ||
@@ -211,6 +402,7 @@ class FxBookingService {
 
   Future<void> prepareExpense(Expense expense) async {
     final previous = await db.expenses.get(expense.id);
+    await _preserveMedicalPayment(expense, previous);
     final old =
         previous == null ? null : FxHistory.decode(previous.fxHistoryJson);
     if (previous != null) expenseFx(previous);
@@ -303,11 +495,31 @@ class FxBookingService {
   }
 
   Future<void> prepareRefund(Reimbursement refund) async {
+    final medicalPrevious = await db.reimbursements.get(refund.id);
+    if (medicalPrevious?.medicalReceiptJson != null &&
+        refund.medicalReceiptJson == null) {
+      throw StateError('Use a reviewed Medical receipt correction.');
+    }
+    if (refund.medicalReceiptJson != null) {
+      await _validateMedical(refund, await db.reimbursements.get(refund.id),
+          remote: false);
+      return;
+    }
     final previous = await db.reimbursements.get(refund.id);
     final oldHistory = previous == null ? null : reimbursementFx(previous);
     final expense = refund.expenseId == null
         ? null
         : await db.expenses.get(refund.expenseId!);
+    if (expense != null && refund.source == ReimbursementSource.standard) {
+      await LegacyMedicalReimbursementGuard.forExpense(db, expense);
+    }
+    if (previous?.expenseId != null &&
+        previous!.expenseId != refund.expenseId) {
+      final oldExpense = await db.expenses.get(previous.expenseId!);
+      if (oldExpense != null) {
+        await LegacyMedicalReimbursementGuard.forExpense(db, oldExpense);
+      }
+    }
     if (previous != null) {
       if (oldHistory != null &&
           (refund.currencyCode != previous.currencyCode ||
@@ -334,6 +546,14 @@ class FxBookingService {
       return; // existing orphan/legacy validation remains authoritative
     }
     final history = expenseFx(expense);
+    if (expense.type == ExpenseType.medical &&
+        (await db.reimbursements
+                .filter()
+                .expenseIdEqualTo(expense.id)
+                .findAll())
+            .any((r) => r.medicalReceiptJson != null)) {
+      throw StateError('Confirm Medical receipts through Income Sources.');
+    }
     if (history == null) return;
     if (expense.sharedSpaceId != refund.sharedSpaceId ||
         (expense.sharedSpaceId == null &&

@@ -12,6 +12,11 @@ class ReminderNotificationService {
   factory ReminderNotificationService() => _instance;
   ReminderNotificationService._();
 
+  /// Test-only instance so a fake can record `showNow`/`cancelReminder` calls
+  /// without touching the plugin or the production singleton.
+  @visibleForTesting
+  ReminderNotificationService.forTest();
+
   bool get _isTest => Platform.environment.containsKey('FLUTTER_TEST');
 
   final FlutterLocalNotificationsPlugin _plugin =
@@ -72,9 +77,7 @@ class ReminderNotificationService {
 
     await _plugin.initialize(
       settings: initializationSettings,
-      onDidReceiveNotificationResponse: (NotificationResponse response) {
-        // Background and foreground actions can be handled here or via background handlers.
-      },
+      onDidReceiveNotificationResponse: _handleResponse,
     );
   }
 
@@ -128,5 +131,55 @@ class ReminderNotificationService {
     if (_isTest) return;
     await ensureInitialized();
     await _plugin.cancel(id: id);
+  }
+
+  /// Immediate notification used by the Pending Actions centre.
+  Future<void> showNow({
+    required int id,
+    required String title,
+    required String body,
+    String? payload,
+  }) async {
+    if (_isTest) return;
+    await ensureInitialized();
+    await _plugin.show(
+      id: id,
+      title: title,
+      body: body,
+      notificationDetails: const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'pending_actions',
+          'Pending actions',
+          channelDescription: 'Money tasks that need your attention',
+          importance: Importance.high,
+          priority: Priority.high,
+        ),
+        iOS: DarwinNotificationDetails(),
+      ),
+      payload: payload,
+    );
+  }
+
+  /// A tapped pending-action notification carries its deep link here.
+  void Function(String? payload)? onPendingActionTap;
+
+  void _handleResponse(NotificationResponse response) {
+    onPendingActionTap?.call(response.payload);
+  }
+
+  Future<void> scheduleSalaryReminder({
+    required int id,
+    required String title,
+    required String body,
+    required DateTime scheduledDate,
+    required String timezone,
+  }) async {
+    if (_isTest) return;
+    await scheduleReminder(
+      id: id,
+      title: title,
+      body: body,
+      scheduledDate: scheduledDate,
+    );
   }
 }

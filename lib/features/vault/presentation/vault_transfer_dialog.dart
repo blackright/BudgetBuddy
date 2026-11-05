@@ -8,6 +8,7 @@ import '../../../shared/presentation/input_formatters/thousands_separator_input_
 import '../../../shared/presentation/money_format.dart';
 import '../models/vault_entry.dart';
 import '../providers/vault_providers.dart';
+import '../vault_suggestion_service.dart';
 import '../vault_transfer_service.dart';
 import '../vault_transfer_ledger.dart';
 import 'vault_time.dart';
@@ -17,6 +18,32 @@ CurrencyCode currencyForTransfer(String code) => CurrencyCode.tryParse(code)!;
 String transferError(Object error) => error is VaultTransferException
     ? error.message
     : 'The transfer could not be verified. No changes were committed. Close and retry.';
+
+/// Current month through the next twelve, in `YYYY-MM` order.
+List<String> vaultTargetMonths(String fromMonth, {int monthsAhead = 12}) {
+  final parts = fromMonth.split('-');
+  if (parts.length != 2) return const [];
+  var year = int.tryParse(parts[0]);
+  final parsedMonth = int.tryParse(parts[1]);
+  if (year == null ||
+      parsedMonth == null ||
+      parsedMonth < 1 ||
+      parsedMonth > 12) {
+    return const [];
+  }
+  var month = parsedMonth;
+  final result = <String>[];
+  for (var i = 0; i <= monthsAhead; i++) {
+    result.add(
+        '${year.toString().padLeft(4, '0')}-${month.toString().padLeft(2, '0')}');
+    month++;
+    if (month > 12) {
+      month = 1;
+      year = year! + 1;
+    }
+  }
+  return result;
+}
 
 class VaultTransferPanel extends ConsumerWidget {
   const VaultTransferPanel({super.key});
@@ -76,9 +103,27 @@ class VaultTransferPanel extends ConsumerWidget {
 }
 
 class VaultTransferDialog extends ConsumerStatefulWidget {
-  const VaultTransferDialog({super.key, required this.kind, this.original});
+  const VaultTransferDialog({
+    super.key,
+    required this.kind,
+    this.original,
+    this.initialAmountMinor,
+    this.initialCurrency,
+    this.completesActionType,
+    this.completesRecordRef,
+    this.completesCycleOrMonth,
+  });
   final String kind;
   final VaultEntry? original;
+
+  /// Prefilled from a suggestion or planned withdrawal; still editable.
+  final int? initialAmountMinor;
+  final String? initialCurrency;
+
+  /// A reminder completed only after this transfer commits.
+  final String? completesActionType;
+  final String? completesRecordRef;
+  final String? completesCycleOrMonth;
   @override
   ConsumerState<VaultTransferDialog> createState() =>
       _VaultTransferDialogState();
@@ -90,8 +135,20 @@ class _VaultTransferDialogState extends ConsumerState<VaultTransferDialog> {
   final _request = newSyncGuid();
   VaultTransferPreview? _preview;
   VaultTransferService? _service;
+  String? _targetMonth;
   bool _busy = false;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    final amount = widget.initialAmountMinor;
+    final currency = CurrencyCode.tryParse(widget.initialCurrency ?? '');
+    if (amount != null && amount > 0 && currency != null) {
+      _amount.text = formatMinorUnitsInput(amount, currency);
+    }
+  }
+
   @override
   void dispose() {
     _amount.dispose();
@@ -118,7 +175,11 @@ class _VaultTransferDialogState extends ConsumerState<VaultTransferDialog> {
           amount: amount,
           requestId: _request,
           note: _note.text,
-          reverses: widget.original?.operationKey);
+          reverses: widget.original?.operationKey,
+          targetWithdrawalMonth: widget.kind == 'deposit' ? _targetMonth : null,
+          completesActionType: widget.completesActionType,
+          completesRecordRef: widget.completesRecordRef,
+          completesCycleOrMonth: widget.completesCycleOrMonth);
       if (mounted) {
         setState(() {
           _preview = preview;
@@ -169,6 +230,9 @@ class _VaultTransferDialogState extends ConsumerState<VaultTransferDialog> {
   @override
   Widget build(BuildContext context) {
     final preview = _preview;
+    final readinessMonth =
+        ref.watch(vaultTransferReadinessProvider).valueOrNull?.month ??
+            vaultSuggestionCurrentMonth(ref.watch(vaultClockProvider)());
     final title = widget.kind == 'deposit'
         ? 'Deposit to savings'
         : widget.kind == 'withdrawal'
@@ -207,6 +271,33 @@ class _VaultTransferDialogState extends ConsumerState<VaultTransferDialog> {
                           labelText: widget.kind == 'reversal'
                               ? 'Reason (required)'
                               : 'Note (optional)')),
+                  if (widget.kind == 'deposit')
+                    InputDecorator(
+                      decoration: const InputDecoration(
+                          labelText: 'Plan a withdrawal (optional)',
+                          helperText: 'A reminder only; it never moves money.'),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String?>(
+                          key: const Key('vaultTargetMonth'),
+                          value: _targetMonth,
+                          isExpanded: true,
+                          items: [
+                            const DropdownMenuItem<String?>(
+                                value: null, child: Text('No reminder')),
+                            for (final month
+                                in vaultTargetMonths(readinessMonth))
+                              DropdownMenuItem<String?>(
+                                  value: month, child: Text(month)),
+                          ],
+                          onChanged: _busy
+                              ? null
+                              : (value) => setState(() {
+                                    _targetMonth = value;
+                                    _preview = null;
+                                  }),
+                        ),
+                      ),
+                    ),
                 ] else ...[
                   Text('Personal funds for ${preview.state.month}'),
                   Text(
@@ -217,6 +308,9 @@ class _VaultTransferDialogState extends ConsumerState<VaultTransferDialog> {
                       'Monthly bank funds: ${formatMinorUnits(preview.state.bank, preview.state.currency)} -> ${formatMinorUnits(preview.bankAfter, preview.state.currency)}'),
                   Text(
                       'Monthly reserve: ${formatMinorUnits(preview.state.reserve, preview.state.currency)} -> ${formatMinorUnits(preview.reserveAfter, preview.state.currency)}'),
+                  if (preview.targetWithdrawalMonth != null)
+                    Text('Planned withdrawal: ${preview.targetWithdrawalMonth} '
+                        '(reminder only)'),
                   if (preview.note.isNotEmpty) Text(preview.note),
                   const Text(
                       'Income, expenses and the original opening balance stay unchanged.'),
@@ -296,6 +390,9 @@ class VaultTransferHistory extends StatelessWidget {
           Text(reversedOriginal == null
               ? 'Linked original transfer needs review'
               : 'Reverses ${reversedOriginal!.kind} of ${formatMinorUnits(reversedOriginal!.amountMinor.abs(), currencyForTransfer(code))} from ${formatVaultTime(reversedOriginal!.createdAt)}'),
+        if (data['targetWithdrawalMonth'] != null)
+          Text(
+              'Planned withdrawal: ${data['targetWithdrawalMonth']} (reminder only)'),
         if (reversed) const Text('Reversed - original evidence retained'),
         if (!reversed && entry.kind != 'reversal')
           TextButton(

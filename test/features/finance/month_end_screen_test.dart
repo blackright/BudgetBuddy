@@ -21,12 +21,13 @@ class _UnusedDb implements Isar {
 }
 
 class _ScreenService extends MonthEndService {
-  _ScreenService({this.owner = true, this.stale = false})
+  _ScreenService(
+      {this.owner = true, this.stale = false, this.legacyDestination = false})
       : super(_UnusedDb(),
             context: ContextRef.personal(profileId: 1, yearMonth: '2026-09'),
             actorId: 1,
             rates: RateTableRegistry());
-  final bool owner, stale;
+  final bool owner, stale, legacyDestination;
   int saves = 0;
   List<MonthEndChoice> lastChoices = [];
   @override
@@ -41,7 +42,17 @@ class _ScreenService extends MonthEndService {
                 ..allocation = 100000
                 ..monthEndRule = MonthEndRule.carryForward
                 ..createdAt = DateTime(2026)
-                ..updatedAt = DateTime(2026)
+                ..updatedAt = DateTime(2026),
+              if (legacyDestination)
+                BudgetProfile()
+                  ..syncGuid = 'next'
+                  ..profileId = 1
+                  ..yearMonth = '2026-10'
+                  ..name = 'Next'
+                  ..allocation = 100000
+                  ..monthEndRule = MonthEndRule.carryForward
+                  ..createdAt = DateTime(2026)
+                  ..updatedAt = DateTime(2026),
             ],
             months: ['2026-09'],
             currency: CurrencyCode.huf
@@ -121,11 +132,14 @@ void main() {
     expect(find.text('Shared space'), findsOneWidget);
   });
   Future<_ScreenService> open(WidgetTester tester,
-      {bool owner = true, bool stale = false}) async {
+      {bool owner = true,
+      bool stale = false,
+      bool legacyDestination = false}) async {
     tester.view.resetPhysicalSize();
     await tester.binding.setSurfaceSize(const Size(900, 1800));
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    final service = _ScreenService(owner: owner, stale: stale);
+    final service = _ScreenService(
+        owner: owner, stale: stale, legacyDestination: legacyDestination);
     await tester.pumpWidget(ProviderScope(overrides: [
       budgetContextProvider.overrideWithValue(
           ContextRef.personal(profileId: 1, yearMonth: '2026-09')),
@@ -139,10 +153,77 @@ void main() {
   Future<void> review(WidgetTester tester) async {
     await tester.tap(find.text('Confirm this default allocation'));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Review month-end'));
     await tester.tap(find.text('Review month-end'));
     await tester.pumpAndSettle();
   }
+
+  testWidgets(
+      'required default and destination gates are visible without reviewing',
+      (tester) async {
+    await open(tester, legacyDestination: true);
+    expect(
+        find.text(
+            'Tick the confirmation to include this profile in the review.'),
+        findsOneWidget);
+    expect(find.text('Choose a destination or create a new monthly profile.'),
+        findsOneWidget);
+    await tester.tap(find.text('Confirm this default allocation'));
+    await tester.pumpAndSettle();
+    expect(
+        find.text(
+            'Tick the confirmation to include this profile in the review.'),
+        findsNothing);
+  });
+
+  testWidgets('changing policy keeps the preview but marks it outdated',
+      (tester) async {
+    await open(tester);
+    await review(tester);
+    expect(find.text('Ready to finish'), findsOneWidget);
+
+    await tester.tap(find.text('Carry Forward').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Reset').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ready to finish'), findsOneWidget);
+    expect(find.byKey(const Key('outdatedPreviewHint')), findsOneWidget);
+    expect(find.text('Review again'), findsOneWidget);
+    expect(
+        tester
+            .widget<FilledButton>(
+                find.widgetWithText(FilledButton, 'Finish month'))
+            .onPressed,
+        isNull);
+
+    await tester.tap(find.text('Review again'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('outdatedPreviewHint')), findsNothing);
+    expect(
+        tester
+            .widget<FilledButton>(
+                find.widgetWithText(FilledButton, 'Finish month'))
+            .onPressed,
+        isNotNull);
+  });
+
+  testWidgets('changing the amount keeps the preview but marks it outdated',
+      (tester) async {
+    await open(tester);
+    await review(tester);
+
+    await tester.enterText(find.byType(TextField), '90000');
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ready to finish'), findsOneWidget);
+    expect(find.byKey(const Key('outdatedPreviewHint')), findsOneWidget);
+    expect(
+        tester
+            .widget<FilledButton>(
+                find.widgetWithText(FilledButton, 'Finish month'))
+            .onPressed,
+        isNull);
+  });
 
   testWidgets('default allocation is grouped on load and while typing',
       (tester) async {
@@ -173,7 +254,6 @@ void main() {
   testWidgets('cancel confirmation makes no write', (tester) async {
     final service = await open(tester);
     await review(tester);
-    await tester.ensureVisible(find.text('Finish month'));
     await tester.tap(find.text('Finish month'));
     await tester.pumpAndSettle();
     expect(find.text('Finish 2026-09?'), findsOneWidget);
@@ -194,14 +274,21 @@ void main() {
       (tester) async {
     final service = await open(tester, stale: true);
     await review(tester);
-    await tester.ensureVisible(find.text('Finish month'));
     await tester.tap(find.text('Finish month'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Confirm month-end'));
     await tester.pumpAndSettle();
     expect(service.saves, 1);
     expect(find.textContaining('Data changed after preview'), findsOneWidget);
-    expect(find.text('Finish month'), findsNothing);
+    expect(find.text('Ready to finish'), findsOneWidget);
+    expect(find.byKey(const Key('outdatedPreviewHint')), findsOneWidget);
+    expect(find.text('Review again'), findsOneWidget);
+    expect(
+        tester
+            .widget<FilledButton>(
+                find.widgetWithText(FilledButton, 'Finish month'))
+            .onPressed,
+        isNull);
     expect(tester.takeException(), isNull);
   });
   testWidgets('review and confirmation remain reachable at phone width',
@@ -213,13 +300,9 @@ void main() {
         find.text('Confirm this default allocation'), 150,
         scrollable: find.byType(Scrollable).first);
     await tester.tap(find.text('Confirm this default allocation'));
-    await tester.scrollUntilVisible(find.text('Review month-end'), 150,
-        scrollable: find.byType(Scrollable).first);
     await tester.tap(find.text('Review month-end'));
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(find.text('Finish month'), 150,
-        scrollable: find.byType(Scrollable).first);
-    expect(find.text('Finish month'), findsOneWidget);
+    expect(find.text('Finish month').hitTestable(), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

@@ -1,3 +1,5 @@
+import 'package:budget_buddy/features/identity/providers/device_auth_session.dart';
+import 'support/native_identity_fixture.dart';
 import 'dart:async';
 
 import 'package:budget_buddy/core/models/consent_record.dart';
@@ -61,6 +63,7 @@ void main() {
   Future<ProviderContainer> coldStart(DeviceAuthenticator authenticator) async {
     final container = ProviderContainer(
       overrides: [
+        nativeAccessBindingProvider.overrideWith(nativeFixtureBinding),
         lockSubjectProvider.overrideWithValue(subject),
         lockSettingRepositoryProvider.overrideWithValue(settings),
         secretStoreProvider.overrideWithValue(secrets),

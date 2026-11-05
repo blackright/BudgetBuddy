@@ -112,6 +112,56 @@ final expenseSearchMerchantsProvider =
   if (scope.isShared) ref.watch(activeSpaceMembersProvider);
   return ref.watch(expenseSearchRepositoryProvider).merchants(scope, actor);
 });
+
+/// Saved merchants for the active profile/space, most recently used first.
+///
+/// The merchant row has no "last used" column, so recency is derived from the
+/// expense rows already in the same context. This is read by the merchant
+/// picker only (on demand), so the Add Expense form does not subscribe to the
+/// whole expense stream just to show suggestions.
+final savedMerchantsProvider =
+    Provider.autoDispose<AsyncValue<List<Merchant>>>((ref) {
+  final merchants = ref.watch(expenseSearchMerchantsProvider);
+  final rows = ref.watch(expenseSearchRowsProvider);
+  if (merchants.hasError) {
+    return AsyncValue.error(
+        merchants.error!, merchants.stackTrace ?? StackTrace.current);
+  }
+  if (rows.hasError) {
+    return AsyncValue.error(rows.error!, rows.stackTrace ?? StackTrace.current);
+  }
+  if (merchants.isLoading ||
+      rows.isLoading ||
+      !merchants.hasValue ||
+      !rows.hasValue) {
+    return const AsyncValue.loading();
+  }
+  final lastUsed = <String, DateTime>{};
+  for (final expense in rows.requireValue) {
+    final guid = expense.merchantSyncGuid;
+    if (guid == null) continue;
+    final current = lastUsed[guid];
+    if (current == null || expense.date.isAfter(current)) {
+      lastUsed[guid] = expense.date;
+    }
+  }
+  final sorted = [...merchants.requireValue]..sort((a, b) {
+      final aUsed = lastUsed[a.syncGuid], bUsed = lastUsed[b.syncGuid];
+      if (aUsed != null || bUsed != null) {
+        if (aUsed == null) return 1;
+        if (bUsed == null) return -1;
+        final byUse = bUsed.compareTo(aUsed);
+        if (byUse != 0) return byUse;
+      } else {
+        final byCreated = b.createdAt.compareTo(a.createdAt);
+        if (byCreated != 0) return byCreated;
+      }
+      return a.canonicalName
+          .toLowerCase()
+          .compareTo(b.canonicalName.toLowerCase());
+    });
+  return AsyncValue.data(sorted);
+});
 final expenseSearchResultsProvider = Provider<AsyncValue<List<Expense>>>((ref) {
   final rows = ref.watch(expenseSearchRowsProvider);
   final merchants = ref.watch(expenseSearchMerchantsProvider);

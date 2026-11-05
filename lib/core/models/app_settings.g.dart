@@ -27,13 +27,23 @@ const AppSettingsSchema = CollectionSchema(
       name: r'decimalPreferences',
       type: IsarType.string,
     ),
-    r'transferToggle': PropertySchema(
+    r'onboardingStateJson': PropertySchema(
       id: 2,
+      name: r'onboardingStateJson',
+      type: IsarType.string,
+    ),
+    r'starterCategoryPolicy': PropertySchema(
+      id: 3,
+      name: r'starterCategoryPolicy',
+      type: IsarType.string,
+    ),
+    r'transferToggle': PropertySchema(
+      id: 4,
       name: r'transferToggle',
       type: IsarType.bool,
     ),
     r'updatedAt': PropertySchema(
-      id: 3,
+      id: 5,
       name: r'updatedAt',
       type: IsarType.dateTime,
     )
@@ -64,6 +74,18 @@ int _appSettingsEstimateSize(
       bytesCount += 3 + value.length * 3;
     }
   }
+  {
+    final value = object.onboardingStateJson;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
+  {
+    final value = object.starterCategoryPolicy;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
   return bytesCount;
 }
 
@@ -75,8 +97,10 @@ void _appSettingsSerialize(
 ) {
   writer.writeDateTime(offsets[0], object.createdAt);
   writer.writeString(offsets[1], object.decimalPreferences);
-  writer.writeBool(offsets[2], object.transferToggle);
-  writer.writeDateTime(offsets[3], object.updatedAt);
+  writer.writeString(offsets[2], object.onboardingStateJson);
+  writer.writeString(offsets[3], object.starterCategoryPolicy);
+  writer.writeBool(offsets[4], object.transferToggle);
+  writer.writeDateTime(offsets[5], object.updatedAt);
 }
 
 AppSettings _appSettingsDeserialize(
@@ -89,8 +113,10 @@ AppSettings _appSettingsDeserialize(
   object.createdAt = reader.readDateTime(offsets[0]);
   object.decimalPreferences = reader.readStringOrNull(offsets[1]);
   object.id = id;
-  object.transferToggle = reader.readBool(offsets[2]);
-  object.updatedAt = reader.readDateTime(offsets[3]);
+  object.onboardingStateJson = reader.readStringOrNull(offsets[2]);
+  object.starterCategoryPolicy = reader.readStringOrNull(offsets[3]);
+  object.transferToggle = reader.readBool(offsets[4]);
+  object.updatedAt = reader.readDateTime(offsets[5]);
   return object;
 }
 
@@ -106,8 +132,12 @@ P _appSettingsDeserializeProp<P>(
     case 1:
       return (reader.readStringOrNull(offset)) as P;
     case 2:
-      return (reader.readBool(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 3:
+      return (reader.readStringOrNull(offset)) as P;
+    case 4:
+      return (reader.readBool(offset)) as P;
+    case 5:
       return (reader.readDateTime(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -471,6 +501,315 @@ extension AppSettingsQueryFilter
   }
 
   QueryBuilder<AppSettings, AppSettings, QAfterFilterCondition>
+      onboardingStateJsonIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'onboardingStateJson',
+      ));
+    });
+  }
+
+  QueryBuilder<AppSettings, AppSettings, QAfterFilterCondition>
+      onboardingStateJsonIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'onboardingStateJson',
+      ));
+    });
+  }
+
+  QueryBuilder<AppSettings, AppSettings, QAfterFilterCondition>
+      onboardingStateJsonEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'onboardingStateJson',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<AppSettings, AppSettings, QAfterFilterCondition>
+      onboardingStateJsonGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'onboardingStateJson',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<AppSettings, AppSettings, QAfterFilterCondition>
+      onboardingStateJsonLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'onboardingStateJson',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<AppSettings, AppSettings, QAfterFilterCondition>
+      onboardingStateJsonBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'onboardingStateJson',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<AppSettings, AppSettings, QAfterFilterCondition>
+      onboardingStateJsonStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'onboardingStateJson',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<AppSettings, AppSettings, QAfterFilterCondition>
+      onboardingStateJsonEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'onboardingStateJson',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<AppSettings, AppSettings, QAfterFilterCondition>
+      onboardingStateJsonContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'onboardingStateJson',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<AppSettings, AppSettings, QAfterFilterCondition>
+      onboardingStateJsonMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'onboardingStateJson',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<AppSettings, AppSettings, QAfterFilterCondition>
+      onboardingStateJsonIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'onboardingStateJson',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<AppSettings, AppSettings, QAfterFilterCondition>
+      onboardingStateJsonIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'onboardingStateJson',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<AppSettings, AppSettings, QAfterFilterCondition>
+      starterCategoryPolicyIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'starterCategoryPolicy',
+      ));
+    });
+  }
+
+  QueryBuilder<AppSettings, AppSettings, QAfterFilterCondition>
+      starterCategoryPolicyIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'starterCategoryPolicy',
+      ));
+    });
+  }
+
+  QueryBuilder<AppSettings, AppSettings, QAfterFilterCondition>
+      starterCategoryPolicyEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'starterCategoryPolicy',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<AppSettings, AppSettings, QAfterFilterCondition>
+      starterCategoryPolicyGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'starterCategoryPolicy',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<AppSettings, AppSettings, QAfterFilterCondition>
+      starterCategoryPolicyLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'starterCategoryPolicy',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<AppSettings, AppSettings, QAfterFilterCondition>
+      starterCategoryPolicyBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'starterCategoryPolicy',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<AppSettings, AppSettings, QAfterFilterCondition>
+      starterCategoryPolicyStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'starterCategoryPolicy',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<AppSettings, AppSettings, QAfterFilterCondition>
+      starterCategoryPolicyEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'starterCategoryPolicy',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<AppSettings, AppSettings, QAfterFilterCondition>
+      starterCategoryPolicyContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'starterCategoryPolicy',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<AppSettings, AppSettings, QAfterFilterCondition>
+      starterCategoryPolicyMatches(String pattern,
+          {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'starterCategoryPolicy',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<AppSettings, AppSettings, QAfterFilterCondition>
+      starterCategoryPolicyIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'starterCategoryPolicy',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<AppSettings, AppSettings, QAfterFilterCondition>
+      starterCategoryPolicyIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'starterCategoryPolicy',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<AppSettings, AppSettings, QAfterFilterCondition>
       transferToggleEqualTo(bool value) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
@@ -571,6 +910,34 @@ extension AppSettingsQuerySortBy
     });
   }
 
+  QueryBuilder<AppSettings, AppSettings, QAfterSortBy>
+      sortByOnboardingStateJson() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'onboardingStateJson', Sort.asc);
+    });
+  }
+
+  QueryBuilder<AppSettings, AppSettings, QAfterSortBy>
+      sortByOnboardingStateJsonDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'onboardingStateJson', Sort.desc);
+    });
+  }
+
+  QueryBuilder<AppSettings, AppSettings, QAfterSortBy>
+      sortByStarterCategoryPolicy() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'starterCategoryPolicy', Sort.asc);
+    });
+  }
+
+  QueryBuilder<AppSettings, AppSettings, QAfterSortBy>
+      sortByStarterCategoryPolicyDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'starterCategoryPolicy', Sort.desc);
+    });
+  }
+
   QueryBuilder<AppSettings, AppSettings, QAfterSortBy> sortByTransferToggle() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'transferToggle', Sort.asc);
@@ -637,6 +1004,34 @@ extension AppSettingsQuerySortThenBy
     });
   }
 
+  QueryBuilder<AppSettings, AppSettings, QAfterSortBy>
+      thenByOnboardingStateJson() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'onboardingStateJson', Sort.asc);
+    });
+  }
+
+  QueryBuilder<AppSettings, AppSettings, QAfterSortBy>
+      thenByOnboardingStateJsonDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'onboardingStateJson', Sort.desc);
+    });
+  }
+
+  QueryBuilder<AppSettings, AppSettings, QAfterSortBy>
+      thenByStarterCategoryPolicy() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'starterCategoryPolicy', Sort.asc);
+    });
+  }
+
+  QueryBuilder<AppSettings, AppSettings, QAfterSortBy>
+      thenByStarterCategoryPolicyDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'starterCategoryPolicy', Sort.desc);
+    });
+  }
+
   QueryBuilder<AppSettings, AppSettings, QAfterSortBy> thenByTransferToggle() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'transferToggle', Sort.asc);
@@ -679,6 +1074,22 @@ extension AppSettingsQueryWhereDistinct
     });
   }
 
+  QueryBuilder<AppSettings, AppSettings, QDistinct>
+      distinctByOnboardingStateJson({bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'onboardingStateJson',
+          caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<AppSettings, AppSettings, QDistinct>
+      distinctByStarterCategoryPolicy({bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'starterCategoryPolicy',
+          caseSensitive: caseSensitive);
+    });
+  }
+
   QueryBuilder<AppSettings, AppSettings, QDistinct> distinctByTransferToggle() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'transferToggle');
@@ -710,6 +1121,20 @@ extension AppSettingsQueryProperty
       decimalPreferencesProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'decimalPreferences');
+    });
+  }
+
+  QueryBuilder<AppSettings, String?, QQueryOperations>
+      onboardingStateJsonProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'onboardingStateJson');
+    });
+  }
+
+  QueryBuilder<AppSettings, String?, QQueryOperations>
+      starterCategoryPolicyProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'starterCategoryPolicy');
     });
   }
 

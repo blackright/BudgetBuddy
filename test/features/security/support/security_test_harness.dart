@@ -1,44 +1,17 @@
-import 'package:budget_buddy/features/vault/models/vault_entry.dart';
-import 'package:budget_buddy/core/models/expense_evidence_chunk.dart';
-import 'package:budget_buddy/core/models/expense_purchase.dart';
 import 'dart:io';
-import 'package:budget_buddy/core/models/allocation.dart';
-import 'package:budget_buddy/core/models/audit_event.dart';
-import 'package:budget_buddy/core/models/budget_profile.dart';
-import 'package:budget_buddy/core/models/direct_expense_profile.dart';
-import 'package:budget_buddy/core/models/income_source.dart';
-import 'package:budget_buddy/core/models/merchant.dart';
-import 'package:budget_buddy/core/models/month_end_run.dart';
-import 'package:budget_buddy/core/models/transfer.dart';
 
+import 'package:budget_buddy/core/database/isar_helper.dart';
 import 'package:budget_buddy/core/database/schema_migrations.dart';
-import 'package:budget_buddy/core/models/category.dart';
-import 'package:budget_buddy/core/models/change_record.dart';
-import 'package:budget_buddy/core/models/consent_record.dart';
-import 'package:budget_buddy/core/models/expense.dart';
-import 'package:budget_buddy/core/models/expense_template.dart';
-import 'package:budget_buddy/core/models/identity.dart';
-import 'package:budget_buddy/core/models/insurance_profile.dart';
-import 'package:budget_buddy/core/models/live_rate_set.dart';
 import 'package:budget_buddy/core/models/lock_setting.dart';
-import 'package:budget_buddy/core/models/medical_bill.dart';
-import 'package:budget_buddy/core/models/medical_service_type.dart';
-import 'package:budget_buddy/core/models/month_rate_seal.dart';
 import 'package:budget_buddy/core/models/monthly_budget.dart';
-import 'package:budget_buddy/core/models/paired_context.dart';
-import 'package:budget_buddy/core/models/paired_peer.dart';
-import 'package:budget_buddy/core/models/pairing_token.dart';
 import 'package:budget_buddy/core/models/shared_member.dart';
 import 'package:budget_buddy/core/models/shared_space.dart';
-import 'package:budget_buddy/core/models/sync_cursor.dart';
 import 'package:budget_buddy/core/models/user_profile.dart';
-import 'package:budget_buddy/features/expenses/models/reimbursement.dart';
 import 'package:budget_buddy/features/identity/repositories/secret_store.dart';
 import 'package:budget_buddy/features/security/domain/away_time.dart';
 import 'package:budget_buddy/features/security/domain/lock_subject.dart';
 import 'package:budget_buddy/features/security/repositories/lock_setting_janitor.dart';
 import 'package:budget_buddy/features/security/repositories/lock_setting_repository.dart';
-import 'package:budget_buddy/features/vault/models/savings_vault.dart';
 import 'package:isar/isar.dart';
 
 /// Shared Isar harness for the security tests (016).
@@ -84,44 +57,7 @@ class SecurityTestHarness {
     }
     final directory = Directory.systemTemp.createTempSync('budget_buddy_sec_');
     final isar = await Isar.open(
-      [
-        UserProfileSchema,
-        AllocationSchema,
-        AuditEventSchema,
-        BudgetProfileSchema,
-        DirectExpenseProfileSchema,
-        IncomeSourceSchema,
-        MerchantSchema,
-        MonthEndRunSchema,
-        TransferSchema,
-        MonthlyBudgetSchema,
-        ExpenseSchema,
-        ExpenseEvidenceChunkSchema,
-        ExpensePurchaseSchema,
-        ExpenseTemplateSchema,
-        ReimbursementSchema,
-        SavingsVaultSchema,
-        VaultEntrySchema,
-        CategorySchema,
-        MedicalBillSchema,
-        InsuranceProfileSchema,
-        FamilyMemberSchema,
-        MedicalProviderSchema,
-        MedicalServiceTypeSchema,
-        SchemaMigrationStampSchema,
-        MonthRateSealSchema,
-        LiveRateSetSchema,
-        SharedSpaceSchema,
-        SharedMemberSchema,
-        IdentitySchema,
-        ConsentRecordSchema,
-        PairedPeerSchema,
-        PairedContextSchema,
-        PairingTokenSchema,
-        ChangeRecordSchema,
-        SyncCursorSchema,
-        LockSettingSchema,
-      ],
+      IsarHelper.schemas,
       directory: directory.path,
       name: 'security_${_nextInstance++}',
     );

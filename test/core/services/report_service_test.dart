@@ -9,7 +9,6 @@ import 'package:budget_buddy/core/models/currency_code.dart';
 import 'package:budget_buddy/core/models/user_profile.dart';
 import 'package:budget_buddy/core/models/monthly_budget.dart';
 import 'package:budget_buddy/core/models/expense.dart';
-import 'package:budget_buddy/core/models/lock_setting.dart';
 import 'package:budget_buddy/core/models/shared_space.dart';
 import 'package:budget_buddy/core/models/shared_member.dart';
 import 'package:budget_buddy/core/services/report_access.dart';
@@ -47,7 +46,7 @@ void main() {
   setUp(() async {
     await Isar.initializeIsarCore(download: false);
     dir = await Directory.systemTemp.createTemp('report_test_');
-    db = await Isar.open([...MedicalTestHarness.schemas, LockSettingSchema],
+    db = await Isar.open(MedicalTestHarness.schemas,
         directory: dir.path, name: 'reports_${serial++}');
     await db.writeTxn(() async {
       await db.userProfiles.put(UserProfile()

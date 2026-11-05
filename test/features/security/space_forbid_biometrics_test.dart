@@ -1,3 +1,5 @@
+import 'package:budget_buddy/features/identity/providers/device_auth_session.dart';
+import 'support/native_identity_fixture.dart';
 import 'package:budget_buddy/core/models/lock_setting.dart';
 import 'package:budget_buddy/core/models/shared_space.dart';
 import 'package:budget_buddy/core/models/user_profile.dart';
@@ -110,6 +112,7 @@ void main() {
 
   Future<ProviderContainer> start(SharedSpace space) async {
     final container = ProviderContainer(overrides: [
+      nativeAccessBindingProvider.overrideWith(nativeFixtureBinding),
       lockSubjectProvider.overrideWithValue(subject),
       lockSettingRepositoryProvider.overrideWithValue(settings),
       secretStoreProvider.overrideWithValue(secrets),

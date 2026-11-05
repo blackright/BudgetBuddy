@@ -27,11 +27,43 @@ migrate_working_dir/
 # Spec-Kit & Agent Infrastructure
 .agents/
 .specify/
+.kilo/
+.opencode/
 specs/
 Phase-Builder-Agent.md
 Specs-Dafting.md
 Troubleshoot.md
 Troubleshoot-app.md
+/Phase_Troubleshoot.md
+/Feature Architect & Spec Generation.md
+
+# Local build, analysis and one-off tooling artifacts
+/artifacts/
+/tmp/
+/.tmp_db/
+/analyze*.txt
+/format.txt
+/out.txt
+/read_out.txt
+/app_build.txt
+/setup_plan_out.json
+/read.ps1
+/read_contract.py
+/fix_*.py
+/image.png
+*.apk
+*.aab
+*.ipa
+*.symbols
+*.map.json
+*.bak
+*.orig
+*.rej
+*.pid
+
+# Internal branding review artefacts (production assets stay tracked)
+/assets/branding/review-v1/
+/assets/branding/review-v2/
 
 # Visual Studio Code related
 .vscode/
@@ -47,11 +79,16 @@ Troubleshoot-app.md
 .pub/
 /build/
 build/
+**/build/
 /coverage/
 coverage/
+lcov.info
 .packages.generated
 .pub-preload-cache/
 pubspec_overrides.yaml
+.fvm/
+.fvmrc
+node_modules/
 
 # Generated code that must stay tracked (Isar schemas are committed):
 #   lib/**/*.g.dart  -> intentionally NOT ignored
@@ -77,6 +114,23 @@ app.*.map.json
 **/android/**/GeneratedPluginRegistrant.java
 **/android/key.properties
 *.jks
+*.keystore
+**/android/app/*.keystore
+**/android/*.keystore
+release*.keystore
+
+# Secrets and local environment
+.env
+.env.*
+*.pem
+*.p12
+*.pfx
+google-services.json
+GoogleService-Info.plist
+*.isar
+*.db
+*.sqlite
+*.sqlite3
 
 # iOS/XCode related
 **/ios/**/*.mode1v3
@@ -134,3 +188,6 @@ isar.dll
 !**/ios/**/default.mode2v3
 !**/ios/**/default.pbxuser
 !**/ios/**/default.perspectivev3
+
+# Local audit reports (generated, not application source)
+/audit-reports/

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:isar/isar.dart';
 
 import '../../../core/database/isar_helper.dart';
+import '../../../core/logging/app_logger.dart';
 import '../../../core/models/expense.dart';
 import '../../../core/providers/active_profile_provider.dart';
 import '../../../core/providers/budget_context_provider.dart';
@@ -51,6 +52,8 @@ class ExpenseRepository {
   }
 
   Future<void> addExpense(Expense expense) async {
+    AppLogger.expenseRepo(
+        'ADD_EXPENSE_START id=${expense.id} profileId=${expense.profileId} sharedSpaceId=${expense.sharedSpaceId} yearMonth=${expense.yearMonth} amount=${expense.amount} currency=${expense.currency} status=${expense.status} categoryId=${expense.categoryId} type=${expense.type} title=${expense.title}');
     await _guardWrite(expense.sharedSpaceId, expense.yearMonth);
     await _isar.writeTxn(() async {
       await MerchantRepository(_isar,
@@ -64,13 +67,19 @@ class ExpenseRepository {
           .put(_isar.expenses, expense, id: expense.id, type: 'Expense');
       await _syncRecorder?.recordExpense(expense);
     });
+    AppLogger.expenseRepo(
+        'ADD_EXPENSE_DONE id=${expense.id} profileId=${expense.profileId} sharedSpaceId=${expense.sharedSpaceId} yearMonth=${expense.yearMonth} amount=${expense.amount} currency=${expense.currency} status=${expense.status}');
   }
 
   Future<void> updateExpense(Expense expense) async {
+    AppLogger.expenseRepo(
+        'UPDATE_EXPENSE_START id=${expense.id} profileId=${expense.profileId} sharedSpaceId=${expense.sharedSpaceId} yearMonth=${expense.yearMonth} amount=${expense.amount} currency=${expense.currency} status=${expense.status}');
     await _guardWrite(expense.sharedSpaceId, expense.yearMonth);
     await _isar.writeTxn(() async {
       final previous = await _isar.expenses.get(expense.id);
       if (previous == null) throw StateError('Expense no longer exists.');
+      AppLogger.expenseRepo(
+          'UPDATE_EXPENSE_PREV id=${previous.id} amount=${previous.amount} status=${previous.status} yearMonth=${previous.yearMonth}');
       if (expense.merchantName != previous.merchantName ||
           expense.merchantSyncGuid != previous.merchantSyncGuid) {
         await MerchantRepository(_isar,
@@ -85,6 +94,8 @@ class ExpenseRepository {
           .put(_isar.expenses, expense, id: expense.id, type: 'Expense');
       await _syncRecorder?.recordExpense(expense);
     });
+    AppLogger.expenseRepo(
+        'UPDATE_EXPENSE_DONE id=${expense.id} amount=${expense.amount} status=${expense.status}');
   }
 
   /// Deletes an expense, flagging any reimbursement that pointed at it.
@@ -93,8 +104,11 @@ class ExpenseRepository {
   /// removing them silently would erase a return from a month that is already
   /// closed. Flagging hands the decision to the user.
   Future<void> deleteExpense(int id) async {
+    AppLogger.expenseRepo('DELETE_EXPENSE_START id=$id');
     final existing = await _isar.expenses.get(id);
     if (existing != null) {
+      AppLogger.expenseRepo(
+          'DELETE_EXPENSE_EXISTING id=${existing.id} amount=${existing.amount} status=${existing.status} yearMonth=${existing.yearMonth} profileId=${existing.profileId} sharedSpaceId=${existing.sharedSpaceId}');
       await _guardWrite(existing.sharedSpaceId, existing.yearMonth);
     }
     await _isar.writeTxn(() async {
@@ -111,6 +125,8 @@ class ExpenseRepository {
 
       final linked =
           await _isar.reimbursements.filter().expenseIdEqualTo(id).findAll();
+      AppLogger.expenseRepo(
+          'DELETE_EXPENSE_ORPHAN_CHECK id=$id linkedReimbursements=${linked.length}');
       if (linked.isEmpty) return;
       for (final reimbursement in linked) {
         reimbursement.orphaned = true;
@@ -120,6 +136,7 @@ class ExpenseRepository {
         await _syncRecorder?.recordReimbursement(reimbursement);
       }
     });
+    AppLogger.expenseRepo('DELETE_EXPENSE_DONE id=$id');
   }
 
   Stream<List<Expense>> watchExpenses(int profileId, String yearMonth) {
@@ -143,6 +160,23 @@ class ExpenseRepository {
         )
         .and()
         .yearMonthEqualTo(context.yearMonth)
+        .watch(fireImmediately: true);
+  }
+
+  /// Expenses whose actual cash month is [context]'s month.
+  ///
+  /// Only rows with an explicit override appear here; a null override keeps the
+  /// legacy service-month behavior in [watchExpensesForContext].
+  Stream<List<Expense>> watchExpensesByCashMonth(ContextRef context) {
+    return _isar.expenses
+        .filter()
+        .group(
+          (q) => context.isShared
+              ? q.sharedSpaceIdEqualTo(context.spaceId)
+              : q.profileIdEqualTo(context.profileKey),
+        )
+        .and()
+        .cashYearMonthEqualTo(context.yearMonth)
         .watch(fireImmediately: true);
   }
 
@@ -198,6 +232,8 @@ class ExpenseRepository {
   /// A `null` [Reimbursement.expenseId] is preserved as-is: that is an orphan the
   /// user has to resolve, and quietly dropping it would lose money (FR-035).
   Future<void> addReimbursement(Reimbursement reimbursement) async {
+    AppLogger.expenseRepo(
+        'ADD_REIMBURSEMENT_START expenseId=${reimbursement.expenseId} amount=${reimbursement.amount} currency=${reimbursement.currency} originYearMonth=${reimbursement.originYearMonth} date=${reimbursement.date}');
     var yearMonth = reimbursement.originYearMonth;
     final preExpenseId = reimbursement.expenseId;
     if (yearMonth.isEmpty && preExpenseId != null) {
@@ -217,6 +253,8 @@ class ExpenseRepository {
             .filter()
             .expenseIdEqualTo(expenseId)
             .findAll();
+        AppLogger.expenseRepo(
+            'ADD_REIMBURSEMENT_EXISTING_FOR_EXPENSE expenseId=$expenseId count=${existing.length}');
         if (existing.isNotEmpty) {
           existing.sort((a, b) => a.id.compareTo(b.id));
           // Keep the earliest row's identity and date so the row stays stable
@@ -231,6 +269,8 @@ class ExpenseRepository {
 
           final extras = existing.skip(1).map((r) => r.id).toList();
           if (extras.isNotEmpty) {
+            AppLogger.expenseRepo(
+                'ADD_REIMBURSEMENT_COLLAPSE expenseId=$expenseId droppingExtras=${extras.length}');
             await _isar.reimbursements.deleteAll(extras);
           }
         }
@@ -241,6 +281,8 @@ class ExpenseRepository {
               id: reimbursement.id, type: 'Reimbursement');
       await _syncRecorder?.recordReimbursement(reimbursement);
     });
+    AppLogger.expenseRepo(
+        'ADD_REIMBURSEMENT_DONE expenseId=${reimbursement.expenseId} amount=${reimbursement.amount} originYearMonth=${reimbursement.originYearMonth}');
   }
 
   /// Reimbursements whose target expense has been deleted (FR-035).
@@ -262,8 +304,11 @@ class ExpenseRepository {
 
   /// Discards an orphan the user chose to remove (FR-035).
   Future<void> discardOrphanReimbursement(int id) async {
+    AppLogger.expenseRepo('DISCARD_ORPHAN_REIMBURSEMENT_START id=$id');
     final existing = await _isar.reimbursements.get(id);
     if (existing != null) {
+      AppLogger.expenseRepo(
+          'DISCARD_ORPHAN_REIMBURSEMENT_EXISTING id=${existing.id} amount=${existing.amount} expenseId=${existing.expenseId} orphaned=${existing.orphaned}');
       await _guardWrite(existing.sharedSpaceId, existing.originYearMonth);
     }
     await _isar.writeTxn(() async {
@@ -272,6 +317,7 @@ class ExpenseRepository {
         await _syncRecorder?.recordReimbursementRemoved(existing);
       }
     });
+    AppLogger.expenseRepo('DISCARD_ORPHAN_REIMBURSEMENT_DONE id=$id');
   }
 
   /// Re-attaches an orphan to [expenseId] the user restored (FR-035).
@@ -279,6 +325,8 @@ class ExpenseRepository {
     int reimbursementId,
     int expenseId,
   ) async {
+    AppLogger.expenseRepo(
+        'RESTORE_ORPHAN_REIMBURSEMENT_START reimbursementId=$reimbursementId expenseId=$expenseId');
     final expense = await _isar.expenses.get(expenseId);
     final existing = await _isar.reimbursements.get(reimbursementId);
     if (existing != null) {
@@ -289,7 +337,13 @@ class ExpenseRepository {
     }
     await _isar.writeTxn(() async {
       final reimbursement = await _isar.reimbursements.get(reimbursementId);
-      if (reimbursement == null) return;
+      if (reimbursement == null) {
+        AppLogger.expenseRepo(
+            'RESTORE_ORPHAN_REIMBURSEMENT_MISSING reimbursementId=$reimbursementId');
+        return;
+      }
+      AppLogger.expenseRepo(
+          'RESTORE_ORPHAN_REIMBURSEMENT_BEFORE reimbursementId=${reimbursement.id} amount=${reimbursement.amount} expenseId=${reimbursement.expenseId} orphaned=${reimbursement.orphaned}');
       reimbursement
         ..expenseId = expenseId
         ..orphaned = false
@@ -300,6 +354,8 @@ class ExpenseRepository {
               id: reimbursement.id, type: 'Reimbursement');
       await _syncRecorder?.recordReimbursement(reimbursement);
     });
+    AppLogger.expenseRepo(
+        'RESTORE_ORPHAN_REIMBURSEMENT_DONE reimbursementId=$reimbursementId expenseId=$expenseId');
   }
 
   Stream<List<Reimbursement>> watchReimbursementsForOwner(ContextRef context) =>

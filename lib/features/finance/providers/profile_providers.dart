@@ -5,10 +5,12 @@ import '../../../core/models/budget_profile.dart';
 import '../../../core/models/currency_code.dart';
 import '../../../core/models/direct_expense_profile.dart';
 import '../../../core/models/expense.dart';
+import '../../../core/database/isar_helper.dart';
 import '../../../core/providers/active_profile_provider.dart';
 import '../../../core/providers/active_space_provider.dart';
 import '../../../core/providers/budget_context_provider.dart';
 import '../../../core/services/profile_spending_service.dart';
+import '../../../core/services/allocation_operations_service.dart';
 import '../../../core/services/expense_profile_identity.dart';
 import '../../engine/currency_resolution.dart';
 import '../../engine/providers/rate_registry_provider.dart';
@@ -17,6 +19,30 @@ import '../repositories/allocation_repository.dart';
 import '../repositories/budget_profile_repository.dart';
 import '../repositories/direct_expense_profile_repository.dart';
 import '../../engine/providers/true_available_provider.dart';
+import '../../vault/allocation_transfer_service.dart';
+
+final allocationServiceProvider = Provider<AllocationOperationsService>((ref) {
+  return AllocationOperationsService(IsarHelper.instance,
+      actorId: ref.watch(actingProfileIdProvider));
+});
+
+final allocationTransferServiceProvider =
+    Provider<AllocationTransferService>((ref) {
+  return AllocationTransferService(IsarHelper.instance,
+      actorId: ref.watch(actingProfileIdProvider));
+});
+
+final allocationHistoryProvider = StreamProvider<List<Allocation>>((ref) {
+  if (IsarHelper.maybeInstance == null) {
+    return Stream.value(const <Allocation>[]);
+  }
+  final context = ref.watch(budgetContextProvider);
+  return ref.watch(allocationRepositoryProvider).watchAll(
+        profileId: context.isShared ? null : context.profileId,
+        sharedSpaceId: context.isShared ? context.spaceId : null,
+        yearMonth: context.yearMonth,
+      );
+});
 
 final budgetProfilesProvider = StreamProvider<List<BudgetProfile>>((ref) {
   final context = ref.watch(budgetContextProvider);
@@ -185,6 +211,56 @@ class ProfileActions {
     final profile = _ref.read(activeProfileProvider).value;
     return (profile?.primaryCurrency.code ?? CurrencyCode.huf).code;
   }
+
+  Future<void> reserve({
+    required BudgetProfile profile,
+    required int amount,
+    String? operationKey,
+  }) =>
+      _ref.read(allocationServiceProvider).reserve(
+          profileId: profile.id,
+          yearMonth: profile.yearMonth,
+          amount: amount,
+          operationKey: operationKey);
+
+  Future<void> release({
+    required BudgetProfile profile,
+    required int amount,
+    String? reason,
+    String? operationKey,
+  }) =>
+      _ref.read(allocationServiceProvider).release(
+          profileId: profile.id,
+          yearMonth: profile.yearMonth,
+          amount: amount,
+          reason: reason,
+          operationKey: operationKey);
+
+  Future<void> correctAllocation({
+    required BudgetProfile profile,
+    required int amount,
+    required String reason,
+    String? operationKey,
+  }) =>
+      _ref.read(allocationServiceProvider).correct(
+          profileId: profile.id,
+          yearMonth: profile.yearMonth,
+          amount: amount,
+          reason: reason,
+          operationKey: operationKey);
+
+  Future<void> moveToVault({
+    required BudgetProfile profile,
+    required int amount,
+    required String operationKey,
+    String note = '',
+  }) =>
+      _ref.read(allocationTransferServiceProvider).moveToVault(
+          profileId: profile.id,
+          yearMonth: profile.yearMonth,
+          amount: amount,
+          operationKey: operationKey,
+          note: note);
 
   Future<void> saveDirect(DirectExpenseProfile profile) async {
     final context = _ref.read(budgetContextProvider);

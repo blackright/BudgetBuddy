@@ -1,5 +1,13 @@
+import '../../../core/services/income_receipt_ledger.dart';
+import '../../../core/services/continuous_balance_service.dart';
+import '../../../core/services/month_carry_service.dart';
+import '../../../core/services/fx_booking_service.dart';
+import '../../../core/models/income_source.dart';
 import '../../../core/services/audit_financial_state.dart';
 import '../../../core/models/money.dart';
+import '../../../core/models/balance_checkpoint.dart';
+import '../../../core/services/balance_checkpoint_service.dart';
+import '../../../core/services/receipt_snapshot_repository.dart';
 import 'audit_repository.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:isar/isar.dart';
@@ -89,6 +97,38 @@ class MonthFinanceRepository {
   /// no-ops for it.
   final SyncRecorder? _syncRecorder;
 
+  int get _checkpointActor =>
+      _actingProfileId ?? (throw const ReceiptGuardException('missingActor'));
+
+  Future<CheckpointSources> loadBalanceCheckpointReview(ContextRef context,
+          {required bool Function() isAccessCurrent}) =>
+      BalanceCheckpointService(_isar).load(
+          context: context,
+          actorId: _checkpointActor,
+          isAccessCurrent: isAccessCurrent);
+
+  Future<CheckpointPreview> previewBalanceCheckpoint(
+      CheckpointSources sources, CheckpointDraft draft,
+      {required bool Function() isAccessCurrent}) {
+    if (sources.source.actorId != _checkpointActor) {
+      throw const ReceiptGuardException('wrongOwner');
+    }
+    return BalanceCheckpointService(_isar).preview(
+        sources: sources, draft: draft, isAccessCurrent: isAccessCurrent);
+  }
+
+  Future<BalanceCheckpoint> confirmBalanceCheckpoint(
+      CheckpointPreview preview, String operationKey,
+      {required bool Function() isAccessCurrent}) {
+    if (preview.sources.source.actorId != _checkpointActor) {
+      throw const ReceiptGuardException('wrongOwner');
+    }
+    return BalanceCheckpointService(_isar).confirm(
+        preview: preview,
+        operationKey: operationKey,
+        isAccessCurrent: isAccessCurrent);
+  }
+
   Future<void> _guardWrite(ContextRef context) async {
     await _writeGuard?.assertSharedMoneyWrite(
       sharedSpaceId: context.spaceId,
@@ -166,10 +206,38 @@ class MonthFinanceRepository {
     }
 
     final now = DateTime.now();
+    // A personal month starts from the previous month's derived closing when
+    // that chain is provable. Shared spaces keep their zero/unconfirmed start.
+    var opening = 0.0;
+    var openingConfirmed = false;
+    ContinuousBalance? previousBalance;
+    if (!context.isShared && context.profileId != null) {
+      final previousMonth = _previousMonth(context.yearMonth);
+      final currentMonth =
+          '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}';
+      if (previousMonth.compareTo(currentMonth) < 0) {
+        try {
+          final balance = await ContinuousBalanceService(
+            _isar,
+            rates: await readFxRates(_isar),
+            clock: () => now,
+          ).balance(profileId: context.profileKey, yearMonth: previousMonth);
+          if (balance.status == BalanceChainStatus.intact) {
+            final profile = await _isar.userProfiles.get(context.profileKey);
+            final currency = profile?.primaryCurrency.code ?? CurrencyCode.huf;
+            opening = balance.closingMinor / currency.minorUnitsPerMajor;
+            openingConfirmed = true;
+            previousBalance = balance;
+          }
+        } catch (_) {
+          // Keep zero/unconfirmed; the opening sheet will ask for review.
+        }
+      }
+    }
     final budget = MonthlyBudget()
       ..yearMonth = context.yearMonth
-      ..baseAvailableAmount = 0.0
-      ..openingBalanceConfirmed = false
+      ..baseAvailableAmount = opening
+      ..openingBalanceConfirmed = openingConfirmed
       ..createdAt = now
       ..updatedAt = now;
     if (context.isShared) {
@@ -177,12 +245,43 @@ class MonthFinanceRepository {
     } else {
       budget.profileId = context.profileKey;
     }
-    budget.id = await AuditRepository(_isar,
-            recorder: _syncRecorder, actorId: _actingProfileId)
-        .put(_isar.monthlyBudgets, budget,
-            id: budget.id, type: 'MonthlyBudget');
+    final audit = AuditRepository(_isar,
+        recorder: _syncRecorder, actorId: _actingProfileId);
+    budget.id = await audit.put(_isar.monthlyBudgets, budget,
+        id: budget.id, type: 'MonthlyBudget');
+    final carried = previousBalance;
+    if (carried != null && !context.isShared) {
+      await audit.append(
+          profileId: context.profileKey,
+          action: 'balance.opening.autoCarry',
+          objectType: 'MonthlyBudget',
+          objectGuid: 'personal:${context.profileKey}:${context.yearMonth}',
+          after: {
+            'previousMonth': carried.yearMonth,
+            'closingMinor': carried.closingMinor,
+            'chainFingerprint': _chainFingerprint(carried),
+          });
+    }
+    if (!context.isShared) {
+      await MonthCarryService(_isar,
+              recorder: _syncRecorder, actorId: _actingProfileId)
+          .ensureCarryInTxn(
+              profileId: context.profileKey, yearMonth: context.yearMonth);
+    }
     await _recordBudget(budget);
     return budget;
+  }
+
+  String _chainFingerprint(ContinuousBalance balance) =>
+      '${balance.yearMonth}:${balance.openingMinor}:'
+      '${balance.cashInMinor}:${balance.cashOutMinor}:'
+      '${balance.allocatedMinor}:${balance.closingMinor}';
+
+  String _previousMonth(String month) {
+    final parts = month.split('-');
+    final date = DateTime(int.parse(parts[0]), int.parse(parts[1]) - 1);
+    return '${date.year.toString().padLeft(4, '0')}-'
+        '${date.month.toString().padLeft(2, '0')}';
   }
 
   /// The pre-011 row for [yearMonth]: a budget with no context columns at all.
@@ -321,6 +420,26 @@ class MonthFinanceRepository {
           (space?.currency.code.minorUnitsPerMajor ??
               CurrencyCode.huf.minorUnitsPerMajor);
       return ResolvedIncome(amount: major, usesOverride: override != null);
+    }
+    final profile = await _isar.userProfiles.get(context.profileId!);
+    if (profile != null) {
+      final actual =
+          await IncomeReceiptLedger.forOwner(_isar, context.profileId!);
+      final corrections =
+          await SalaryCorrection.forOwner(_isar, context.profileId!);
+      final sources = await _isar.incomeSources
+          .filter()
+          .profileIdEqualTo(context.profileId!)
+          .sharedSpaceIdIsNull()
+          .findAll();
+      final confirmed = IncomeReceiptLedger.incomeForMonth(
+          actual, sources, context.yearMonth, profile.primaryCurrency.code,
+          corrections: corrections);
+      if (confirmed != null) {
+        return ResolvedIncome(
+            amount: confirmed / profile.primaryCurrency.code.minorUnitsPerMajor,
+            usesOverride: false);
+      }
     }
     return ResolvedIncome.resolve(
       override: month?.netSalaryOverride,

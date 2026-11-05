@@ -199,4 +199,27 @@ void main() {
         contains('paid'));
     expect(formatAuditValues('Old salary'), 'Old salary');
   });
+  test(
+      'D1 bank-credit audit classifies exact money without exposing component identities',
+      () {
+    final text = formatAuditValues(
+        jsonEncode({
+          'currency': 'usd',
+          'totalMinor': 506000,
+          'salaryMinor': 500000,
+          'medicalMinor': 6000,
+          'componentReceiptGuids': ['PRIVATE-COMPONENT'],
+          'componentRevisionRefs': ['PRIVATE-REVISION'],
+          'fingerprint': 'PRIVATE-HASH'
+        }),
+        objectType: 'IncomeReceiptGroup');
+    expect(text, contains('Total received'));
+    expect(text, contains('5,060'));
+    expect(text, contains('Salary received'));
+    expect(text, contains('Insurance refunds received'));
+    expect(text, contains('60.00'));
+    expect(text, isNot(contains('PRIVATE-')));
+    expect(
+        auditActionLabel('incomereceiptgroup.create'), 'Bank credit confirmed');
+  });
 }

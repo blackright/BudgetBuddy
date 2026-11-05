@@ -14,6 +14,7 @@ String? monthKeyOf(String entityType, String payload) {
     'ExpensePurchase' ||
     'ExpenseEvidenceChunk' ||
     'MedicalBill' ||
+    'MedicalApproval' ||
     'BudgetProfile' =>
       'yearMonth',
     'Reimbursement' => 'originYearMonth',

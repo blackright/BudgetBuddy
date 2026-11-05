@@ -22,8 +22,7 @@ import '../../settings/providers/settings_provider.dart';
 import '../../spaces/providers/spaces_providers.dart';
 import '../providers/category_provider.dart';
 import '../providers/expenses_provider.dart';
-import 'widgets/reimbursement_entry_sheet.dart' as entry;
-import 'widgets/reimbursement_history_list.dart' as history;
+import 'widgets/medical_expense_link.dart';
 import 'widgets/refund_summary_card.dart';
 import 'refund_dialog.dart';
 import 'profile_picker_sheet.dart';
@@ -46,10 +45,11 @@ class ExpenseDetailScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Expense Details'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.edit),
-            onPressed: () => context.push('/edit_expense', extra: expense),
-          ),
+          if (expense.type != ExpenseType.medical)
+            IconButton(
+              icon: const Icon(Icons.edit),
+              onPressed: () => context.push('/edit_expense', extra: expense),
+            ),
         ],
       ),
       body: SingleChildScrollView(
@@ -129,12 +129,11 @@ class ExpenseDetailScreen extends ConsumerWidget {
             const SizedBox(height: 24),
             _VisualTimeline(expense: expense),
             const SizedBox(height: 24),
-            if (expense.status == ExpenseStatus.reimbursed ||
-                expense.status == ExpenseStatus.partiallyReimbursed ||
-                expense.status == ExpenseStatus.paid)
-              expense.type == ExpenseType.standard
-                  ? RefundSummaryCard(expense: expense)
-                  : history.ReimbursementHistoryList(expenseId: expense.id),
+            if (expense.type != ExpenseType.medical &&
+                (expense.status == ExpenseStatus.reimbursed ||
+                    expense.status == ExpenseStatus.partiallyReimbursed ||
+                    expense.status == ExpenseStatus.paid))
+              RefundSummaryCard(expense: expense),
             const SizedBox(height: 32),
             _ActionBar(expense: expense),
           ],
@@ -148,23 +147,11 @@ class _ActionBar extends ConsumerWidget {
   final Expense expense;
   const _ActionBar({required this.expense});
 
-  void _showReimbursementSheet(BuildContext context) {
-    if (expense.type == ExpenseType.standard) {
-      showDialog<bool>(
-          context: context,
-          barrierDismissible: false,
-          builder: (_) => RefundDialog(expenseId: expense.id));
-      return;
-    }
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (ctx) => entry.ReimbursementEntrySheet(expense: expense),
-    );
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (expense.type == ExpenseType.medical) {
+      return MedicalExpenseLink(expenseId: expense.id);
+    }
     final isPaid = expense.status == ExpenseStatus.paid ||
         expense.status == ExpenseStatus.partiallyReimbursed ||
         expense.status == ExpenseStatus.reimbursed;
@@ -183,20 +170,6 @@ class _ActionBar extends ConsumerWidget {
                   builder: (_) => RefundDialog(expenseId: expense.id)),
               icon: const Icon(Icons.undo),
               label: const Text('Record refund')),
-          const SizedBox(height: 12),
-        ],
-        if (isPaid && expense.status != ExpenseStatus.reimbursed) ...[
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: () => _showReimbursementSheet(context),
-              icon: const Icon(Icons.currency_exchange),
-              label: const Text('Add Reimbursement'),
-              style: FilledButton.styleFrom(
-                backgroundColor: Colors.blue,
-              ),
-            ),
-          ),
           const SizedBox(height: 12),
         ],
         Row(

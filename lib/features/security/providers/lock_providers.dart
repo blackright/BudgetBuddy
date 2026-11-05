@@ -1,3 +1,4 @@
+import '../../identity/providers/device_auth_session.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:isar/isar.dart';
 
@@ -272,6 +273,9 @@ final lockControllerProvider =
 /// never be written during a build pass.
 class LockController extends Notifier<LockSnapshot> {
   LockSubject? _subject;
+  int _operationGeneration = 0;
+  bool _alive = false;
+  String? _activeKey;
   LockState _state = LockState.locked;
 
   /// The monotonic reading at which the app left the foreground, or `null` when
@@ -309,9 +313,27 @@ class LockController extends Notifier<LockSnapshot> {
 
   @override
   LockSnapshot build() {
-    final effective = ref.watch(effectiveLockProvider);
+    _alive = true;
+    _activeKey = ref.read(lockSubjectProvider)?.key;
+    ref.onDispose(() {
+      _alive = false;
+      _operationGeneration++;
+    });
+    ref.listen(lockSubjectProvider, (previous, next) {
+      if (_activeKey != next?.key) {
+        _activeKey = next?.key;
+        _operationGeneration++;
+      }
+    });
+    ref.listen(effectiveLockProvider, (previous, next) {
+      if (_alive) state = _reconcile(next);
+    });
+    return _reconcile(ref.read(effectiveLockProvider));
+  }
 
+  LockSnapshot _reconcile(EffectiveLock? effective) {
     if (effective == null || !effective.lockRequired) {
+      if (_subject != null) _operationGeneration++;
       _subject = null;
       _state = LockState.unlocked;
       _awaySinceMs = null;
@@ -325,6 +347,7 @@ class LockController extends Notifier<LockSnapshot> {
     // (FR-022, FR-032). Re-entering the *same* subject keeps the session's
     // state, so a settings change does not slam the lock in the user's face.
     if (_subject?.key != effective.subject.key) {
+      _operationGeneration++;
       final justConfigured = _justConfiguredKey == effective.subject.key;
       _justConfiguredKey = null;
       _subject = effective.subject;
@@ -349,6 +372,9 @@ class LockController extends Notifier<LockSnapshot> {
         waitUntilMs: _waitUntilMs,
       );
 
+  bool _validOperation(int generation, String key) =>
+      _alive && generation == _operationGeneration && _activeKey == key;
+
   void _applyEvent(LockEvent event) =>
       _transition(ref.read(effectiveLockProvider), event);
 
@@ -370,12 +396,14 @@ class LockController extends Notifier<LockSnapshot> {
   Future<void> refreshLockout() async {
     final subject = _subject;
     if (subject == null) return;
+    final operation = _operationGeneration;
     final effective = ref.read(effectiveLockProvider);
     if (effective == null || !effective.lockRequired) return;
 
     final nowMs = ref.read(monotonicClockProvider).nowMs();
     final status =
         await ref.read(lockoutStoreProvider).status(subject.key, nowMs: nowMs);
+    if (!_validOperation(operation, subject.key)) return;
     _failCount = status.failCount;
     _waitUntilMs =
         status.isWaiting ? nowMs + status.remaining.inMilliseconds : null;
@@ -393,6 +421,7 @@ class LockController extends Notifier<LockSnapshot> {
 
   /// On-demand lock (FR-022).
   void lockNow() {
+    _operationGeneration++;
     // Drop the key first, before the state write triggers a rebuild.
     ref.read(deviceKeySessionProvider.notifier).lock();
     _applyEvent(LockEvent.explicitLock);
@@ -462,7 +491,11 @@ class LockController extends Notifier<LockSnapshot> {
     required LockoutStore lockout,
     required PinVerifierStore verifiers,
   }) async {
+    final operation = _operationGeneration;
     final status = await lockout.status(subject.key, nowMs: clock.nowMs());
+    if (!_validOperation(operation, subject.key)) {
+      return PinResult.deviceRefused;
+    }
     _failCount = status.failCount;
     if (status.isWaiting) {
       _waitUntilMs = clock.nowMs() + status.remaining.inMilliseconds;
@@ -472,10 +505,16 @@ class LockController extends Notifier<LockSnapshot> {
     _waitUntilMs = null;
 
     final matches = await verifiers.verify(subject.key, pin);
+    if (!_validOperation(operation, subject.key)) {
+      return PinResult.deviceRefused;
+    }
     if (matches) return PinResult.accepted;
 
     final after =
         await lockout.registerFailure(subject.key, nowMs: clock.nowMs());
+    if (!_validOperation(operation, subject.key)) {
+      return PinResult.deviceRefused;
+    }
     _failCount = after.failCount;
     _waitUntilMs =
         after.isWaiting ? clock.nowMs() + after.remaining.inMilliseconds : null;
@@ -485,7 +524,7 @@ class LockController extends Notifier<LockSnapshot> {
   }
 
   void _publish(EffectiveLock? effective) {
-    if (effective == null) return;
+    if (effective == null || !_alive) return;
     state = _snapshot(effective);
   }
 
@@ -506,25 +545,28 @@ class LockController extends Notifier<LockSnapshot> {
     final session = ref.read(deviceKeySessionProvider.notifier);
     final effective = ref.read(effectiveLockProvider);
 
-    final result = await _checkPin(
-      subject,
-      pin,
-      effective: effective,
-      clock: clock,
-      lockout: lockout,
-      verifiers: verifiers,
-    );
+    final binding = ref.read(nativeAccessBindingProvider);
+    final native = ref.read(deviceAuthSessionProvider.notifier);
+    final epoch = _operationGeneration, authEpoch = native.generation;
+    bool current() =>
+        _validOperation(epoch, subject.key) && native.isCurrent(authEpoch);
+    final result = await _checkPin(subject, pin,
+        effective: effective,
+        clock: clock,
+        lockout: lockout,
+        verifiers: verifiers);
     if (result != PinResult.accepted) return result;
-
-    final keyPair = await session.require(reason: 'Unlock BudgetBuddy');
-    if (keyPair == null) {
-      // The PIN was right but the phone could not confirm it was the user, so
-      // the key stayed in the keystore. The failure count is deliberately left
-      // alone: the PIN itself was not wrong (FR-048).
+    if (!current() || !binding.resolved || binding.key != subject.key) {
       return PinResult.deviceRefused;
     }
-
+    final verified = binding.identity == null &&
+            !binding.isShared &&
+            subject.kind == LockSubjectKind.profile
+        ? await native.require(reason: 'Unlock BudgetBuddy')
+        : await session.require(reason: 'Unlock BudgetBuddy') != null;
+    if (!verified || !current()) return PinResult.deviceRefused;
     await lockout.clear(subject.key);
+    if (!current()) return PinResult.deviceRefused;
     _failCount = 0;
     _waitUntilMs = null;
     _transition(effective, LockEvent.pinAccepted);
@@ -556,11 +598,41 @@ class LockController extends Notifier<LockSnapshot> {
     final verifiers = ref.read(pinVerifierStoreProvider);
     final lockout = ref.read(lockoutStoreProvider);
 
+    final binding = ref.read(nativeAccessBindingProvider);
+    final native = ref.read(deviceAuthSessionProvider.notifier);
+    if (!binding.resolved || binding.key != subject.key) {
+      throw StateError('Wait for the exact profile protection to resolve.');
+    }
+    final existing = await store.find(subject.key);
+    final hasVerifier = await verifiers.isSet(subject.key);
+    if (hasVerifier || existing?.lockEnabled == true) {
+      throw StateError(
+          'Existing or incomplete PIN protection needs review; use its existing change/recovery flow.');
+    }
+    if (!await native.require(
+        reason: 'Verify phone security before enabling the app PIN',
+        force: true)) {
+      throw StateError(
+          'Phone verification did not succeed. The new PIN was not enabled.');
+    }
+    final authEpoch = native.generation, operation = _operationGeneration;
+    bool current() =>
+        _validOperation(operation, subject.key) && native.isCurrent(authEpoch);
+    if (!current()) {
+      throw StateError('The active profile changed. Retry enrollment.');
+    }
     await verifiers.setPin(subject.key, pin);
+    if (!current()) {
+      throw StateError(
+          "Enrollment was interrupted. Review this profile protection before retrying.");
+    }
     await lockout.clear(subject.key);
 
     final row =
         await store.find(subject.key) ?? LockSetting.forSubject(subject);
+    if (!current()) {
+      throw StateError("The active profile changed. Review saved protection.");
+    }
     row.lockEnabled = true;
     // Ask for the PIN once, not three times: this mark tells the next `build()`
     // that the user is already past the PIN they just chose (FR-009).

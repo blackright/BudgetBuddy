@@ -42,6 +42,7 @@ class MoneyField extends StatefulWidget {
     this.formatInitial,
     this.textInputAction,
     this.decoration,
+    this.textStyle,
   });
 
   /// External controller. When `null` the field owns and disposes its own.
@@ -88,6 +89,10 @@ class MoneyField extends StatefulWidget {
 
   /// Replaces the decoration built from [label]/[helperText]/[prefixText].
   final InputDecoration? decoration;
+
+  /// Optional text style, e.g. a large hero amount. Wallet/grouping behaviour
+  /// is unchanged.
+  final TextStyle? textStyle;
 
   @override
   State<MoneyField> createState() => _MoneyFieldState();
@@ -199,6 +204,7 @@ class _MoneyFieldState extends State<MoneyField> {
       textInputAction: widget.textInputAction,
       inputFormatters: const [ThousandsSeparatorInputFormatter()],
       decoration: decoration,
+      style: widget.textStyle,
       validator: widget.validator,
       onChanged: _handleChanged,
       onFieldSubmitted: _handleSubmitted,

@@ -129,8 +129,12 @@ class ExpensesNotifier extends StateNotifier<AsyncValue<List<Expense>>> {
     }
   }
 
-  Future<void> addExpense(Expense expense) async {
-    if (budgetId == null) return;
+  Future<void> addExpense(Expense expense, {int? targetBudgetId}) async {
+    // The target month may differ from the one on screen when the expense is
+    // dated in the past (or planned for the future). The row carries its own
+    // yearMonth; only the owning budget id needs to follow it.
+    final destination = targetBudgetId ?? budgetId;
+    if (destination == null) return;
 
     try {
       await _guard?.assertSharedMoneyWrite(
@@ -139,7 +143,7 @@ class ExpensesNotifier extends StateNotifier<AsyncValue<List<Expense>>> {
         yearMonth: expense.yearMonth,
       );
 
-      expense.budgetId = budgetId!;
+      expense.budgetId = destination;
       if (expense.status == ExpenseStatus.paid) {
         expense.paidAt ??=
             expense.type == ExpenseType.medical ? DateTime.now() : expense.date;
@@ -158,7 +162,10 @@ class ExpensesNotifier extends StateNotifier<AsyncValue<List<Expense>>> {
         await _syncProfileSpending(expense.yearMonth, expense);
       });
 
-      await _loadExpenses();
+      // The visible list belongs to the active month. When the expense was
+      // filed into another month the caller switches the selection, which
+      // rebuilds this notifier; reload only when it still belongs here.
+      if (budgetId != null && destination == budgetId) await _loadExpenses();
     } catch (e, st) {
       state = AsyncValue.error(e, st);
       rethrow;

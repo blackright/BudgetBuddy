@@ -1,3 +1,6 @@
+import '../identity/support/fake_device_authenticator.dart';
+import 'package:budget_buddy/features/identity/providers/device_auth_session.dart';
+import 'support/native_identity_fixture.dart';
 import 'package:budget_buddy/core/models/lock_setting.dart';
 import 'package:budget_buddy/features/security/domain/lock_subject.dart';
 import 'package:budget_buddy/features/security/presentation/lock_keys.dart';
@@ -42,6 +45,9 @@ void main() {
 
   Widget host() => ProviderScope(
         overrides: [
+          nativeAccessBindingProvider.overrideWith(nativeFixtureBinding),
+          deviceAuthenticatorProvider
+              .overrideWithValue(FakeDeviceAuthenticator()),
           lockSubjectProvider.overrideWithValue(subject),
           lockSettingRepositoryProvider.overrideWithValue(settings),
           secretStoreProvider.overrideWithValue(secrets),
@@ -87,7 +93,8 @@ void main() {
     // switch — and in the words the user has (profile, shared space), never the
     // internal word "subject".
     expect(
-      find.text('Off — anyone who opens the app sees this profile.'),
+      find.text(
+          'Extra app PIN is off. Phone verification still protects this profile.'),
       findsOneWidget,
     );
     expect(find.textContaining('subject'), findsNothing,
@@ -98,7 +105,9 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    expect(find.text('On — a PIN opens this profile.'), findsOneWidget);
+    expect(
+        find.text('On: app PIN and phone verification protect this profile.'),
+        findsOneWidget);
     expect(find.byKey(const Key(LockKeys.changePinButton)), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox.shrink());

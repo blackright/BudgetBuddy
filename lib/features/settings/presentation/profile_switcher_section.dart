@@ -1,3 +1,6 @@
+import '../../../core/models/medical_approval.dart';
+import '../../../core/models/money_receipt.dart';
+import '../../budget_setup/repositories/onboarding_lifecycle.dart';
 import '../../../core/models/merchant.dart';
 import '../../../core/services/profile_name.dart';
 import '../../../core/models/expense_evidence_chunk.dart';
@@ -223,6 +226,36 @@ class ProfileSwitcherController {
           .profileIdEqualTo(profileId)
           .deleteAll();
       await _isar.vaultEntrys.filter().profileIdEqualTo(profileId).deleteAll();
+      // The confirmed personal deletion owns its decision/payment history too.
+      // Shared history must not be erased merely because this profile authored it.
+      await _isar.medicalApprovals
+          .filter()
+          .profileIdEqualTo(profileId)
+          .and()
+          .sharedSpaceIdIsNull()
+          .deleteAll();
+      await _isar.medicalClaimClosures
+          .filter()
+          .profileIdEqualTo(profileId)
+          .and()
+          .sharedSpaceIdIsNull()
+          .deleteAll();
+      await _isar.moneyReceipts
+          .filter()
+          .profileIdEqualTo(profileId)
+          .and()
+          .sharedSpaceIdIsNull()
+          .deleteAll();
+      await _isar.receiptRevisions
+          .filter()
+          .profileIdEqualTo(profileId)
+          .and()
+          .sharedSpaceIdIsNull()
+          .deleteAll();
+      await _isar.medicalClaimActivitys
+          .filter()
+          .profileIdEqualTo(profileId)
+          .deleteAll();
       await _isar.medicalBills.filter().profileIdEqualTo(profileId).deleteAll();
       await _isar.insuranceProfiles
           .filter()
@@ -297,6 +330,7 @@ class ProfileSwitcherController {
           await _isar.schemaMigrationStamps.delete(stamp.id);
         }
       }
+      await pruneDeletedProfileSetupInTxn(_isar, profileId);
       await _isar.userProfiles.delete(profileId);
 
       // FR-034: the profile's security setting is removed with the profile. The

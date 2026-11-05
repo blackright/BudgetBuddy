@@ -1,9 +1,9 @@
 import 'package:cryptography/cryptography.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers/identity_provider.dart';
 import '../repositories/identity_service.dart';
+import 'device_auth_session.dart';
 
 /// The keystore seam: hands back the identity's private key **after** the
 /// phone's own authentication has passed (research R1/R8, FR-002).
@@ -57,55 +57,78 @@ final deviceKeySessionProvider =
 
 /// Holds the session's unlocked key and serialises every prompt behind one
 /// in-memory single-flight guard.
+
 class DeviceKeySession extends Notifier<SimpleKeyPair?> {
-  /// The prompt everybody is currently waiting on, or `null` when idle.
   Future<SimpleKeyPair?>? _inFlight;
-
+  int _generation = 0;
+  bool _alive = false;
   @override
-  SimpleKeyPair? build() => null;
+  SimpleKeyPair? build() {
+    ref.listen(nativeAccessBindingProvider, (previous, next) {
+      if (previous?.token != next.token) {
+        _generation++;
+        state = null;
+      }
+    });
+    ref.listen(deviceAuthSessionProvider.select((s) => s.generation),
+        (previous, next) {
+      if (previous != next) {
+        _generation++;
+        state = null;
+      }
+    });
+    _generation++;
+    _alive = true;
+    ref.onDispose(() {
+      _alive = false;
+      _generation++;
+    });
+    return null;
+  }
 
-  /// Whether the key is already out (so a caller can skip prompting).
   bool get isUnlocked => state != null;
-
-  /// The unlocked key, prompting for [reason] at most once across all
-  /// concurrent callers. Returns `null` when the user declines or there is no
-  /// key to release — in which case a later call prompts again.
   Future<SimpleKeyPair?> require({required String reason}) {
-    final unlocked = state;
-    if (unlocked != null) return Future<SimpleKeyPair?>.value(unlocked);
+    final binding = ref.read(nativeAccessBindingProvider);
+    if (!binding.resolved || binding.identity == null) {
+      return Future.value(null);
+    }
+    final native = ref.read(deviceAuthSessionProvider.notifier);
+    if (!native.isCurrent(native.generation)) return Future.value(null);
+    if (state != null) return Future.value(state);
     return _inFlight ??= _authenticate(reason);
   }
 
-  /// Drops the key from memory (app lock).
-  ///
-  /// A no-op when the session is already locked: there is nothing to release
-  /// and nothing worth notifying listeners about.
   void lock() {
-    if (state == null) return;
-    state = null;
+    _generation++;
+    ref.read(deviceAuthSessionProvider.notifier).lock();
+    if (_alive && state != null) state = null;
   }
 
   Future<SimpleKeyPair?> _authenticate(String reason) async {
-    // Read the seams before the first `await`: a notifier's `ref` must not be
-    // used after it could have been disposed.
-    final authenticator = ref.read(deviceAuthenticatorProvider);
+    final auth = ref.read(deviceAuthSessionProvider.notifier);
     final loader = ref.read(identityKeyLoaderProvider);
+    final epoch = _generation, authEpoch = auth.generation;
     try {
-      if (!await authenticator.authenticate(reason: reason)) return null;
-      final keyPair = await loader.load();
-      if (keyPair != null) state = keyPair;
-      return keyPair;
-    } on Object catch (error, stackTrace) {
-      // A keystore/platform hiccup is a refusal like any other. Callers treat
-      // `null` as "nothing was shared, try again" and several of them are
-      // fire-and-forget, so letting this escape would surface as an unhandled
-      // async error *and* leave the session looking permanently locked.
-      debugPrint(
-          'DeviceKeySession.require($reason) failed: $error\n$stackTrace');
+      if (!await auth.require(reason: reason)) return null;
+      if (!_alive || epoch != _generation || !auth.isCurrent(authEpoch)) {
+        return null;
+      }
+      final key = await loader.load();
+      if (!_alive || epoch != _generation || !auth.isCurrent(authEpoch)) {
+        return null;
+      }
+      if (key != null) {
+        state = key;
+      } else {
+        auth.lock();
+      }
+      return key;
+    } catch (_) {
+      if (_alive && epoch == _generation && auth.isCurrent(authEpoch)) {
+        auth.lock();
+      }
       return null;
     } finally {
-      // Clear last, so a caller that arrives while we are still storing the key
-      // joins this flight rather than starting a second prompt.
       _inFlight = null;
     }
   }

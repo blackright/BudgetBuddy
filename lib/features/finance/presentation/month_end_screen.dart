@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/models/budget_profile.dart';
 import '../../../core/models/currency_code.dart';
+import '../../../core/models/month_end_run.dart';
 import '../../../core/providers/budget_context_provider.dart';
 import '../../../core/providers/active_profile_provider.dart';
 import '../../../core/providers/active_space_provider.dart';
@@ -13,16 +14,25 @@ import '../../../core/services/refund_service.dart';
 import '../../../shared/presentation/money_format.dart';
 import '../../../shared/presentation/input_formatters/thousands_separator_input_formatter.dart';
 import '../providers/month_end_providers.dart';
+import '../../pending_actions/providers/pending_actions_providers.dart';
 
 class MonthEndScreen extends ConsumerWidget {
-  const MonthEndScreen({super.key});
+  const MonthEndScreen({super.key, this.initialMonth});
+
+  /// The month a deep link asked for. It is honoured only when the service
+  /// exposes that month; otherwise the screen falls back to a closable month.
+  final String? initialMonth;
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) =>
-      _MonthEndBody(key: ValueKey(ref.watch(budgetContextProvider).toString()));
+  Widget build(BuildContext context, WidgetRef ref) => _MonthEndBody(
+      key:
+          ValueKey('${ref.watch(budgetContextProvider)}|${initialMonth ?? ''}'),
+      initialMonth: initialMonth);
 }
 
 class _MonthEndBody extends ConsumerStatefulWidget {
-  const _MonthEndBody({super.key});
+  const _MonthEndBody({super.key, this.initialMonth});
+  final String? initialMonth;
   @override
   ConsumerState<_MonthEndBody> createState() => _MonthEndBodyState();
 }
@@ -43,11 +53,12 @@ class _ProfileInput {
 
 class _MonthEndBodyState extends ConsumerState<_MonthEndBody> {
   final _inputs = <String, _ProfileInput>{};
+  final _scrollController = ScrollController();
   List<BudgetProfile> _profiles = [];
   List<String> _months = [];
   CurrencyCode _currency = CurrencyCode.huf;
   String? _month, _error;
-  bool _loading = true, _busy = false;
+  bool _loading = true, _busy = false, _previewOutdated = false;
   MonthEndReport? _report;
   List<MonthEndChoice> _reviewedChoices = [];
 
@@ -71,24 +82,63 @@ class _MonthEndBodyState extends ConsumerState<_MonthEndBody> {
 
   @override
   void dispose() {
+    _scrollController.dispose();
     for (final input in _inputs.values) {
       input.amount.dispose();
     }
     super.dispose();
   }
 
+  String _monthOf(DateTime value) =>
+      '${value.year.toString().padLeft(4, '0')}-${value.month.toString().padLeft(2, '0')}';
+
+  /// The requested month wins when the service exposes it. Otherwise keep a
+  /// completed month already selected, then prefer the earliest completed month
+  /// that has no applied run, then the latest completed month, then the latest
+  /// available month. The current/future month is never chosen implicitly.
+  String? _defaultMonth(
+      List<String> months, List<MonthEndRun> runs, String current) {
+    if (months.isEmpty) return null;
+    final completed = months.where((m) => m.compareTo(current) < 0).toList()
+      ..sort();
+    final selected = ref.read(budgetContextProvider).yearMonth;
+    if (completed.contains(selected)) return selected;
+    final applied =
+        runs.where((run) => run.applied).map((run) => run.yearMonth).toSet();
+    final unfinished = completed.where((m) => !applied.contains(m)).toList();
+    if (unfinished.isNotEmpty) return unfinished.first;
+    if (completed.isNotEmpty) return completed.last;
+    return months.last;
+  }
+
   Future<void> _load() async {
     try {
       final data = await ref.read(monthEndServiceProvider).inputs();
       if (!mounted) return;
+      List<MonthEndRun> runs;
+      try {
+        runs = await ref.read(monthEndRunsProvider.future);
+      } catch (_) {
+        runs = const [];
+      }
+      if (!mounted) return;
+      final current = _monthOf(ref.read(monthEndServiceProvider).clock());
+      final requested = widget.initialMonth;
+      final requestedAvailable =
+          requested != null && data.months.contains(requested);
+      final kept =
+          _month != null && data.months.contains(_month) ? _month : null;
       setState(() {
         _profiles = data.profiles;
         _months = data.months;
         _currency = data.currency;
-        _month ??= ref.read(budgetContextProvider).yearMonth;
-        _month = _months.contains(_month) ? _month : _months.lastOrNull;
+        _month = kept ??
+            (requestedAvailable
+                ? requested
+                : _defaultMonth(data.months, runs, current));
         _loading = false;
         _report = null;
+        _previewOutdated = false;
         _error = null;
       });
     } catch (error) {
@@ -103,7 +153,7 @@ class _MonthEndBodyState extends ConsumerState<_MonthEndBody> {
 
   void _invalidate() {
     setState(() {
-      _report = null;
+      _previewOutdated = _report != null;
       _error = null;
     });
   }
@@ -119,8 +169,10 @@ class _MonthEndBodyState extends ConsumerState<_MonthEndBody> {
           ? 0
           : parseRefundAmount(raw, _currency);
       if (!input.confirmedDefault || amount == null) {
-        setState(
-            () => _error = 'Confirm a valid default allocation for ${p.name}.');
+        setState(() {
+          _error = 'Confirm a valid default allocation for ${p.name}.';
+          _previewOutdated = _report != null;
+        });
         return;
       }
       final next = nextFinancialMonth(_month!);
@@ -132,8 +184,11 @@ class _MonthEndBodyState extends ConsumerState<_MonthEndBody> {
       if (legacyTargets.isNotEmpty &&
           known.isEmpty &&
           !input.destinationReviewed) {
-        setState(() => _error =
-            'Choose a destination or explicitly create a new monthly profile for ${p.name}.');
+        setState(() {
+          _error =
+              'Choose a destination or explicitly create a new monthly profile for ${p.name}.';
+          _previewOutdated = _report != null;
+        });
         return;
       }
       choices.add(MonthEndChoice(
@@ -154,6 +209,15 @@ class _MonthEndBodyState extends ConsumerState<_MonthEndBody> {
         setState(() {
           _report = report;
           _reviewedChoices = choices;
+          _previewOutdated = false;
+        });
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _scrollController.hasClients) {
+            _scrollController.animateTo(
+                _scrollController.position.maxScrollExtent,
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeOut);
+          }
         });
       }
     } catch (error) {
@@ -165,7 +229,9 @@ class _MonthEndBodyState extends ConsumerState<_MonthEndBody> {
 
   Future<void> _confirm() async {
     final report = _report;
-    if (_busy || report == null || !report.ready) return;
+    if (_busy || _previewOutdated || report == null || !report.ready) {
+      return;
+    }
     final accepted = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
@@ -186,11 +252,18 @@ class _MonthEndBodyState extends ConsumerState<_MonthEndBody> {
       await ref
           .read(monthEndServiceProvider)
           .confirm(report, choices: _reviewedChoices);
+      await ref.read(pendingActionServiceProvider).completeByRecord(
+          'monthend.close', report.yearMonth, report.yearMonth);
       if (!mounted) return;
       showFinancialFeedback(context, 'Month-End confirmed');
       final saved =
           await ref.read(monthEndServiceProvider).preview(report.yearMonth);
-      if (mounted) setState(() => _report = saved);
+      if (mounted) {
+        setState(() {
+          _report = saved;
+          _previewOutdated = false;
+        });
+      }
     } catch (error) {
       if (mounted) {
         showFinancialFeedback(context,
@@ -198,7 +271,7 @@ class _MonthEndBodyState extends ConsumerState<_MonthEndBody> {
             kind: FinancialFeedbackKind.error);
         setState(() {
           _error = '$error';
-          _report = null;
+          _previewOutdated = _report != null;
         });
       }
     } finally {
@@ -215,6 +288,7 @@ class _MonthEndBodyState extends ConsumerState<_MonthEndBody> {
         _report?.completed;
     final source = _profiles.where((p) => p.yearMonth == _month).toList();
     final next = _month == null ? null : nextFinancialMonth(_month!);
+    final showActions = !_loading && saved == null && _months.isNotEmpty;
     return PopScope(
         canPop: !_busy,
         child: Scaffold(
@@ -226,108 +300,143 @@ class _MonthEndBodyState extends ConsumerState<_MonthEndBody> {
             ]),
             body: _loading
                 ? const Center(child: CircularProgressIndicator())
-                : ListView(padding: const EdgeInsets.all(16), children: [
-                    IgnorePointer(
-                        ignoring: _busy,
-                        child: ContextSwitcherMenu(
-                            child: ListTile(
-                                leading: const Icon(
-                                    Icons.account_balance_wallet_outlined),
-                                title: Text(_contextName),
-                                subtitle:
-                                    const Text('Personal / shared context'),
-                                trailing: const Icon(Icons.arrow_drop_down)))),
-                    const Text(
-                        'Review a completed month. Income and opening bank balances stay unchanged. Carried funds are reserved once; Reset releases unused funds.'),
-                    const SizedBox(height: 16),
-                    if (_months.isEmpty)
-                      const Text(
-                          'No months are available. Open a month in your budget first.'),
-                    if (_months.isNotEmpty)
-                      DropdownButtonFormField<String>(
-                          isExpanded: true,
-                          initialValue: _month,
-                          decoration:
-                              const InputDecoration(labelText: 'Source month'),
-                          items: _months
-                              .map((m) =>
-                                  DropdownMenuItem(value: m, child: Text(m)))
-                              .toList(),
-                          onChanged: _busy
-                              ? null
-                              : (value) => setState(() {
-                                    _month = value;
-                                    _report = null;
-                                    _error = null;
-                                  })),
-                    if (saved != null) ...[
-                      const SizedBox(height: 16),
-                      Text(
-                          saved.hasConflict
-                              ? 'Conflicting confirmations need review. Further month-end processing is blocked.'
-                              : 'Month already finished',
-                          style: Theme.of(context).textTheme.titleMedium),
-                      Text(
-                          'Confirmed by ${saved.actor} on ${saved.createdAt.toLocal()}'),
-                      if (!saved.applied)
+                : ListView(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.all(16),
+                    children: [
+                        IgnorePointer(
+                            ignoring: _busy,
+                            child: ContextSwitcherMenu(
+                                child: ListTile(
+                                    leading: const Icon(
+                                        Icons.account_balance_wallet_outlined),
+                                    title: Text(_contextName),
+                                    subtitle:
+                                        const Text('Personal / shared context'),
+                                    trailing:
+                                        const Icon(Icons.arrow_drop_down)))),
                         const Text(
-                            'This conflicting plan has not been applied.'),
-                      Text(
-                          'Carried: ${formatMinorUnits(saved.carriedMinor, CurrencyCode.tryParse(saved.currency) ?? _currency)}'),
-                      Text(
-                          'Released: ${formatMinorUnits(saved.releasedMinor, CurrencyCode.tryParse(saved.currency) ?? _currency)}'),
-                      for (final line
-                          in (jsonDecode(saved.reportJson)['lines'] as List))
-                        ListTile(
-                            title: Text(line['name'] as String),
-                            subtitle: Text(
-                                '${line['rule']} • next allocation ${formatMinorUnits(line['nextAllocation'] as int, CurrencyCode.tryParse(saved.currency) ?? _currency)}')),
-                    ] else ...[
-                      for (final p in source) _profileCard(p, next!),
-                      if (_month != null)
-                        FilledButton(
-                            onPressed: _busy ? null : _preview,
-                            child:
-                                Text(_busy ? 'Checking…' : 'Review month-end')),
-                      if (_report != null) ...[
+                            'Review a completed month. Income and opening bank balances stay unchanged. Carried funds are reserved once; Reset releases unused funds.'),
                         const SizedBox(height: 16),
-                        Text('Ready to finish',
-                            style: Theme.of(context).textTheme.titleLarge),
-                        if (_report!.blockers.isEmpty)
-                          const ListTile(
-                              leading: Icon(Icons.check_circle),
-                              title: Text('Financial checks passed')),
-                        for (final blocker in _report!.blockers)
-                          ListTile(
-                              leading: const Icon(Icons.warning_amber),
-                              title: Text(blocker)),
-                        if (!_report!.canConfirm)
+                        if (_months.isEmpty)
                           const Text(
-                              'Only the shared-space Owner can confirm. You can inspect this report.'),
-                        for (final line in _report!.lines)
-                          Card(
-                              child: ListTile(
-                                  title: Text(line.name),
-                                  subtitle: Text(
-                                      'Allocated ${formatMinorUnits(line.amounts.allocation, _currency)} • Net spending ${formatMinorUnits(line.amounts.spent, _currency)}\n'
-                                      'Unused ${formatMinorUnits(line.amounts.unused, _currency)} • Overspent ${formatMinorUnits(line.amounts.overspent, _currency)}\n'
-                                      'Borrowed ${formatMinorUnits(line.borrowed, _currency)} | Deficit ${formatMinorUnits(line.deficit, _currency)} (not transferred)\n'
-                                      '${line.amounts.rule == MonthEndRule.reset ? 'Reset' : 'Carry Forward'} → ${_report!.destinationMonth}\n'
-                                      'Carry ${formatMinorUnits(line.amounts.carried, _currency)} • Release ${formatMinorUnits(line.amounts.released, _currency)}\n'
-                                      'Next allocation ${formatMinorUnits(line.amounts.nextAllocation, _currency)}'))),
-                        FilledButton(
-                            onPressed:
-                                _busy || !_report!.ready ? null : _confirm,
-                            child: const Text('Finish month')),
-                      ],
-                    ],
-                    if (_error != null)
-                      Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Text(_error!,
-                              style: TextStyle(
-                                  color: Theme.of(context).colorScheme.error))),
-                  ])));
+                              'No months are available. Open a month in your budget first.'),
+                        if (_months.isNotEmpty)
+                          DropdownButtonFormField<String>(
+                              key: const Key('sourceMonthDropdown'),
+                              isExpanded: true,
+                              initialValue: _month,
+                              decoration: const InputDecoration(
+                                  labelText: 'Source month'),
+                              items: _months
+                                  .map((m) => DropdownMenuItem(
+                                      value: m, child: Text(m)))
+                                  .toList(),
+                              onChanged: _busy
+                                  ? null
+                                  : (value) => setState(() {
+                                        _month = value;
+                                        _report = null;
+                                        _previewOutdated = false;
+                                        _error = null;
+                                      })),
+                        if (saved != null) ...[
+                          const SizedBox(height: 16),
+                          Text(
+                              saved.hasConflict
+                                  ? 'Conflicting confirmations need review. Further month-end processing is blocked.'
+                                  : 'Month already finished',
+                              style: Theme.of(context).textTheme.titleMedium),
+                          Text(
+                              'Confirmed by ${saved.actor} on ${saved.createdAt.toLocal()}'),
+                          if (!saved.applied)
+                            const Text(
+                                'This conflicting plan has not been applied.'),
+                          Text(
+                              'Carried: ${formatMinorUnits(saved.carriedMinor, CurrencyCode.tryParse(saved.currency) ?? _currency)}'),
+                          Text(
+                              'Released: ${formatMinorUnits(saved.releasedMinor, CurrencyCode.tryParse(saved.currency) ?? _currency)}'),
+                          for (final line
+                              in (jsonDecode(saved.reportJson)['lines']
+                                  as List))
+                            ListTile(
+                                title: Text(line['name'] as String),
+                                subtitle: Text(
+                                    '${line['rule']} • next allocation ${formatMinorUnits(line['nextAllocation'] as int, CurrencyCode.tryParse(saved.currency) ?? _currency)}')),
+                        ] else ...[
+                          for (final p in source) _profileCard(p, next!),
+                          if (_report != null) ...[
+                            const SizedBox(height: 16),
+                            Text('Ready to finish',
+                                style: Theme.of(context).textTheme.titleLarge),
+                            if (_report!.blockers.isEmpty)
+                              const ListTile(
+                                  leading: Icon(Icons.check_circle),
+                                  title: Text('Financial checks passed')),
+                            for (final blocker in _report!.blockers)
+                              ListTile(
+                                  leading: const Icon(Icons.warning_amber),
+                                  title: Text(blocker)),
+                            if (!_report!.canConfirm)
+                              const Text(
+                                  'Only the shared-space Owner can confirm. You can inspect this report.'),
+                            for (final line in _report!.lines)
+                              Card(
+                                  child: ListTile(
+                                      title: Text(line.name),
+                                      subtitle: Text(
+                                          'Allocated ${formatMinorUnits(line.amounts.allocation, _currency)} • Net spending ${formatMinorUnits(line.amounts.spent, _currency)}\n'
+                                          'Unused ${formatMinorUnits(line.amounts.unused, _currency)} • Overspent ${formatMinorUnits(line.amounts.overspent, _currency)}\n'
+                                          'Borrowed ${formatMinorUnits(line.borrowed, _currency)} | Deficit ${formatMinorUnits(line.deficit, _currency)} (not transferred)\n'
+                                          '${line.amounts.rule == MonthEndRule.reset ? 'Reset' : 'Carry Forward'} → ${_report!.destinationMonth}\n'
+                                          'Carry ${formatMinorUnits(line.amounts.carried, _currency)} • Release ${formatMinorUnits(line.amounts.released, _currency)}\n'
+                                          'Next allocation ${formatMinorUnits(line.amounts.nextAllocation, _currency)}'))),
+                          ],
+                        ],
+                      ]),
+            bottomNavigationBar: showActions ? _actionArea(context) : null));
+  }
+
+  Widget _actionArea(BuildContext context) {
+    final outdated = _previewOutdated && _report != null;
+    final canFinish = _report != null && !_busy && !outdated && _report!.ready;
+    return SafeArea(
+        child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              if (outdated)
+                Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                        'Preview is outdated — review again before finishing.',
+                        key: const Key('outdatedPreviewHint'),
+                        style: TextStyle(
+                            color: Theme.of(context).colorScheme.error))),
+              if (_error != null)
+                Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(_error!,
+                        key: const Key('monthEndError'),
+                        style: TextStyle(
+                            color: Theme.of(context).colorScheme.error))),
+              Row(children: [
+                Expanded(
+                    child: FilledButton(
+                        onPressed: _busy || _month == null ? null : _preview,
+                        child: Text(_busy
+                            ? 'Checking…'
+                            : outdated
+                                ? 'Review again'
+                                : 'Review month-end'))),
+                if (_report != null) ...[
+                  const SizedBox(width: 12),
+                  Expanded(
+                      child: FilledButton(
+                          onPressed: canFinish ? _confirm : null,
+                          child: const Text('Finish month'))),
+                ],
+              ]),
+            ])));
   }
 
   Widget _profileCard(BudgetProfile p, String next) {
@@ -388,6 +497,15 @@ class _MonthEndBodyState extends ConsumerState<_MonthEndBody> {
                           input.confirmedDefault = v ?? false;
                           _invalidate();
                         }),
+              if (!input.confirmedDefault)
+                Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                        'Tick the confirmation to include this profile in the review.',
+                        key: ValueKey('defaultRequired-${p.syncGuid}'),
+                        style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                            fontSize: 12))),
               if (known != null)
                 Text(
                     'Linked destination: ${known.name} ($next). Its existing allocation is preserved.')
@@ -414,6 +532,17 @@ class _MonthEndBodyState extends ConsumerState<_MonthEndBody> {
                             input.destination = value == '__new' ? null : value;
                             _invalidate();
                           }),
+              if (known == null &&
+                  targets.any((d) => d.familyGuid.isEmpty) &&
+                  !input.destinationReviewed)
+                Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                        'Choose a destination or create a new monthly profile.',
+                        key: ValueKey('destinationRequired-${p.syncGuid}'),
+                        style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                            fontSize: 12))),
               const Text(
                   'Choices apply to this settlement and the next monthly profile. Closed source records are preserved.'),
             ])));

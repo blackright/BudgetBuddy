@@ -1,3 +1,5 @@
+import '../../budget_setup/providers/setup_handoff_provider.dart';
+import 'widgets/onboarding_guidance_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -6,6 +8,7 @@ import '../../../core/models/expense.dart';
 import '../../../core/providers/active_budget_provider.dart';
 import '../../../core/providers/active_profile_provider.dart';
 import '../../../core/providers/active_space_provider.dart';
+import '../../../core/providers/budget_context_provider.dart';
 import '../../../core/providers/selected_month_provider.dart';
 import '../../../shared/presentation/widgets/month_incomplete_banner.dart';
 import '../../../shared/presentation/widgets/sync_status_chip.dart';
@@ -34,8 +37,21 @@ class DashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final activeBudget = ref.watch(activeBudgetProvider).value;
     final profile = ref.watch(activeProfileProvider).valueOrNull;
+    final handoff = ref.watch(setupHandoffProvider);
+    if (setupHandoffArrived(handoff,
+        profileId: profile?.id,
+        isShared: ref.watch(activeSpaceIdProvider) != null,
+        budgetId: activeBudget?.id,
+        yearMonth: ref.watch(selectedYearMonthProvider))) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (context.mounted && ref.read(setupHandoffProvider) == handoff) {
+          ref.read(setupHandoffProvider.notifier).state = null;
+        }
+      });
+    }
     final canEdit = ref.watch(activeContextCanEditProvider);
     final activeSpaceId = ref.watch(activeSpaceIdProvider);
+    final personal = !ref.watch(budgetContextProvider).isShared;
     final display =
         resolveDisplayCurrency(month: activeBudget, profile: profile);
     final symbol = display.symbol;
@@ -100,7 +116,8 @@ class DashboardScreen extends ConsumerWidget {
                 child: ListView(
                   padding: const EdgeInsets.all(16),
                   children: [
-                    MonthIncompleteBanner(currencySymbol: symbol),
+                    if (!ref.watch(onboardingGuidanceEligibleProvider))
+                      MonthIncompleteBanner(currencySymbol: symbol),
                     MonthSummaryCard(
                       currency: display,
                       // US8: insurance returns came from medical bills; expense
@@ -112,6 +129,7 @@ class DashboardScreen extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(height: 12),
+                    if (activeSpaceId == null) const OnboardingGuidanceCard(),
                     const AllocationCard(),
                     if (activeSpaceId == null) ...[
                       const SizedBox(height: 12),
@@ -138,27 +156,96 @@ class DashboardScreen extends ConsumerWidget {
                     const SizedBox(height: 12),
                     const AnalyticsMiniCharts(),
                     const SizedBox(height: 24),
-                    const Text(
-                      'Quick Actions',
-                      style:
-                          TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 16),
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: [
-                        if (canEdit)
-                          InkWell(
-                            onTap: () => context.push('/add_expense'),
-                            child: _buildActionButton(Icons.add, 'Add Expense'),
+                        Container(
+                          width: 34,
+                          height: 34,
+                          decoration: BoxDecoration(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .primary
+                                .withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(10),
                           ),
-                        InkWell(
-                          onTap: () => context.go('/medical'),
-                          child: _buildActionButton(
-                              Icons.medical_services, 'Medical'),
+                          child: Icon(Icons.bolt_outlined,
+                              size: 20,
+                              color: Theme.of(context).colorScheme.primary),
                         ),
-                        _buildActionButton(Icons.history, 'History'),
+                        const SizedBox(width: 10),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Quick actions',
+                              style: TextStyle(
+                                  fontSize: 18, fontWeight: FontWeight.w800),
+                            ),
+                            Text(
+                              'Jump straight to what you need',
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant),
+                            ),
+                          ],
+                        ),
                       ],
+                    ),
+                    const SizedBox(height: 12),
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final actions = <_QuickAction>[
+                          if (canEdit)
+                            _QuickAction(
+                              icon: Icons.add_card_outlined,
+                              label: 'Add Expense',
+                              hint: 'Record new spending',
+                              color: Theme.of(context).colorScheme.primary,
+                              onTap: () => context.push('/add_expense'),
+                            ),
+                          _QuickAction(
+                            icon: Icons.medical_services_outlined,
+                            label: 'Medical',
+                            hint: 'Claims, bills and refunds',
+                            color: Colors.teal,
+                            onTap: () => context.go('/medical'),
+                          ),
+                          if (personal)
+                            _QuickAction(
+                              key: const Key('vaultQuickAction'),
+                              icon: Icons.savings_outlined,
+                              label: 'Savings Vault',
+                              hint: 'Your saved money and history',
+                              color: Colors.indigo,
+                              onTap: () => context.push('/vault'),
+                            ),
+                          _QuickAction(
+                            icon: Icons.history,
+                            label: 'History',
+                            hint: 'Your audit trail',
+                            color: Colors.purple,
+                            onTap: () => context.push('/audit_history'),
+                          ),
+                        ];
+                        final columns = constraints.maxWidth >= 540 ? 3 : 2;
+                        final width =
+                            (constraints.maxWidth - (columns - 1) * 12) /
+                                columns;
+                        return Wrap(
+                          spacing: 12,
+                          runSpacing: 12,
+                          children: [
+                            for (final action in actions)
+                              SizedBox(
+                                width: width,
+                                child: _QuickActionCard(
+                                    key: action.key, action: action),
+                              ),
+                          ],
+                        );
+                      },
                     ),
                   ],
                 ),
@@ -169,14 +256,90 @@ class DashboardScreen extends ConsumerWidget {
       ),
     );
   }
+}
 
-  Widget _buildActionButton(IconData icon, String label) {
-    return Column(
-      children: [
-        CircleAvatar(radius: 28, child: Icon(icon, size: 28)),
-        const SizedBox(height: 8),
-        Text(label),
-      ],
+class _QuickAction {
+  const _QuickAction({
+    this.key,
+    required this.icon,
+    required this.label,
+    required this.hint,
+    required this.color,
+    required this.onTap,
+  });
+
+  final Key? key;
+  final IconData icon;
+  final String label;
+  final String hint;
+  final Color color;
+  final VoidCallback onTap;
+}
+
+class _QuickActionCard extends StatelessWidget {
+  const _QuickActionCard({super.key, required this.action});
+
+  final _QuickAction action;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: action.color.withValues(alpha: 0.08),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(color: action.color.withValues(alpha: 0.22)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: action.onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: action.color.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(11),
+                    ),
+                    child: Icon(action.icon, color: action.color, size: 21),
+                  ),
+                  const Spacer(),
+                  Icon(Icons.arrow_outward_rounded,
+                      size: 17, color: action.color),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Text(
+                action.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  color: action.color,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                action.hint,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 11.5,
+                  height: 1.25,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

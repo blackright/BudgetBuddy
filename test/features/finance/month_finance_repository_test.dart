@@ -1,8 +1,15 @@
+import 'package:budget_buddy/core/models/audit_event.dart';
+import 'package:budget_buddy/core/models/budget_profile.dart';
 import 'package:budget_buddy/core/models/currency_code.dart';
+import 'package:budget_buddy/core/models/expense.dart';
+import 'package:budget_buddy/core/models/income_receipt_group.dart';
+import 'package:budget_buddy/core/models/salary_cycle.dart';
 import 'package:budget_buddy/core/models/user_profile.dart';
+import 'package:budget_buddy/features/vault/models/vault_entry.dart';
 import 'package:budget_buddy/features/engine/currency_resolution.dart';
 import 'package:budget_buddy/features/finance/repositories/month_finance_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:isar/isar.dart';
 
 import '../medical/repositories/medical_test_harness.dart';
 
@@ -86,15 +93,62 @@ void main() {
       );
     });
 
-    test('FR-007: no balance is carried forward into a new month', () async {
+    test('a confirmed closing auto-carries into the next personal month',
+        () async {
       await seedProfile();
       await repository.saveOpeningBalance('2026-01', 5000);
       expect((await repository.getMonth('2026-01'))!.baseAvailableAmount, 5000);
 
       final february = await repository.ensureMonth('2026-02');
 
-      expect(february.baseAvailableAmount, 0.0);
-      expect(february.openingBalanceConfirmed, isFalse);
+      expect(february.baseAvailableAmount, 5000);
+      expect(february.openingBalanceConfirmed, isTrue);
+    });
+
+    test('auto-carry records the previous month and derived closing', () async {
+      await seedProfile();
+      await repository.saveOpeningBalance('2026-01', 5000);
+      await repository.ensureMonth('2026-02');
+
+      final event = await harness.isar.auditEvents
+          .filter()
+          .actionEqualTo('balance.opening.autoCarry')
+          .findFirst();
+      expect(event, isNotNull);
+      expect(event!.newValue, contains('2026-01'));
+      expect(event.newValue, contains('5000'));
+    });
+
+    test('a missing intermediate month leaves the next opening unconfirmed',
+        () async {
+      await seedProfile();
+      await repository.saveOpeningBalance('2026-01', 5000);
+
+      final march = await repository.ensureMonth('2026-03');
+
+      expect(march.baseAvailableAmount, 0.0);
+      expect(march.openingBalanceConfirmed, isFalse);
+    });
+
+    test('auto-carry creates no salary, allocation, Vault or refund rows',
+        () async {
+      await seedProfile();
+      await repository.saveOpeningBalance('2026-01', 5000);
+      final before = {
+        'groups': await harness.isar.incomeReceiptGroups.count(),
+        'cycles': await harness.isar.salaryCycles.count(),
+        'allocations': await harness.isar.budgetProfiles.count(),
+        'vault': await harness.isar.vaultEntrys.count(),
+        'expenses': await harness.isar.expenses.count(),
+      };
+
+      await repository.ensureMonth('2026-02');
+
+      expect(await harness.isar.incomeReceiptGroups.count(), before['groups']);
+      expect(await harness.isar.salaryCycles.count(), before['cycles']);
+      expect(await harness.isar.budgetProfiles.count(), before['allocations']);
+      expect(await harness.isar.vaultEntrys.count(), before['vault']);
+      expect(await harness.isar.expenses.count(), before['expenses']);
     });
 
     test('watchMonth emits the provisioned month', () async {
@@ -119,7 +173,7 @@ void main() {
       expect(month.openingBalanceConfirmed, isTrue);
     });
 
-    test('FR-010: a saved zero is confirmed, unlike an untouched month',
+    test('FR-010: a saved zero is confirmed, unlike a month with no anchor',
         () async {
       await seedProfile();
       await repository.saveOpeningBalance('2026-05', 0);
@@ -128,7 +182,13 @@ void main() {
       expect(month!.baseAvailableAmount, 0);
       expect(month.openingBalanceConfirmed, isTrue);
 
-      final untouched = await repository.ensureMonth('2026-06');
+      // A confirmed zero closing is still a provable chain.
+      final june = await repository.ensureMonth('2026-06');
+      expect(june.baseAvailableAmount, 0);
+      expect(june.openingBalanceConfirmed, isTrue);
+
+      // With no earlier anchor at all, the month stays unconfirmed.
+      final untouched = await repository.ensureMonth('2027-01');
       expect(untouched.baseAvailableAmount, 0);
       expect(untouched.openingBalanceConfirmed, isFalse);
     });

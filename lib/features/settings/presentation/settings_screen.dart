@@ -143,6 +143,18 @@ class SettingsScreen extends ConsumerWidget {
             title: 'Appearance',
             cards: [ThemeSettingSection(), FontSettingSection()],
           ),
+          _Section(title: 'Help & learning', cards: [
+            Card(
+                child: ListTile(
+              key: const Key('replayIntroduction'),
+              leading: const Icon(Icons.auto_stories_outlined),
+              title: const Text('Replay introduction'),
+              subtitle: const Text(
+                  'Explore the basics without changing your records'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.push('/introduction'),
+            ))
+          ]),
           const _Section(
             title: 'Diagnostics',
             cards: [AuditDiagnosticsSection()],

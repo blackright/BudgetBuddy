@@ -1,5 +1,6 @@
 import '../../../shared/presentation/financial_feedback.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/models/money.dart';
@@ -51,13 +52,28 @@ class NetSalarySection extends ConsumerWidget {
     final table = ref.watch(rateRegistryProvider).tableFor(yearMonth);
     final usedMoney = Money.fromMajor(resolved.amount, currency);
     final usedDisplay = toDisplay(usedMoney, display, table);
-
+    // Reviewed transition: the sole incoming salary/refund home is now Income
+    // Sources. Keep the legacy controls available but direct users there first
+    // (Phase 2a, T048).
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            FilledButton.icon(
+              onPressed: () => context.push('/income_sources'),
+              icon: const Icon(Icons.account_balance_wallet_outlined),
+              label: const Text('Manage income in Income Sources'),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Salary and refunds are now confirmed in Income Sources. '
+              'The fields below are kept for compatibility and will be retired '
+              'after the reviewed transition.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
             Text('My income', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 4),
             Text(

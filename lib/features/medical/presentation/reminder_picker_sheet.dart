@@ -4,20 +4,34 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 import '../../../shared/presentation/time_picker_dialogs.dart';
+import 'medical_sheet_header.dart';
 
 class ReminderPickerSheet extends StatefulWidget {
   const ReminderPickerSheet({
     super.key,
     this.initialDate,
+    this.allowClear = false,
   });
 
   final DateTime? initialDate;
 
-  static Future<DateTime?> show(BuildContext context, {DateTime? initialDate}) {
+  /// When true, the sheet offers "No reminder" and pops [cleared].
+  final bool allowClear;
+
+  /// Sentinel value meaning "remove the reminder"; `null` from [show] still
+  /// means the sheet was dismissed without a choice.
+  static final DateTime cleared = DateTime.fromMillisecondsSinceEpoch(0);
+
+  static Future<DateTime?> show(
+    BuildContext context, {
+    DateTime? initialDate,
+    bool allowClear = false,
+  }) {
     return showModalBottomSheet<DateTime>(
       context: context,
       isScrollControlled: true,
-      builder: (context) => ReminderPickerSheet(initialDate: initialDate),
+      builder: (context) =>
+          ReminderPickerSheet(initialDate: initialDate, allowClear: allowClear),
     );
   }
 
@@ -61,16 +75,8 @@ class _ReminderPickerSheetState extends State<ReminderPickerSheet> {
 
   DateTime _defaultSuggestion() {
     final now = DateTime.now();
-    final in14Days = now.add(const Duration(days: 14));
-    // next half hour mark
-    var minutes = in14Days.minute;
-    var nextHalfHour = (minutes < 30) ? 30 : 60;
-    return DateTime(
-      in14Days.year,
-      in14Days.month,
-      in14Days.day,
-      in14Days.hour,
-    ).add(Duration(minutes: nextHalfHour));
+    final target = now.add(const Duration(days: 3));
+    return DateTime(target.year, target.month, target.day, 9);
   }
 
   void _onConfirm() {
@@ -114,8 +120,11 @@ class _ReminderPickerSheetState extends State<ReminderPickerSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Follow-up Reminder',
-                style: Theme.of(context).textTheme.titleLarge),
+            MedicalSheetHeader(
+              title: 'Follow-up reminder',
+              subtitle: 'Choose when to revisit this bill.',
+              onClose: () => Navigator.of(context).pop(),
+            ),
             const SizedBox(height: 16),
             Wrap(
               spacing: 8,
@@ -129,12 +138,8 @@ class _ReminderPickerSheetState extends State<ReminderPickerSheet> {
                   onPressed: () => _setPreset(const Duration(days: 3)),
                 ),
                 ActionChip(
-                  label: const Text('Next week'),
+                  label: const Text('In 1 week'),
                   onPressed: () => _setPreset(const Duration(days: 7)),
-                ),
-                ActionChip(
-                  label: const Text('In 2 weeks'),
-                  onPressed: () => _setPreset(const Duration(days: 14)),
                 ),
               ],
             ),
@@ -197,9 +202,25 @@ class _ReminderPickerSheetState extends State<ReminderPickerSheet> {
             ),
             const SizedBox(height: 16),
             FilledButton(
+              style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(52)),
               onPressed: _onConfirm,
-              child: const Text('Save'),
+              child: const Text('Save reminder'),
             ),
+            TextButton(
+              style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Keep unchanged'),
+            ),
+            if (widget.allowClear)
+              TextButton.icon(
+                key: const Key('noReminderAction'),
+                style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
+                onPressed: () =>
+                    Navigator.of(context).pop(ReminderPickerSheet.cleared),
+                icon: const Icon(Icons.notifications_off_outlined),
+                label: const Text('No reminder'),
+              ),
           ],
         ),
       )),

@@ -1,30 +1,38 @@
+import '../providers/medical_receipt_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 
-import '../../../core/models/currency_code.dart';
+import '../../../core/providers/budget_context_provider.dart';
+import '../../finance/presentation/receipt_boundary_review.dart';
 import '../../../core/models/insurance_profile.dart';
 import '../../../core/models/medical_bill.dart';
 import '../../../core/models/medical_service_type.dart';
-import '../../../core/models/money.dart';
 import '../../../core/providers/active_profile_provider.dart';
 import '../../../core/providers/active_space_provider.dart';
 import '../../../core/providers/selected_month_provider.dart';
 import '../../../core/providers/clock_provider.dart';
-import '../../engine/currency_resolution.dart';
 import '../../engine/providers/rate_registry_provider.dart';
 import '../../settings/providers/settings_provider.dart';
 import '../../spaces/providers/spaces_providers.dart';
 import '../../dashboard/presentation/widgets/month_convert_to_menu.dart';
-import '../../../shared/presentation/money_conversion.dart';
 import '../../../shared/presentation/money_format.dart';
-import '../../../shared/presentation/widgets/conversion_footnote.dart';
 import '../../../shared/presentation/widgets/money_field.dart';
 import '../providers/medical_providers.dart';
 import '../repositories/medical_repository.dart';
+import 'medical_bill_list_card.dart';
+import 'medical_bill_view_state.dart';
+import 'medical_empty_state.dart';
+import 'medical_filter_bar.dart';
+import 'medical_page_header.dart';
+import 'medical_section_card.dart';
+import 'medical_sheet_header.dart';
+import 'medical_summary_card.dart';
 import 'medical_theme.dart';
-import 'reminder_picker_sheet.dart';
+
+Future<void> reviewMedicalReceiptSetup(BuildContext context, WidgetRef ref,
+        {bool balance = false, ContextRef? target}) =>
+    reviewReceiptSetup(context, ref, balance: balance, target: target);
 
 class MedicalDashboard extends ConsumerWidget {
   const MedicalDashboard({super.key});
@@ -33,6 +41,8 @@ class MedicalDashboard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final background = MedicalTheme.background(context);
     final canEdit = ref.watch(activeContextCanEditProvider);
+    final inbox = ref.watch(medicalInboxProvider);
+    final filters = ref.watch(medicalInboxFiltersProvider);
 
     return Scaffold(
       backgroundColor: background,
@@ -43,6 +53,19 @@ class MedicalDashboard extends ConsumerWidget {
         backgroundColor: background,
         elevation: 0,
         actions: [
+          if (ref.watch(activeContextCanManageProvider))
+            PopupMenuButton<String>(
+              tooltip: 'Medical options',
+              onSelected: (value) => reviewMedicalReceiptSetup(context, ref,
+                  balance: value == 'balanceReview'),
+              itemBuilder: (_) => const [
+                PopupMenuItem(
+                    value: 'receiptSetup', child: Text('Review receipt setup')),
+                PopupMenuItem(
+                    value: 'balanceReview',
+                    child: Text('Review opening money')),
+              ],
+            ),
           if (canEdit) const MonthConvertToMenu(),
           if (canEdit)
             IconButton(
@@ -59,84 +82,175 @@ class MedicalDashboard extends ConsumerWidget {
             ),
         ],
       ),
-      body: GestureDetector(
-        onHorizontalDragEnd: (details) {
-          if (details.primaryVelocity != null) {
-            if (details.primaryVelocity! < -300) {
-              ref
-                  .read(selectedYearMonthProvider.notifier)
-                  .update((state) => nextMonth(state));
-            } else if (details.primaryVelocity! > 300) {
-              ref
-                  .read(selectedYearMonthProvider.notifier)
-                  .update((state) => previousMonth(state));
-            }
-          }
+      body: RefreshIndicator(
+        onRefresh: () async {
+          ref
+            ..invalidate(medicalBillViewBatchProvider)
+            ..invalidate(insuranceProfileProvider)
+            ..invalidate(familyMembersProvider)
+            ..invalidate(medicalProvidersProvider)
+            ..invalidate(medicalServiceTypesProvider);
         },
-        child: RefreshIndicator(
-          onRefresh: () async {
-            await Future.delayed(const Duration(milliseconds: 500));
-            ref
-              ..invalidate(medicalBillsProvider)
-              ..invalidate(insuranceProfileProvider)
-              ..invalidate(insuranceProfileProvider)
-              ..invalidate(familyMembersProvider)
-              ..invalidate(medicalProvidersProvider)
-              ..invalidate(medicalServiceTypesProvider);
-          },
-          child: CustomScrollView(
-            slivers: [
-              SliverToBoxAdapter(
-                child: _InsuranceSection(
-                    canEdit: canEdit,
-                    onSetup: () => _editInsuranceProfile(context, ref)),
+        child: CustomScrollView(
+          slivers: [
+            SliverToBoxAdapter(
+              child: MedicalPageHeader(
+                title: 'Medical bills',
+                subtitle: 'Open bills across all months',
+                trailing: ElevatedButton.icon(
+                  key: const Key('addBillButton'),
+                  onPressed:
+                      canEdit ? () => context.push('/medical_bill_form') : null,
+                  icon: const Icon(Icons.add, size: 20),
+                  label: const Text('Add'),
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size(48, 48),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(24)),
+                  ),
+                ),
               ),
-              const SliverToBoxAdapter(child: _BudgetImpactCard()),
-              const SliverToBoxAdapter(child: _PatientShareCard()),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
-                  child: Row(
-                    children: [
-                      const Expanded(
-                        child: Text(
-                          'Medical Bills',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
+            ),
+            SliverToBoxAdapter(
+              child: MedicalSummaryCard(
+                needsYouCount: inbox.valueOrNull?.needsYouCount ?? 0,
+                waitingCount:
+                    inbox.valueOrNull?.count(MedicalInboxGroup.waiting) ?? 0,
+                approvedStillToReceiveMinor:
+                    inbox.valueOrNull?.approvedStillToReceiveMinor ?? 0,
+                currency: ref.watch(medicalDisplayCurrencyProvider),
+                mainCurrency: ref.watch(mainCurrencyProvider),
+                rateTable: ref.watch(rateRegistryProvider).tableFor(
+                      ref.watch(selectedYearMonthProvider),
+                    ),
+                amountsNeedReview:
+                    inbox.valueOrNull?.amountsNeedReview ?? false,
+                hasError: inbox.hasError,
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: MedicalFilterBar(
+                filters: filters,
+                inbox: inbox.valueOrNull,
+                onChanged: (value) => ref
+                    .read(medicalInboxFiltersProvider.notifier)
+                    .state = value,
+                onClear: () => ref
+                    .read(medicalInboxFiltersProvider.notifier)
+                    .state = const MedicalInboxFilters(),
+              ),
+            ),
+            ...inbox.when<List<Widget>>(
+              data: (data) => data.items.isEmpty
+                  ? [
+                      SliverToBoxAdapter(
+                        child: MedicalEmptyState(
+                          icon: data.allBillsCount > 0
+                              ? Icons.filter_alt_off_outlined
+                              : Icons.medical_services_outlined,
+                          title: data.allBillsCount > 0
+                              ? 'No bills match these filters'
+                              : 'No medical bills yet',
+                          message: data.allBillsCount > 0
+                              ? 'Clear a filter or choose another month.'
+                              : 'Add a bill to see what it costs you and what comes back.',
+                          actions: [
+                            if (data.allBillsCount > 0)
+                              TextButton(
+                                key: const Key('medicalInboxEmptyClear'),
+                                style: TextButton.styleFrom(
+                                    minimumSize: const Size(48, 48)),
+                                onPressed: () => ref
+                                    .read(medicalInboxFiltersProvider.notifier)
+                                    .state = const MedicalInboxFilters(),
+                                child: const Text('Clear filters'),
+                              )
+                            else if (canEdit)
+                              FilledButton.icon(
+                                key: const Key('medicalInboxAddBill'),
+                                style: FilledButton.styleFrom(
+                                    minimumSize: const Size(48, 48)),
+                                onPressed: () =>
+                                    context.push('/medical_bill_form'),
+                                icon: const Icon(Icons.add),
+                                label: const Text('Add bill'),
+                              ),
+                          ],
                         ),
                       ),
-                      ElevatedButton.icon(
-                        key: const Key('addBillButton'),
-                        onPressed: canEdit
-                            ? () => context.push('/medical_bill_form')
-                            : null,
-                        icon: const Icon(Icons.add, size: 20),
-                        label: const Text('Add',
-                            style: TextStyle(fontWeight: FontWeight.bold)),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blueAccent,
-                          foregroundColor: Colors.white,
-                          elevation: 4,
-                          shadowColor: Colors.blueAccent.withAlpha(100),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(24),
-                          ),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 8),
-                        ),
+                    ]
+                  : [
+                      SliverList.builder(
+                        itemCount: data.items.length,
+                        itemBuilder: (context, index) {
+                          final item = data.items[index];
+                          final bill = item.bill;
+                          return MedicalBillListCard(
+                            bill: bill,
+                            state: item.state,
+                            displayCurrency: data.currency,
+                            rateTable: ref
+                                .watch(rateRegistryProvider)
+                                .tableFor(ref.watch(selectedYearMonthProvider)),
+                            providerName: item.providerName,
+                            memberName: item.memberName,
+                            serviceTypeName: item.serviceTypeName,
+                            now: ref.watch(clockProvider),
+                            onOpen: () =>
+                                context.push('/medical_detail', extra: bill.id),
+                            onReviewSetup: () =>
+                                _reviewBillSetup(context, ref, bill),
+                          );
+                        },
+                      ),
+                    ],
+              loading: () => const [
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.all(32),
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
+                ),
+              ],
+              error: (error, _) => [
+                SliverToBoxAdapter(
+                  child: MedicalEmptyState(
+                    icon: Icons.error_outline,
+                    title: 'Could not load medical bills',
+                    message:
+                        'Reopen this screen after checking your access and selected budget.',
+                    isError: true,
+                    actions: [
+                      TextButton(
+                        style: TextButton.styleFrom(
+                            minimumSize: const Size(48, 48)),
+                        onPressed: () =>
+                            ref.invalidate(medicalBillViewBatchProvider),
+                        child: const Text('Retry'),
                       ),
                     ],
                   ),
                 ),
-              ),
-              const _BillsSliver(),
-            ],
-          ),
+              ],
+            ),
+          ],
         ),
       ),
     );
+  }
+
+  Future<void> _reviewBillSetup(
+      BuildContext context, WidgetRef ref, MedicalBill bill) async {
+    final target = bill.sharedSpaceId == null
+        ? ContextRef.personal(
+            profileId: bill.profileId!, yearMonth: bill.yearMonth)
+        : ContextRef.shared(
+            spaceId: bill.sharedSpaceId!, yearMonth: bill.yearMonth);
+    await reviewMedicalReceiptSetup(context, ref, target: target);
+    if (!context.mounted) return;
+    ref
+      ..invalidate(medicalBillViewBatchProvider)
+      ..invalidate(medicalBillMonthBlockersProvider(bill.id));
   }
 
   Future<void> _editInsuranceProfile(
@@ -173,111 +287,6 @@ class MedicalDashboard extends ConsumerWidget {
 // -----------------------------------------------------------------------------
 // Insurance profile
 // -----------------------------------------------------------------------------
-
-class _InsuranceSection extends ConsumerWidget {
-  const _InsuranceSection({required this.onSetup, required this.canEdit});
-
-  final VoidCallback onSetup;
-  final bool canEdit;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final insurance = ref.watch(insuranceProfileProvider);
-
-    return insurance.when(
-      data: (profile) {
-        if (profile == null || !_isConfigured(profile)) {
-          if (!canEdit) return const SizedBox.shrink();
-          return _SetupPrompt(onSetup: onSetup);
-        }
-        // The gear used to be the only entry point to this setting, so its
-        // effect was invisible once configured. One line makes it discoverable
-        // without opening anything.
-        return _DefaultsSummary(
-          percent: profile.defaultPatientPercent,
-          plan: profile.planSummary,
-          onEdit: canEdit ? onSetup : null,
-        );
-      },
-      loading: () => const SizedBox(height: 8),
-      error: (_, __) =>
-          canEdit ? _SetupPrompt(onSetup: onSetup) : const SizedBox.shrink(),
-    );
-  }
-
-  /// FR-035: there is no deductible to configure any more, so a profile counts
-  /// as configured once it carries a usable default patient share.
-  static bool _isConfigured(InsuranceProfile p) => p.defaultPatientPercent > 0;
-}
-
-/// The configured state: shows the current default so the setting has a visible
-/// representation on the screen, not just an icon in the app bar.
-class _DefaultsSummary extends StatelessWidget {
-  const _DefaultsSummary({
-    required this.percent,
-    required this.onEdit,
-    this.plan,
-  });
-
-  final double percent;
-
-  /// Already joined by `InsuranceProfile.planSummary`, so it is null when
-  /// neither part was recorded.
-  final String? plan;
-  final VoidCallback? onEdit;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-      child: Card(
-        color: Colors.blueAccent.withValues(alpha: 0.12),
-        child: ListTile(
-          key: const Key('billDefaultsSummary'),
-          leading: const Icon(Icons.tune, color: Colors.blueAccent),
-          title: Text('Usually pay ${percent.toStringAsFixed(0)}%'),
-          // Two separate lines rather than one '\n' string: the plan is a
-          // distinct fact, not part of the explanation.
-          subtitle: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (plan != null) Text(plan!),
-              const Text('Pre-filled on every new bill. Tap to change.'),
-            ],
-          ),
-          isThreeLine: plan != null,
-          trailing: onEdit == null ? null : const Icon(Icons.chevron_right),
-          onTap: onEdit,
-        ),
-      ),
-    );
-  }
-}
-
-class _SetupPrompt extends StatelessWidget {
-  const _SetupPrompt({required this.onSetup});
-
-  final VoidCallback onSetup;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-      child: Card(
-        color: Colors.blueAccent.withValues(alpha: 0.12),
-        child: ListTile(
-          leading: const Icon(Icons.shield_outlined, color: Colors.blueAccent),
-          title: const Text('Set your usual share'),
-          subtitle: const Text(
-            'The share you normally pay, so new bills pre-fill it for you.',
-          ),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: onSetup,
-        ),
-      ),
-    );
-  }
-}
 
 class _InsuranceProfileSheet extends StatefulWidget {
   const _InsuranceProfileSheet({this.initial});
@@ -356,7 +365,7 @@ class _InsuranceProfileSheetState extends State<_InsuranceProfileSheet> {
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
                 decoration: const InputDecoration(
-                  labelText: 'Usual patient share (%)',
+                  labelText: 'Usual Your share (%)',
                   helperText: 'The share you normally pay, not the insurer\'s. '
                       'A 20% share means a 1000 bill costs you 200.',
                   border: OutlineInputBorder(),
@@ -406,6 +415,8 @@ class _InsuranceProfileSheetState extends State<_InsuranceProfileSheet> {
               ),
               const SizedBox(height: 24),
               ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(52)),
                 onPressed: _submit,
                 child: const Text('Save'),
               ),
@@ -439,616 +450,226 @@ class _InsuranceProfileSheetState extends State<_InsuranceProfileSheet> {
 }
 
 // -----------------------------------------------------------------------------
-// Patient share + budget impact
-// -----------------------------------------------------------------------------
-
-/// Month-scoped split of who paid what.
-///
-/// Replaces the old deductible progress card (FR-037): with deductibles gone
-/// there is no limit or progress to show, only the totals for the selected month
-/// (T049).
-class _PatientShareCard extends ConsumerWidget {
-  const _PatientShareCard();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final totals = ref.watch(patientShareTotalsProvider);
-    final currency = ref.watch(medicalDisplayCurrencyProvider);
-    final month = ref.watch(selectedYearMonthProvider);
-
-    if (totals.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return Card(
-      key: const Key('patientShareCard'),
-      margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-      color: MedicalTheme.surface(context),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Patient share',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              '${totals.billCount} bill'
-              '${totals.billCount == 1 ? '' : 's'} in $month',
-              style: TextStyle(color: MedicalTheme.subtleText(context)),
-            ),
-            const SizedBox(height: 16),
-            _SplitRow(
-              label: 'Billed',
-              value: totals.billedTotal,
-              currency: currency,
-              color: MedicalTheme.subtleText(context),
-            ),
-            _SplitRow(
-              label: 'Insurer paid',
-              value: totals.insurerPaidTotal,
-              currency: currency,
-              color: Colors.green,
-            ),
-            _SplitRow(
-              label: 'You paid',
-              value: totals.patientShareTotal,
-              currency: currency,
-              color: Colors.orange,
-            ),
-            if (totals.reimbursedTotal > 0) ...[
-              _SplitRow(
-                label: 'Reimbursed to you',
-                value: totals.reimbursedTotal,
-                currency: currency,
-                color: Colors.teal,
-              ),
-              _SplitRow(
-                label: 'Net out of pocket',
-                value: totals.netPatientCost,
-                currency: currency,
-                color: Colors.red,
-                bold: true,
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SplitRow extends StatelessWidget {
-  const _SplitRow({
-    required this.label,
-    required this.value,
-    required this.currency,
-    required this.color,
-    this.bold = false,
-  });
-
-  final String label;
-  final int value;
-  final CurrencyCode currency;
-  final Color color;
-  final bool bold;
-
-  @override
-  Widget build(BuildContext context) {
-    final base = Theme.of(context).textTheme.bodyMedium;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: bold ? base?.copyWith(fontWeight: FontWeight.bold) : base,
-          ),
-          Text(
-            MedicalTheme.moneyMinor(currency, value),
-            style: base?.copyWith(
-              fontWeight: bold ? FontWeight.bold : FontWeight.w600,
-              color: color,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _BudgetImpactCard extends ConsumerWidget {
-  const _BudgetImpactCard();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final impact = ref.watch(medicalBudgetImpactProvider);
-    final currency = ref.watch(medicalDisplayCurrencyProvider);
-    final main = ref.watch(mainCurrencyProvider);
-    final table = ref.watch(rateRegistryProvider).tableFor(
-          ref.watch(selectedYearMonthProvider),
-        );
-
-    if (impact.plannedTotal == 0 && impact.paidTotal == 0) {
-      return const SizedBox.shrink();
-    }
-
-    return Card(
-      margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-      color: MedicalTheme.surface(context),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Budget Impact',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 12),
-            _ImpactRow(
-              label: 'Paid to providers',
-              value: MedicalTheme.moneyMinor(currency, impact.paidTotal),
-              color: Colors.redAccent,
-            ),
-            if (impact.hasPending)
-              _ImpactRow(
-                label: 'Still planned',
-                value: MedicalTheme.moneyMinor(currency, impact.plannedTotal),
-                color: Colors.orange,
-              ),
-            _ImpactRow(
-              label: 'Estimated out-of-pocket',
-              value: MedicalTheme.moneyMinor(currency, impact.outOfPocketTotal),
-              color: Colors.blueAccent,
-            ),
-            if (impact.reimbursedTotal > 0)
-              _ImpactRow(
-                label: 'Reimbursed',
-                value:
-                    '+${MedicalTheme.moneyMinor(currency, impact.reimbursedTotal)}',
-                color: Colors.green,
-              ),
-            const Divider(height: 24),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Net cost to you',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: MedicalTheme.subtleText(context),
-                  ),
-                ),
-                Text(
-                  MedicalTheme.moneyMinor(currency, impact.netOutOfPocket),
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-            ConversionFootnote(main: main, display: currency, table: table),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ImpactRow extends StatelessWidget {
-  const _ImpactRow({
-    required this.label,
-    required this.value,
-    required this.color,
-  });
-
-  final String label;
-  final String value;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label),
-          Text(
-            value,
-            style: TextStyle(color: color, fontWeight: FontWeight.w600),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// -----------------------------------------------------------------------------
-// Bill list
-// -----------------------------------------------------------------------------
-
-class _BillsSliver extends ConsumerWidget {
-  const _BillsSliver();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final billsAsync = ref.watch(medicalBillsProvider);
-    final currency = ref.watch(medicalDisplayCurrencyProvider);
-
-    return billsAsync.when(
-      data: (bills) {
-        if (bills.isEmpty) {
-          return SliverToBoxAdapter(
-            child: _EmptyState(
-              background: MedicalTheme.background(context),
-            ),
-          );
-        }
-        return SliverList.builder(
-          itemCount: bills.length,
-          itemBuilder: (context, index) => _BillTile(
-            bill: bills[index],
-            currency: currency,
-          ),
-        );
-      },
-      loading: () => const SliverToBoxAdapter(
-        child: Padding(
-          padding: EdgeInsets.all(32),
-          child: Center(child: CircularProgressIndicator()),
-        ),
-      ),
-      error: (error, _) => SliverToBoxAdapter(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Text('Could not load medical bills: $error'),
-        ),
-      ),
-    );
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.background});
-
-  final Color background;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: background,
-      padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 32),
-      child: Column(
-        children: [
-          Icon(
-            Icons.medical_services_outlined,
-            size: 48,
-            color: MedicalTheme.subtleText(context),
-          ),
-          const SizedBox(height: 12),
-          const Text(
-            'No medical bills yet',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Log a bill to see what it costs you and what comes back.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: MedicalTheme.subtleText(context)),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _BillTile extends ConsumerWidget {
-  const _BillTile({required this.bill, required this.currency});
-
-  final MedicalBill bill;
-  final CurrencyCode currency;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final directory = ref.watch(medicalDirectoryProvider);
-    final now = ref.watch(clockProvider);
-    final table = ref.watch(rateRegistryProvider).tableFor(
-          ref.watch(selectedYearMonthProvider),
-        );
-    final provider = directory.providerName(bill.providerId);
-    final patient = directory.memberName(bill.familyMemberId);
-
-    // T158: every read-only amount is shown in the display currency, with the
-    // bill's own amount revealed on long-press (FR-020). A legacy bill with no
-    // currency of its own is treated as already being in the display currency.
-    final from = bill.currencyCode ?? currency;
-    final billed = convertAndFormat(bill.billedAmount, from, currency, table);
-    final patientShare =
-        convertAndFormat(bill.patientShareAmount, from, currency, table);
-
-    // The budget impact is denominated in the bill's own currency; show it in
-    // the display currency so a foreign-currency bill's cost is comparable with
-    // the rest of the month (FR-016).
-    final fundsImpactMinor = toDisplay(
-      Money(bill.fundsImpact, from),
-      currency,
-      table,
-    ).minorUnits;
-
-    // FR-042: the state is the single source of truth for both the chip colour
-    // and the wording, so it replaces the old claim-status + paid/planned pair.
-    final stateColor = MedicalTheme.billStateColor(context, bill.state);
-
-    return Dismissible(
-      key: ValueKey('bill-${bill.id}'),
-      direction: DismissDirection.endToStart,
-      confirmDismiss: (direction) async {
-        final picked = await ReminderPickerSheet.show(context,
-            initialDate: bill.followUpDate);
-        if (picked != null) {
-          await ref
-              .read(medicalRepositoryProvider)
-              .setFollowUpDate(bill, picked);
-          if (context.mounted) {
-            ScaffoldMessenger.of(context)
-                .showSnackBar(const SnackBar(content: Text('Reminder set')));
-          }
-        }
-        return false;
-      },
-      background: Container(
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 20.0),
-        color: Colors.orange,
-        child: const Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            Text('Remind me',
-                style: TextStyle(
-                    color: Colors.white, fontWeight: FontWeight.bold)),
-            SizedBox(width: 8),
-            Icon(Icons.access_time, color: Colors.white),
-          ],
-        ),
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        leading: CircleAvatar(
-          backgroundColor: stateColor.withValues(alpha: 0.2),
-          child: Icon(
-            MedicalTheme.billStateIcon(bill.state),
-            color: stateColor,
-          ),
-        ),
-        title: Text(provider ?? 'Medical Bill'),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              <String>[
-                if (patient != null) patient,
-                bill.state.label,
-                bill.paymentMethod.label,
-              ].join(' • '),
-            ),
-            if (bill.followUpDate != null && bill.state.isPending) ...[
-              () {
-                final diff = bill.followUpDate!.difference(now);
-                String statusText;
-                Color statusColor;
-
-                if (diff.inHours < -1) {
-                  statusText =
-                      'Overdue since ${DateFormat.MMMd().format(bill.followUpDate!)}';
-                  statusColor = Colors.red;
-                } else if (diff.isNegative || diff.inMinutes < 60) {
-                  statusText = 'Due now';
-                  statusColor = Theme.of(context).colorScheme.primary;
-                } else if (diff.inHours < 24) {
-                  final hours = diff.inHours;
-                  final mins = diff.inMinutes % 60;
-                  statusText = 'In ${hours}h ${mins}m';
-                  statusColor = Colors.orange;
-                } else {
-                  statusText =
-                      'Follow up ${DateFormat('MMM d').format(bill.followUpDate!)}';
-                  statusColor = Colors.orange;
-                }
-
-                return Text(
-                  statusText,
-                  style: TextStyle(
-                      fontSize: 12,
-                      color: statusColor,
-                      fontWeight: FontWeight.bold),
-                );
-              }(),
-            ],
-          ],
-        ),
-        trailing: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            ConvertedAmountText(
-              text: billed.text,
-              originalText: billed.originalText,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-            ),
-            if (bill.paymentMethod == MedicalPaymentMethod.insurerPaid)
-              ConvertedAmountText(
-                text: '${patientShare.text} you',
-                originalText: patientShare.originalText == null
-                    ? null
-                    : '${patientShare.originalText} you',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: MedicalTheme.subtleText(context),
-                ),
-              ),
-            if (bill.currencyCode != null && bill.currencyCode != currency)
-              Text(
-                '${MedicalTheme.moneyMinor(currency, fundsImpactMinor)} budget',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: MedicalTheme.subtleText(context),
-                ),
-              ),
-          ],
-        ),
-        onTap: () => context.push('/medical_detail', extra: bill.id),
-      ),
-    );
-  }
-}
-
-// -----------------------------------------------------------------------------
 // Provider + family directory (FR-008)
 // -----------------------------------------------------------------------------
 
-class _DirectorySheet extends ConsumerWidget {
+class _DirectorySheet extends ConsumerStatefulWidget {
   const _DirectorySheet();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final providers = ref.watch(medicalProvidersProvider).value ?? const [];
-    final members = ref.watch(familyMembersProvider).value ?? const [];
+  ConsumerState<_DirectorySheet> createState() => _DirectorySheetState();
+}
+
+class _DirectorySheetState extends ConsumerState<_DirectorySheet> {
+  final _search = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final query = _query.trim().toLowerCase();
+    bool matches(String value) =>
+        query.isEmpty || value.toLowerCase().contains(query);
+    final providers = (ref.watch(medicalProvidersProvider).value ?? const [])
+        .where((p) => matches(p.name) || matches(p.specialty ?? ''))
+        .toList();
+    final members = (ref.watch(familyMembersProvider).value ?? const [])
+        .where((m) => matches(m.name) || matches(m.relation))
+        .toList();
     final serviceTypes =
-        ref.watch(medicalServiceTypesProvider).value ?? const [];
+        (ref.watch(medicalServiceTypesProvider).value ?? const [])
+            .where((t) => matches(t.name))
+            .toList();
+    final noMatches = query.isNotEmpty &&
+        providers.isEmpty &&
+        members.isEmpty &&
+        serviceTypes.isEmpty;
 
     return SafeArea(
       child: Padding(
-        // The keyboard covers the lower half of the sheet, so the list needs the
-        // inset as real space and a bounded parent to scroll within.
         padding: EdgeInsets.fromLTRB(
-          16,
-          16,
-          16,
-          MediaQuery.viewInsetsOf(context).bottom + 16,
-        ),
+            MedicalTheme.screenGutter,
+            16,
+            MedicalTheme.screenGutter,
+            MediaQuery.viewInsetsOf(context).bottom + 16),
         child: ConstrainedBox(
           constraints: BoxConstraints(
-            maxHeight: MediaQuery.sizeOf(context).height * 0.8,
+            maxHeight: MediaQuery.sizeOf(context).height * 0.85,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Providers & Family',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
-                ],
+              MedicalSheetHeader(
+                title: 'Providers & family',
+                subtitle: 'Names and service types used on bills.',
+                onClose: () => Navigator.of(context).pop(),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 12),
+              TextField(
+                key: const Key('directorySearchField'),
+                controller: _search,
+                decoration: InputDecoration(
+                  hintText: 'Search provider, person or service type',
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: _query.isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: 'Clear search',
+                          onPressed: () {
+                            _search.clear();
+                            setState(() => _query = '');
+                          },
+                          icon: const Icon(Icons.close),
+                        ),
+                  border: OutlineInputBorder(
+                      borderRadius:
+                          BorderRadius.circular(MedicalTheme.inputRadius)),
+                  isDense: true,
+                ),
+                onChanged: (value) => setState(() => _query = value),
+              ),
+              const SizedBox(height: 12),
               Flexible(
                 child: ListView(
-                  // Compact when the list is short, scrollable when it is long:
-                  // the ConstrainedBox above gives this a bounded height to
-                  // shrink-wrap against instead of the full screen.
                   shrinkWrap: true,
                   children: [
-                    _DirectorySectionHeader(
-                      title: 'Medical providers',
-                      onAdd: () => _editProvider(context, ref),
-                    ),
-                    if (providers.isEmpty)
-                      const _DirectoryEmpty('No providers saved yet.'),
-                    for (final provider in providers)
-                      ListTile(
-                        dense: true,
-                        leading: const Icon(Icons.local_hospital_outlined),
-                        title: Text(provider.name),
-                        subtitle: provider.specialty == null
-                            ? null
-                            : Text(provider.specialty!),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.delete_outline),
-                          tooltip: 'Remove provider',
-                          onPressed: () => ref
-                              .read(medicalRepositoryProvider)
-                              .deleteProvider(provider.id),
+                    if (noMatches)
+                      const MedicalEmptyState(
+                        icon: Icons.search_off,
+                        title: 'No matches',
+                        message: 'Try another name or clear the search.',
+                      )
+                    else ...[
+                      MedicalSectionCard(
+                        title: 'Medical providers',
+                        trailing: TextButton.icon(
+                          key: const Key('addProviderButton'),
+                          style: TextButton.styleFrom(
+                              minimumSize: const Size(48, 48)),
+                          onPressed: () => _editProvider(context, ref),
+                          icon: const Icon(Icons.add, size: 18),
+                          label: const Text('Add'),
                         ),
-                        onTap: () =>
-                            _editProvider(context, ref, existing: provider),
+                        child: providers.isEmpty
+                            ? const Text('No providers saved yet.')
+                            : Column(
+                                children: [
+                                  for (final provider in providers)
+                                    ListTile(
+                                      contentPadding: EdgeInsets.zero,
+                                      leading: const Icon(
+                                          Icons.local_hospital_outlined),
+                                      title: Text(provider.name),
+                                      subtitle: provider.specialty == null
+                                          ? null
+                                          : Text(provider.specialty!),
+                                      trailing: IconButton(
+                                        icon: const Icon(Icons.delete_outline),
+                                        tooltip: 'Remove provider',
+                                        onPressed: () => ref
+                                            .read(medicalRepositoryProvider)
+                                            .deleteProvider(provider.id),
+                                      ),
+                                      onTap: () => _editProvider(context, ref,
+                                          existing: provider),
+                                    ),
+                                ],
+                              ),
                       ),
-                    const Divider(height: 32),
-                    _DirectorySectionHeader(
-                      title: 'Family members',
-                      onAdd: () => _editFamilyMember(context, ref),
-                    ),
-                    if (members.isEmpty)
-                      const _DirectoryEmpty('No family members yet.'),
-                    for (final member in members)
-                      ListTile(
-                        dense: true,
-                        leading: const Icon(Icons.person_outline),
-                        title: Text(member.name),
-                        subtitle: Text(member.relation),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.delete_outline),
-                          tooltip: 'Remove member',
-                          onPressed: () => ref
-                              .read(medicalRepositoryProvider)
-                              .deleteFamilyMember(member.id),
+                      const SizedBox(height: 12),
+                      MedicalSectionCard(
+                        title: 'Family members',
+                        trailing: TextButton.icon(
+                          key: const Key('addFamilyMemberButton'),
+                          style: TextButton.styleFrom(
+                              minimumSize: const Size(48, 48)),
+                          onPressed: () => _editFamilyMember(context, ref),
+                          icon: const Icon(Icons.add, size: 18),
+                          label: const Text('Add'),
                         ),
+                        child: members.isEmpty
+                            ? const Text('No family members yet.')
+                            : Column(
+                                children: [
+                                  for (final member in members)
+                                    ListTile(
+                                      contentPadding: EdgeInsets.zero,
+                                      leading: const Icon(Icons.person_outline),
+                                      title: Text(member.name),
+                                      subtitle: Text(member.relation),
+                                      trailing: IconButton(
+                                        icon: const Icon(Icons.delete_outline),
+                                        tooltip: 'Remove member',
+                                        onPressed: () => ref
+                                            .read(medicalRepositoryProvider)
+                                            .deleteFamilyMember(member.id),
+                                      ),
+                                    ),
+                                ],
+                              ),
                       ),
-                    const Divider(height: 32),
-                    _DirectorySectionHeader(
-                      title: 'Service types',
-                      addKey: const Key('addServiceTypeButton'),
-                      onAdd: () => _editServiceType(context, ref),
-                    ),
-                    if (serviceTypes.isEmpty)
-                      const _DirectoryEmpty('No service types yet.'),
-                    for (final type in serviceTypes)
-                      ListTile(
-                        dense: true,
-                        leading: Icon(type.archived
-                            ? Icons.inventory_2_outlined
-                            : Icons.medical_services_outlined),
-                        title: Text(
-                          type.name,
-                          style: type.archived
-                              ? TextStyle(
-                                  color: MedicalTheme.subtleText(context))
-                              : null,
+                      const SizedBox(height: 12),
+                      MedicalSectionCard(
+                        title: 'Service types',
+                        trailing: TextButton.icon(
+                          key: const Key('addServiceTypeButton'),
+                          style: TextButton.styleFrom(
+                              minimumSize: const Size(48, 48)),
+                          onPressed: () => _editServiceType(context, ref),
+                          icon: const Icon(Icons.add, size: 18),
+                          label: const Text('Add'),
                         ),
-                        subtitle: type.archived ? const Text('Archived') : null,
-                        trailing: IconButton(
-                          icon: Icon(type.archived
-                              ? Icons.unarchive_outlined
-                              : Icons.archive_outlined),
-                          tooltip: type.archived
-                              ? 'Restore service type'
-                              : 'Archive service type',
-                          onPressed: () => ref
-                              .read(medicalRepositoryProvider)
-                              .setServiceTypeArchived(type.id,
-                                  archived: !type.archived),
-                        ),
-                        onTap: type.archived
-                            ? null
-                            : () =>
-                                _editServiceType(context, ref, existing: type),
+                        child: serviceTypes.isEmpty
+                            ? const Text('No service types yet.')
+                            : Column(
+                                children: [
+                                  for (final type in serviceTypes)
+                                    ListTile(
+                                      contentPadding: EdgeInsets.zero,
+                                      leading: Icon(type.archived
+                                          ? Icons.inventory_2_outlined
+                                          : Icons.medical_services_outlined),
+                                      title: Text(
+                                        type.name,
+                                        style: type.archived
+                                            ? TextStyle(
+                                                color: MedicalTheme.subtleText(
+                                                    context))
+                                            : null,
+                                      ),
+                                      subtitle: type.archived
+                                          ? const Text('Archived')
+                                          : null,
+                                      trailing: IconButton(
+                                        icon: Icon(type.archived
+                                            ? Icons.unarchive_outlined
+                                            : Icons.archive_outlined),
+                                        tooltip: type.archived
+                                            ? 'Restore service type'
+                                            : 'Archive service type',
+                                        onPressed: () => ref
+                                            .read(medicalRepositoryProvider)
+                                            .setServiceTypeArchived(type.id,
+                                                archived: !type.archived),
+                                      ),
+                                      onTap: type.archived
+                                          ? null
+                                          : () => _editServiceType(context, ref,
+                                              existing: type),
+                                    ),
+                                ],
+                              ),
                       ),
+                    ],
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
             ],
           ),
         ),
@@ -1130,54 +751,6 @@ class _DirectorySheet extends ConsumerWidget {
         SnackBar(content: Text('"${draft.name}" is already a service type.')),
       );
     }
-  }
-}
-
-class _DirectorySectionHeader extends StatelessWidget {
-  const _DirectorySectionHeader({
-    required this.title,
-    required this.onAdd,
-    this.addKey,
-  });
-
-  final String title;
-  final VoidCallback onAdd;
-  final Key? addKey;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          title,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-        ),
-        TextButton.icon(
-          key: addKey,
-          onPressed: onAdd,
-          icon: const Icon(Icons.add, size: 18),
-          label: const Text('Add'),
-        ),
-      ],
-    );
-  }
-}
-
-class _DirectoryEmpty extends StatelessWidget {
-  const _DirectoryEmpty(this.message);
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Text(
-        message,
-        style: TextStyle(color: MedicalTheme.subtleText(context)),
-      ),
-    );
   }
 }
 

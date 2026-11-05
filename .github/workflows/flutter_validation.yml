@@ -9,6 +9,7 @@ jobs:
   build-and-validate:
     name: Build and Validate
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout code
@@ -23,7 +24,10 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: 'stable'
+          # Pin the version used for the approved green baseline. Tracking
+          # `stable` changes Dart between local runs and CI overnight.
+          flutter-version: '3.47.7'
+          cache: true
 
       - name: Install Dependencies
         run: flutter pub get
@@ -37,5 +41,31 @@ jobs:
       - name: Analyze Code
         run: flutter analyze
 
-      - name: Run Tests
-        run: flutter test
+      - name: Run Functional Tests
+        run: >
+          flutter test
+          --exclude-tags performance
+          --reporter expanded
+          --timeout 120s
+          --file-reporter json:functional-results.json
+
+      - name: Run Performance Tests
+        run: >
+          flutter test
+          test/features/expenses/expense_search_native_test.dart
+          --tags performance
+          --concurrency=1
+          --reporter expanded
+          --timeout 120s
+          --file-reporter json:performance-results.json
+
+      - name: Upload Test Results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: |
+            functional-results.json
+            performance-results.json
+          if-no-files-found: ignore
+

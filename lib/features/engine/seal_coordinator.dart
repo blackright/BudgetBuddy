@@ -9,6 +9,7 @@ import '../../core/network/baseline_rates.dart';
 import '../../core/network/exchange_rate_client.dart';
 import '../../core/network/rate_types.dart';
 import '../../core/providers/selected_month_provider.dart';
+import '../budget_setup/domain/onboarding_automation_guard.dart';
 
 /// The device-global singleton that turns closed calendar months into immutable
 /// rate "seals" (contract `month-seal-lifecycle.md`).
@@ -89,6 +90,7 @@ class SealCoordinator {
   /// Seals/upgrades [yearMonth]. Returns the resulting status, or `null` when
   /// the row was already final and therefore left untouched (invariant I2).
   Future<SealStatus?> _sealMonth(String yearMonth, DateTime now) async {
+    if (!await hasEstablishedSealBudget(isar, yearMonth)) return null;
     final existing = await _find(yearMonth);
     if (existing != null &&
         (existing.status == SealStatus.sealed ||
@@ -107,7 +109,7 @@ class SealCoordinator {
         ..fetchedAt = snapshot.fetchedAt
         ..closedAt = existing?.closedAt ?? now
         ..updatedAt = now;
-      await _writeSeal(row);
+      if (!await _writeSeal(row)) return null;
       return SealStatus.sealed;
     }
 
@@ -121,14 +123,14 @@ class SealCoordinator {
         existing
           ..attemptCount += 1
           ..updatedAt = now;
-        await _writeSeal(existing);
+        if (!await _writeSeal(existing)) return null;
         return SealStatus.provisional;
       }
       existing
         ..status = SealStatus.approximate
         ..attemptCount += 1
         ..updatedAt = now;
-      await _writeSeal(existing);
+      if (!await _writeSeal(existing)) return null;
       return SealStatus.approximate;
     }
 
@@ -144,7 +146,7 @@ class SealCoordinator {
       ..closedAt = withinGrace ? now : null
       ..attemptCount = 1
       ..updatedAt = now;
-    await _writeSeal(row);
+    if (!await _writeSeal(row)) return null;
     return row.status;
   }
 
@@ -184,6 +186,11 @@ class SealCoordinator {
     final budgets = await isar.monthlyBudgets.where().findAll();
     String? earliest;
     for (final budget in budgets) {
+      if (budget.sharedSpaceId == null &&
+          budget.profileId != null &&
+          await isPendingSetupOwner(isar, budget.profileId!)) {
+        continue;
+      }
       final ym = budget.yearMonth;
       if (ym.isEmpty) continue;
       if (earliest == null || ym.compareTo(earliest) < 0) earliest = ym;
@@ -228,8 +235,11 @@ class SealCoordinator {
   Future<MonthRateSeal?> _find(String yearMonth) =>
       isar.monthRateSeals.filter().yearMonthEqualTo(yearMonth).findFirst();
 
-  Future<void> _writeSeal(MonthRateSeal row) =>
-      isar.writeTxn(() => isar.monthRateSeals.put(row));
+  Future<bool> _writeSeal(MonthRateSeal row) => isar.writeTxn(() async {
+        if (!await hasEstablishedSealBudget(isar, row.yearMonth)) return false;
+        await isar.monthRateSeals.put(row);
+        return true;
+      });
 
   Future<void> _writeLive(LiveRateSet row) =>
       isar.writeTxn(() => isar.liveRateSets.put(row));

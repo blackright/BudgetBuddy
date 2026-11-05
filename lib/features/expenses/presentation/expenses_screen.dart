@@ -78,13 +78,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
         // decides whether to move it to another expense or drop it, rather than
         // having the app silently discard it with the target.
         actions: [
-          if (canEdit)
-            PopupMenuButton<String>(
-                tooltip: 'Expense actions',
-                onSelected: (_) => context.push('/bulk_entry'),
-                itemBuilder: (_) => const [
-                      PopupMenuItem(value: 'bulk', child: Text('Bulk entry')),
-                    ]),
+          if (canEdit) const _BulkEntryAction(),
           if (canEdit) const MonthConvertToMenu(),
           if (canEdit) const _OrphanBannerButton(),
         ],
@@ -121,18 +115,44 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
               final visible = expenses.skip(page * 20).take(20).toList();
               return Column(children: [
                 Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
+                    child: Row(
+                      children: [
+                        Icon(Icons.calendar_month_outlined,
+                            size: 18,
+                            color: Theme.of(context).colorScheme.primary),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                              monthLabel(ref.watch(selectedYearMonthProvider)),
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.w700)),
+                        ),
+                      ],
+                    )),
+                Padding(
                     padding: const EdgeInsets.fromLTRB(16, 2, 16, 4),
-                    child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                            '${expenses.fold<int>(0, (total, day) => total + day.expenses.length)} results · ${expenses.length} days · Page ${pages == 0 ? 0 : page + 1} of $pages',
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodySmall
-                                ?.copyWith(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurfaceVariant)))),
+                    child: Row(
+                      children: [
+                        Icon(Icons.receipt_long_outlined,
+                            size: 16,
+                            color: Theme.of(context).colorScheme.primary),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                              '${expenses.fold<int>(0, (total, day) => total + day.expenses.length)} results · ${expenses.length} days · Page ${pages == 0 ? 0 : page + 1} of $pages',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant)),
+                        ),
+                      ],
+                    )),
                 Expanded(
                     child: RefreshIndicator(
                         onRefresh: () async {
@@ -141,28 +161,48 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                         },
                         child: visible.isEmpty
                             ? ListView(controller: scroll, children: [
-                                const Padding(
-                                    padding: EdgeInsets.all(24),
-                                    child: Text(
-                                        'No expenses match this search and filters. Try another date range or clear the filters.')),
-                                TextButton(
-                                    onPressed: () => ref
+                                Padding(
+                                  padding:
+                                      const EdgeInsets.fromLTRB(16, 24, 16, 24),
+                                  child: _EmptyExpenses(
+                                    onReset: () => ref
                                         .read(
                                             expenseSearchStateProvider.notifier)
                                         .clear(),
-                                    child:
-                                        const Text('Reset search and filters'))
+                                  ),
+                                ),
                               ])
                             : SlidableAutoCloseBehavior(
                                 child: ListView.builder(
                                     controller: scroll,
                                     itemCount: visible.length + 1,
                                     itemBuilder: (context, index) => index == 0
-                                        ? const Padding(
-                                            padding: EdgeInsets.fromLTRB(
-                                                16, 8, 16, 4),
-                                            child: Text(
-                                                'Day totals use original currencies. Tap a day to explore its expenses.'))
+                                        ? Padding(
+                                            padding: const EdgeInsets.fromLTRB(
+                                                16, 8, 16, 8),
+                                            child: Row(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Icon(Icons.info_outline,
+                                                    size: 15,
+                                                    color: Theme.of(context)
+                                                        .colorScheme
+                                                        .onSurfaceVariant),
+                                                const SizedBox(width: 6),
+                                                Expanded(
+                                                  child: Text(
+                                                      'Day totals use original currencies. Tap a day to explore its expenses.',
+                                                      style: TextStyle(
+                                                          fontSize: 12,
+                                                          color: Theme.of(
+                                                                  context)
+                                                              .colorScheme
+                                                              .onSurfaceVariant)),
+                                                ),
+                                              ],
+                                            ),
+                                          )
                                         : DailyExpenseCardTile(
                                             key: ValueKey(
                                                 visible[index - 1].date),
@@ -178,22 +218,29 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                       top: false,
                       child: Padding(
                         padding: const EdgeInsets.symmetric(vertical: 8),
-                        child: Wrap(spacing: 16, children: [
-                          TextButton(
-                              onPressed: page > 0
-                                  ? () => ref
-                                      .read(expenseSearchStateProvider.notifier)
-                                      .page(page - 1)
-                                  : null,
-                              child: const Text('Previous')),
-                          TextButton(
-                              onPressed: page + 1 < pages
-                                  ? () => ref
-                                      .read(expenseSearchStateProvider.notifier)
-                                      .page(page + 1)
-                                  : null,
-                              child: const Text('Next'))
-                        ]),
+                        child: Wrap(
+                            spacing: 12,
+                            alignment: WrapAlignment.center,
+                            children: [
+                              OutlinedButton.icon(
+                                  onPressed: page > 0
+                                      ? () => ref
+                                          .read(expenseSearchStateProvider
+                                              .notifier)
+                                          .page(page - 1)
+                                      : null,
+                                  icon: const Icon(Icons.chevron_left),
+                                  label: const Text('Previous')),
+                              OutlinedButton.icon(
+                                  onPressed: page + 1 < pages
+                                      ? () => ref
+                                          .read(expenseSearchStateProvider
+                                              .notifier)
+                                          .page(page + 1)
+                                      : null,
+                                  icon: const Icon(Icons.chevron_right),
+                                  label: const Text('Next'))
+                            ]),
                       )),
               ]);
             },
@@ -203,15 +250,69 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
         )),
       ]),
       floatingActionButton: canEdit
-          ? FloatingActionButton(
+          ? FloatingActionButton.extended(
               // A unique hero tag: two default-tagged FABs on one route (this
               // screen and the category list it opens) make Flutter throw
               // "There are multiple heroes that share the same tag" (T081).
               heroTag: 'expensesAddFab',
               onPressed: () => context.push('/add_expense'),
-              child: const Icon(Icons.add),
+              icon: const Icon(Icons.add),
+              label: const Text('Add expense'),
             )
           : null,
+    );
+  }
+}
+
+/// Friendly empty state that keeps the existing reset action and copy.
+class _EmptyExpenses extends StatelessWidget {
+  const _EmptyExpenses({required this.onReset});
+
+  final VoidCallback onReset;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.5)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 54,
+            height: 54,
+            decoration: BoxDecoration(
+              color: scheme.primary.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.receipt_long_outlined,
+                color: scheme.primary, size: 28),
+          ),
+          const SizedBox(height: 12),
+          Text('No matching expenses',
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 6),
+          Text(
+            'No expenses match this search and filters. Try another date range or clear the filters.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
+          ),
+          const SizedBox(height: 14),
+          FilledButton.tonalIcon(
+            onPressed: onReset,
+            icon: const Icon(Icons.restart_alt),
+            label: const Text('Reset search and filters'),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -246,6 +347,36 @@ class _MonthRateFootnote extends ConsumerWidget {
         table: ref.watch(rateRegistryProvider).tableFor(
               ref.watch(selectedYearMonthProvider),
             ),
+      ),
+    );
+  }
+}
+
+/// Visible bulk-entry action. It stays reachable at narrow widths and large
+/// text, switching to a labelled icon button instead of hiding in a menu.
+class _BulkEntryAction extends StatelessWidget {
+  const _BulkEntryAction();
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final scaled = MediaQuery.textScalerOf(context).scale(14);
+    final compact = width < 360 || scaled > 21;
+    if (compact) {
+      return IconButton.filledTonal(
+        key: const ValueKey('bulk-entry'),
+        tooltip: 'Bulk entry',
+        onPressed: () => context.push('/bulk_entry'),
+        icon: const Icon(Icons.playlist_add),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+      child: FilledButton.tonalIcon(
+        key: const ValueKey('bulk-entry'),
+        onPressed: () => context.push('/bulk_entry'),
+        icon: const Icon(Icons.playlist_add),
+        label: const Text('Bulk entry'),
       ),
     );
   }
@@ -548,7 +679,8 @@ class _ExpenseTile extends ConsumerWidget {
     final isReimbursed = expense.status == ExpenseStatus.reimbursed;
     final isPartiallyReimbursed =
         expense.status == ExpenseStatus.partiallyReimbursed;
-    final canEdit = ref.watch(activeContextCanEditProvider) &&
+    final canEdit = expense.type != ExpenseType.medical &&
+        ref.watch(activeContextCanEditProvider) &&
         expense.yearMonth == ref.watch(selectedYearMonthProvider);
 
     // T157: the row reads in the month's display currency. The converted
@@ -670,7 +802,7 @@ class _ExpenseTile extends ConsumerWidget {
             ),
             title: Text(expense.title),
             subtitle: Text(
-              '${expense.yearMonth} \u2022 ${expense.merchantName ?? 'Merchant not recorded'} \u2022 ${expense.status.name.toUpperCase()} • ${expense.guiltLevel.name}',
+              '${expense.type == ExpenseType.medical ? 'Medical \u2022 ' : ''}${expense.yearMonth} \u2022 ${expense.merchantName ?? 'Merchant not recorded'} \u2022 ${expense.status.name.toUpperCase()} • ${expense.guiltLevel.name}',
             ),
             trailing: Column(
               mainAxisSize: MainAxisSize.min,

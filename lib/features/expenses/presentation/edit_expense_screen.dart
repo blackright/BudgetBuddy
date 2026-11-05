@@ -15,8 +15,10 @@ import '../../../core/models/money.dart';
 import '../../../core/network/rate_types.dart';
 import '../../../core/providers/active_budget_provider.dart';
 import '../../../core/providers/active_profile_provider.dart';
+import '../../../core/providers/active_space_provider.dart';
 import '../../../core/providers/selected_month_provider.dart';
 import '../../../shared/presentation/money_format.dart';
+import '../../../shared/presentation/profile_identity_color.dart';
 import '../../../shared/presentation/widgets/money_field.dart';
 import '../../engine/currency_resolution.dart';
 import '../../engine/expense_delta.dart';
@@ -27,6 +29,7 @@ import '../providers/expenses_provider.dart';
 import '../providers/category_provider.dart';
 import '../../finance/providers/profile_providers.dart';
 import 'profile_picker_sheet.dart';
+import 'expense_destination_guard.dart';
 import 'widgets/amount_conversion_hint.dart';
 import 'widgets/emotion_selector.dart';
 
@@ -241,6 +244,91 @@ class _EditExpenseScreenState extends ConsumerState<EditExpenseScreen> {
           kind: FinancialFeedbackKind.error);
       return;
     }
+    final main = ref.read(mainCurrencyProvider);
+    final table = ref.read(rateRegistryProvider).tableFor(budget.yearMonth);
+    final amountInMain =
+        toDisplay(Money(clone.amount, code), main, table).minorUnits;
+    final isDirect = _profileType == FinancialProfileType.direct;
+    String? profileName;
+    Color? profileColor;
+    int? remainingMinor;
+    if (_budgetProfileId != null) {
+      if (isDirect) {
+        final rows =
+            ref.read(directExpenseProfilesProvider).asData?.value ?? const [];
+        for (final profile in rows) {
+          if (profile.id == _budgetProfileId &&
+              (_profileGuid == null || profile.syncGuid == _profileGuid)) {
+            profileName = profile.name;
+            profileColor = profileIdentity(context,
+                syncGuid: profile.syncGuid, name: profile.name);
+            break;
+          }
+        }
+      } else {
+        final rows = ref.read(budgetProfilesProvider).asData?.value ?? const [];
+        for (final profile in rows) {
+          if (profile.id == _budgetProfileId &&
+              (_profileGuid == null || profile.syncGuid == _profileGuid)) {
+            profileName = profile.name;
+            profileColor = profileIdentity(context,
+                syncGuid: profile.syncGuid, name: profile.name);
+            remainingMinor = profile.allocation - profile.spent;
+            break;
+          }
+        }
+      }
+    }
+    final guard = destinationGuardFor(
+      isMain: _budgetProfileId == null,
+      isDirect: isDirect,
+      remainingMinor: remainingMinor,
+      amountMinorInContext: amountInMain,
+      profileName: profileName,
+      profileColor: profileColor,
+    );
+    if (guard != null) {
+      final decision = await confirmExpenseDestination(
+        context,
+        kind: guard.kind,
+        amountText: formatMinorUnits(clone.amount, code),
+        status: ExpenseStatus.planned,
+        title: clone.title,
+        spaceName: src.sharedSpaceId == null
+            ? null
+            : ref.read(activeSpaceProvider).value?.name ?? 'this space',
+        profileName: guard.profileName,
+        profileColor: guard.profileColor,
+        remainingText: guard.remainingMinor == null
+            ? null
+            : formatMinorUnits(guard.remainingMinor!, main),
+        borrowText: guard.borrowMinor == null
+            ? null
+            : formatMinorUnits(guard.borrowMinor!, main),
+      );
+      if (!mounted) return;
+      if (decision == ExpenseDestinationDecision.changeProfile) {
+        setState(() => _saving = false);
+        final choice = await ProfilePickerSheet.show(context,
+            selectedProfileId: _budgetProfileId,
+            selectedProfileType: _profileType);
+        if (choice != null && mounted) {
+          setState(() {
+            _budgetProfileId = choice.profileId;
+            _profileType = choice.profileType;
+            _profileGuid = choice.syncGuid;
+            _metadata.evidence.profileChosen = true;
+            _metadata.evidence.changed = true;
+            _metadata.evidence.cashConfirmed = false;
+          });
+        }
+        return;
+      }
+      if (decision != ExpenseDestinationDecision.save) {
+        setState(() => _saving = false);
+        return;
+      }
+    }
     final saved = await runFinancialAction(context,
         action: () => ref.read(expensesProvider.notifier).addExpense(clone),
         success: 'Planned copy created without payment evidence',
@@ -260,14 +348,17 @@ class _EditExpenseScreenState extends ConsumerState<EditExpenseScreen> {
     }
     var profileLabel =
         _budgetProfileId == null && _profileGuid == null && _profileType == null
-            ? 'Main Profile'
+            ? 'No budget — free-to-use'
             : 'Needs profile review';
+    Color? profileColor;
     for (final profile
         in ref.watch(budgetProfilesProvider).asData?.value ?? const []) {
       if (_profileType == FinancialProfileType.budget &&
           profile.id == _budgetProfileId &&
           (_profileGuid == null || profile.syncGuid == _profileGuid)) {
         profileLabel = profile.name;
+        profileColor = profileIdentity(context,
+            syncGuid: profile.syncGuid, name: profile.name);
       }
     }
     for (final profile
@@ -276,8 +367,16 @@ class _EditExpenseScreenState extends ConsumerState<EditExpenseScreen> {
           profile.id == _budgetProfileId &&
           (_profileGuid == null || profile.syncGuid == _profileGuid)) {
         profileLabel = profile.name;
+        profileColor = profileIdentity(context,
+            syncGuid: profile.syncGuid, name: profile.name);
       }
     }
+    final isMainProfile = _budgetProfileId == null &&
+        _profileGuid == null &&
+        _profileType == null;
+    final profileIcon = _profileType == FinancialProfileType.direct
+        ? Icons.receipt_long
+        : Icons.account_balance_wallet;
     final budget = ref.watch(activeBudgetProvider).value;
     final profile = ref.watch(activeProfileProvider).value;
     final yearMonth = ref.watch(selectedYearMonthProvider);
@@ -440,9 +539,24 @@ class _EditExpenseScreenState extends ConsumerState<EditExpenseScreen> {
               if (widget.expense.type == ExpenseType.standard)
                 ListTile(
                     contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.account_balance_wallet_outlined),
+                    leading: CircleAvatar(
+                      radius: 18,
+                      backgroundColor: isMainProfile
+                          ? Theme.of(context).colorScheme.errorContainer
+                          : (profileColor ??
+                                  Theme.of(context).colorScheme.primary)
+                              .withValues(alpha: .16),
+                      child: Icon(profileIcon,
+                          size: 20,
+                          color: isMainProfile
+                              ? Theme.of(context).colorScheme.onErrorContainer
+                              : (profileColor ??
+                                  Theme.of(context).colorScheme.primary)),
+                    ),
                     title: const Text('Financial profile'),
-                    subtitle: Text(profileLabel),
+                    subtitle: Text(isMainProfile
+                        ? 'No budget — free-to-use'
+                        : profileLabel),
                     trailing: TextButton(
                         onPressed: () async {
                           final choice = await ProfilePickerSheet.show(context,

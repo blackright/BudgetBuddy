@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:budget_buddy/core/database/isar_helper.dart';
 import 'package:budget_buddy/core/database/schema_migrations.dart';
 import 'package:budget_buddy/core/models/expense.dart';
 import 'package:budget_buddy/core/models/expense_evidence_chunk.dart';
@@ -35,8 +36,7 @@ void main() {
         ..value = '28');
     });
     await db.close();
-    db = await Isar.open(
-        [ExpenseSchema, ExpenseEvidenceChunkSchema, SchemaMigrationStampSchema],
+    db = await Isar.open(IsarHelper.schemas,
         directory: directory.path, name: 'evidence-upgrade');
     try {
       await runSchemaMigrations(db);

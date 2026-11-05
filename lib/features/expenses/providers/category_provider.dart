@@ -10,6 +10,5 @@ final categoryRepositoryProvider = Provider<CategoryRepository>((ref) {
 
 final categoriesProvider = FutureProvider<List<Category>>((ref) async {
   final repository = ref.watch(categoryRepositoryProvider);
-  await repository.ensureDefaultCategory();
-  return repository.getAllCategories();
+  return repository.getForUnifiedSetup();
 });

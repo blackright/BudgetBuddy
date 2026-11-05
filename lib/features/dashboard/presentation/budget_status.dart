@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/services/borrowing_service.dart';
+import '../../../core/services/continuous_balance_service.dart';
 
 /// The colours a budget profile card is painted with (FR-014).
 ///
@@ -40,6 +41,35 @@ extension BudgetStatusColors on BudgetStatus {
         return 'Fully used';
       case BudgetStatus.red:
         return 'Over budget';
+    }
+  }
+}
+
+/// User-facing copy for the derived continuous-balance chain state.
+extension BalanceChainStatusCopy on BalanceChainStatus {
+  String get title {
+    switch (this) {
+      case BalanceChainStatus.intact:
+        return 'Balance is continuous';
+      case BalanceChainStatus.firstMonth:
+        return 'Confirm the first opening balance';
+      case BalanceChainStatus.legacyGap:
+        return 'A month is missing from the balance chain';
+      case BalanceChainStatus.needsReview:
+        return 'Review your balance chain';
+    }
+  }
+
+  String get guidance {
+    switch (this) {
+      case BalanceChainStatus.intact:
+        return 'Opening money follows the previous month\'s closing balance.';
+      case BalanceChainStatus.firstMonth:
+        return 'Record what was in your bank at the start of this month. Unknown is different from a confirmed zero.';
+      case BalanceChainStatus.legacyGap:
+        return 'Confirm the opening balance for the missing month before carrying money forward.';
+      case BalanceChainStatus.needsReview:
+        return 'A stored amount, currency or settlement needs review before money can move.';
     }
   }
 }

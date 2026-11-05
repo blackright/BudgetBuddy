@@ -3,9 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/providers/active_profile_provider.dart';
 
-import '../../core/models/medical_bill.dart';
-import '../../core/providers/clock_provider.dart';
-import '../../features/medical/providers/medical_providers.dart';
+import '../../features/medical/providers/medical_receipt_provider.dart';
+import '../../features/identity/providers/device_auth_session.dart';
 import 'widgets/spaces_dropdown.dart';
 import '../../core/providers/budget_context_provider.dart';
 
@@ -54,21 +53,13 @@ class _AppShellState extends ConsumerState<AppShell> {
       visitedOwner = currentOwner;
       visitedBranches.add(widget.navigationShell.currentIndex);
     }
-    // Check due or overdue bills
-    final medicalBillsAsync = ref.watch(medicalBillsProvider);
-    final now = ref.watch(clockProvider);
-
-    int dueOrOverdueCount = 0;
-    if (medicalBillsAsync.value != null) {
-      for (final bill in medicalBillsAsync.value!) {
-        if (bill.followUpDate != null && bill.state.isPending) {
-          if (bill.followUpDate!.isBefore(now) ||
-              bill.followUpDate!.difference(now).inHours < 24) {
-            dueOrOverdueCount++;
-          }
-        }
-      }
-    }
+    // The Medical badge follows the same cross-month inbox as the dashboard, so
+    // an old overdue bill remains visible after the budget month changes. It is
+    // only built after authentication, never during onboarding/lock bootstrap.
+    final authenticated = ref.watch(deviceAuthSessionProvider).authenticated;
+    final dueOrOverdueCount = authenticated
+        ? (ref.watch(medicalInboxProvider).valueOrNull?.needsYouCount ?? 0)
+        : 0;
 
     return Scaffold(
       body: Column(

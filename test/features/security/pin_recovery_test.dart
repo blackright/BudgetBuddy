@@ -1,3 +1,5 @@
+import 'package:budget_buddy/features/identity/providers/device_auth_session.dart';
+import 'support/native_identity_fixture.dart';
 import 'package:budget_buddy/core/models/lock_setting.dart';
 import 'package:budget_buddy/core/models/shared_space.dart';
 import 'package:budget_buddy/core/models/user_profile.dart';
@@ -71,6 +73,7 @@ void main() {
   group('T063: recovery keeps every record (FR-045)', () {
     Future<ProviderContainer> container() async {
       final c = ProviderContainer(overrides: [
+        nativeAccessBindingProvider.overrideWith(nativeFixtureBinding),
         lockSubjectProvider.overrideWithValue(locked),
         lockSettingRepositoryProvider.overrideWithValue(settings),
         secretStoreProvider.overrideWithValue(secrets),
@@ -80,7 +83,8 @@ void main() {
             .overrideWithValue(FakeDeviceAuthenticator()),
         identityKeyLoaderProvider.overrideWithValue(_FakeKeyLoader(_keyPair())),
         activeSpaceProvider.overrideWith((ref) => Stream.value(space())),
-        identityProvider.overrideWith((ref) => Stream.value(null)),
+        identityProvider
+            .overrideWith((ref) => Stream.value(nativeFixtureIdentity())),
       ]);
       addTearDown(c.dispose);
       await c.read(activeLockSettingProvider.future);
@@ -156,7 +160,8 @@ void main() {
             activeSpaceProvider.overrideWith((ref) => Stream.value(space())),
             profilesProvider
                 .overrideWith((ref) => Stream.value(<UserProfile>[])),
-            identityProvider.overrideWith((ref) => Stream.value(null)),
+            identityProvider
+                .overrideWith((ref) => Stream.value(nativeFixtureIdentity())),
           ],
           child: const MaterialApp(home: LockScreen(subject: locked)),
         );

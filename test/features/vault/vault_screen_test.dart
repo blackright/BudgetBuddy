@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:budget_buddy/core/database/isar_helper.dart';
 import 'package:budget_buddy/core/database/money_integrity.dart';
+import 'package:budget_buddy/core/models/pending_action.dart';
 import 'package:budget_buddy/core/models/user_profile.dart';
 import 'package:budget_buddy/core/models/monthly_budget.dart';
 import 'package:budget_buddy/core/providers/active_profile_provider.dart';
@@ -15,6 +16,7 @@ import 'package:budget_buddy/features/vault/presentation/vault_screen.dart';
 import 'package:budget_buddy/features/vault/providers/vault_providers.dart';
 import 'package:budget_buddy/features/vault/repositories/vault_repository.dart';
 import 'package:budget_buddy/features/vault/vault_recovery_service.dart';
+import 'package:budget_buddy/features/vault/vault_suggestion_service.dart';
 import 'package:budget_buddy/features/vault/vault_transfer_service.dart';
 import 'package:budget_buddy/features/vault/presentation/vault_transfer_dialog.dart';
 import 'package:flutter/material.dart';
@@ -29,7 +31,11 @@ Future<void> settle(WidgetTester tester) async {
     await tester.pump();
     await Future<void>.delayed(const Duration(milliseconds: 25));
   }
-  await tester.pumpAndSettle();
+  for (var i = 0; i < 40; i++) {
+    if (!tester.binding.hasScheduledFrame) break;
+    await tester.pump(const Duration(milliseconds: 50));
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+  }
 }
 
 void main() {
@@ -72,7 +78,8 @@ void main() {
         'The transfer did not finish: ${tester.widgetList<Text>(find.byType(Text)).map((t) => t.data).join('\n')}');
   }
 
-  Future<void> open(WidgetTester tester, {bool shared = false}) async {
+  Future<void> open(WidgetTester tester,
+      {bool shared = false, bool waitForTransfer = false}) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final container = ProviderContainer(overrides: [
@@ -102,6 +109,13 @@ void main() {
     await tester.pumpWidget(UncontrolledProviderScope(
         container: container, child: const MaterialApp(home: VaultScreen())));
     await settle(tester);
+    if (waitForTransfer && !shared) {
+      await container.read(vaultTransferReadinessProvider.future).timeout(
+          const Duration(seconds: 10),
+          onTimeout: () => throw StateError(
+              'Vault transfer readiness did not resolve within 10 seconds.'));
+      await settle(tester);
+    }
   }
 
   testWidgets(
@@ -119,7 +133,7 @@ void main() {
           ..createdAt = DateTime(2026)
           ..updatedAt = DateTime(2026));
       });
-      await open(tester);
+      await open(tester, waitForTransfer: true);
       expect(find.text('Maximum deposit: Ft 100,000'), findsOneWidget,
           reason: tester
               .widgetList<Text>(find.byType(Text))
@@ -195,6 +209,8 @@ void main() {
           targetYearMonth: '2027-06',
           clock: () => DateTime(2026, 10, 23));
       await open(tester);
+      await tester.scrollUntilVisible(
+          find.text('Suggested per month: Ft 111,112'), 200);
       expect(find.text('Suggested per month: Ft 111,112'), findsOneWidget);
       expect(
           find.text('9 saving months, including this month'), findsOneWidget);
@@ -234,6 +250,7 @@ void main() {
       (tester) async {
     await tester.runAsync(() async {
       await open(tester);
+      await tester.scrollUntilVisible(find.text('Add savings goal'), 200);
       await tester.ensureVisible(find.text('Add savings goal'));
       await tester.pump();
       await tester.tap(find.text('Add savings goal'));
@@ -278,11 +295,12 @@ void main() {
           name: 'Reached',
           targetMinor: 1000000);
       await open(tester);
-      await tester.ensureVisible(find.text('Check for finished months'));
+      await tester.ensureVisible(find.text('Check savings'));
       await tester.pump();
-      await tester.tap(find.text('Check for finished months'));
+      await tester.tap(find.text('Check savings'));
       await settle(tester);
-      expect(find.textContaining('UNCHANGED:'), findsOneWidget);
+      expect(find.text('No finished month has money left to review.'),
+          findsOneWidget);
       expect(find.text('Goal reached'), findsOneWidget);
       expect(find.text('Edit savings goal'), findsOneWidget);
       await tester.ensureVisible(find.text('Edit savings goal'));
@@ -320,13 +338,113 @@ void main() {
           }));
       });
       await open(tester);
-      await tester.scrollUntilVisible(find.text('2026-09 • Saved Ft 0'), 180);
-      await tester.ensureVisible(find.text('2026-09 • Saved Ft 0'));
+      await tester.scrollUntilVisible(
+          find.text('2026-09 • Earlier automatic savings Ft 0'), 180);
+      await tester
+          .ensureVisible(find.text('2026-09 • Earlier automatic savings Ft 0'));
       await tester.pump();
-      await tester.tap(find.text('2026-09 • Saved Ft 0'));
+      await tester.tap(find.text('2026-09 • Earlier automatic savings Ft 0'));
       await settle(tester);
       expect(find.text('Spending: Ft 100'), findsOneWidget);
       expect(find.text('No positive funds remained.'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  testWidgets(
+      'finished-month suggestion opens a prefilled deposit without moving money',
+      (tester) async {
+    await tester.runAsync(() async {
+      await h.isar.writeTxn(() async {
+        await h.isar.pendingActions.put(PendingAction()
+          ..profileId = 1
+          ..actionType = vaultDepositSuggestedType
+          ..title = 'Money left in 2026-09'
+          ..nextAction = 'Review and deposit to Vault'
+          ..feature = 'vault'
+          ..recordRef = '1:2026-09'
+          ..expectedMonth = '2026-09'
+          ..expectedAmountMinor = 123400
+          ..currency = 'huf'
+          ..status = 'pending'
+          ..dedupeKey = 'vault.depositSuggested|1:2026-09|2026-09'
+          ..createdAt = DateTime(2026, 10, 1)
+          ..updatedAt = DateTime(2026, 10, 1));
+      });
+      await open(tester);
+
+      expect(find.byKey(const Key('vaultSuggestions')), findsOneWidget);
+      expect(find.text('Money left in 2026-09'), findsOneWidget);
+      expect(find.text('Ft 123,400 left in 2026-09'), findsOneWidget);
+
+      await tester.ensureVisible(find.text('Review deposit'));
+      await tester.pump();
+      await tester.tap(find.text('Review deposit'));
+      await settle(tester);
+
+      expect(find.byType(VaultTransferDialog), findsOneWidget);
+      expect(
+          tester
+              .widget<TextField>(find.byKey(const Key('vaultTransferAmount')))
+              .controller!
+              .text,
+          '123,400');
+      expect((await VaultRepository(h.isar).getVault(1))!.totalMinor, 1000000);
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  testWidgets(
+      'planned withdrawals list reminders and only a due one offers withdrawal',
+      (tester) async {
+    await tester.runAsync(() async {
+      Future<void> putDeposit(
+          String key, int amount, String yearMonth, String target) async {
+        await h.isar.writeTxn(() async {
+          final before =
+              (await h.isar.savingsVaults.where().findFirst())!.totalMinor;
+          await h.isar.vaultEntrys.put(VaultEntry()
+            ..operationKey = key
+            ..profileId = 1
+            ..kind = 'deposit'
+            ..yearMonth = yearMonth
+            ..amountMinor = amount
+            ..currency = 'huf'
+            ..balanceAfterMinor = before + amount
+            ..createdAt = DateTime(2026, 10, 2)
+            ..breakdownJson = jsonEncode({
+              'version': 1,
+              'vaultDelta': amount,
+              'monthDelta': -amount,
+              'month': yearMonth,
+              'currency': 'huf',
+              'vaultBefore': before,
+              'bankBefore': 0,
+              'bankAfter': -amount,
+              'reserveBefore': 0,
+              'reserveAfter': -amount,
+              'note': '',
+              'targetWithdrawalMonth': target,
+            }));
+          final vault = (await h.isar.savingsVaults.where().findFirst())!
+            ..totalMinor = before + amount;
+          await h.isar.savingsVaults.put(vault);
+        });
+      }
+
+      await putDeposit('due', 20000, '2026-09', '2026-10');
+      await putDeposit('later', 30000, '2026-09', '2027-01');
+      await open(tester);
+
+      final planned = find.byKey(const Key('vaultPlanned'));
+      expect(planned, findsOneWidget);
+      expect(find.text('Planned for 2026-10'), findsOneWidget);
+      expect(find.text('Planned for 2027-01'), findsOneWidget);
+      expect(find.textContaining('due now'), findsOneWidget);
+      expect(find.descendant(of: planned, matching: find.text('Withdraw')),
+          findsOneWidget);
+      // A reminder never moves money on its own.
+      expect((await VaultRepository(h.isar).getVault(1))!.totalMinor, 1050000);
       expect(tester.takeException(), isNull);
     });
   });
@@ -336,7 +454,7 @@ void main() {
     await tester.runAsync(() async {
       await open(tester, shared: true);
       expect(find.text('The Savings Vault is personal'), findsOneWidget);
-      expect(find.text('Check for finished months'), findsNothing);
+      expect(find.text('Check savings'), findsNothing);
       await tester.pumpWidget(ProviderScope(overrides: [
         budgetContextProvider.overrideWithValue(
             ContextRef.shared(spaceId: 2, yearMonth: '2026-10')),
@@ -407,11 +525,12 @@ void main() {
       await tester.scrollUntilVisible(
           find.text('History amount needs review'), 150);
       expect(find.text('History amount needs review'), findsOneWidget);
-      await tester.ensureVisible(find.text('Check for finished months'));
+      await tester.ensureVisible(find.text('Check savings'));
       await tester.pump();
-      await tester.tap(find.text('Check for finished months'));
+      await tester.tap(find.text('Check savings'));
       await settle(tester);
-      expect(find.textContaining('PAUSED:'), findsOneWidget);
+      expect(find.text('No finished month has money left to review.'),
+          findsOneWidget);
       expect((await VaultRepository(h.isar).getVault(1))!.totalMinor,
           corruptedMinorSentinel);
       expect(tester.takeException(), isNull);
@@ -464,6 +583,8 @@ void main() {
         }
       });
       await open(tester);
+      await tester.scrollUntilVisible(
+          find.text('Review balance recovery'), 200);
       await tester.ensureVisible(find.text('Review balance recovery'));
       await tester.pump();
       await tester.tap(find.text('Review balance recovery'));

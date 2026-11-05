@@ -3,12 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/models/currency_code.dart';
-import '../../../core/providers/budget_context_provider.dart';
+import '../../../core/models/pending_action.dart';
 import '../../../core/providers/active_profile_provider.dart';
+import '../../../core/providers/budget_context_provider.dart';
 import '../../../shared/presentation/money_format.dart';
-import '../../engine/providers/sweep_provider.dart';
 import '../models/savings_vault.dart';
 import '../providers/vault_providers.dart';
+import '../vault_suggestion_service.dart';
 import 'vault_goal.dart';
 import 'vault_history.dart';
 import 'vault_recovery_dialog.dart';
@@ -20,10 +21,10 @@ import '../../../core/database/money_integrity.dart'
 /// The personal Savings Vault.
 ///
 /// The balance/history are read-only; the optional goal is editable metadata.
-/// Money enters only through the end-of-month sweep, so
-/// the total always reconciles with months that actually closed. The vault is
-/// personal-only and is never shared or synced (011/012 FR-015/FR-017), hence
-/// the blocked state in a shared context.
+/// Money enters and leaves only through an explicit, previewed transfer, so the
+/// total always reconciles with real confirmations. The vault is personal-only
+/// and is never shared or synced (011/012 FR-015/FR-017), hence the blocked
+/// state in a shared context.
 class VaultScreen extends ConsumerWidget {
   const VaultScreen({super.key});
 
@@ -77,7 +78,7 @@ class _VaultBody extends ConsumerWidget {
             child: Column(
               children: [
                 Text(
-                  'Saved',
+                  'Saved in Vault',
                   style: theme.textTheme.titleMedium
                       ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                 ),
@@ -89,14 +90,23 @@ class _VaultBody extends ConsumerWidget {
                   style: theme.textTheme.displaySmall
                       ?.copyWith(fontWeight: FontWeight.bold),
                 ),
+                const SizedBox(height: 8),
+                Text(
+                  'Internal transfer - not spending and not income.',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                ),
                 if (current != null) ...[
                   const SizedBox(height: 8),
                   Text(
-                    'Next month to check: ${current.lastSweepYearMonth}\nUpdated: ${formatVaultTime(current.updatedAt)}',
+                    'Updated: ${formatVaultTime(current.updatedAt)}',
                     style: theme.textTheme.bodySmall
                         ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                   ),
                 ],
+                const SizedBox(height: 12),
+                const _CheckSavingsButton(),
               ],
             ),
           ),
@@ -109,7 +119,7 @@ class _VaultBody extends ConsumerWidget {
               leading: Icon(Icons.pause_circle_outline,
                   color: theme.colorScheme.onErrorContainer),
               title: Text(
-                'Sweep paused',
+                'Earlier automatic savings paused',
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   color: theme.colorScheme.onErrorContainer,
@@ -117,12 +127,16 @@ class _VaultBody extends ConsumerWidget {
               ),
               subtitle: Text(
                 current?.pauseReason ??
-                    'The next month could not be valued safely.',
+                    'A previous automatic savings month could not be valued safely.',
                 style: TextStyle(color: theme.colorScheme.onErrorContainer),
               ),
             ),
           ),
         ],
+        const SizedBox(height: 12),
+        _SuggestionsCard(),
+        const SizedBox(height: 12),
+        _PlannedWithdrawalsCard(),
         const SizedBox(height: 12),
         const Card(
           child: ListTile(
@@ -135,10 +149,7 @@ class _VaultBody extends ConsumerWidget {
           ),
         ),
         const SizedBox(height: 12),
-        _SweepButton(
-            key: ValueKey(ref.watch(activeProfileProvider).valueOrNull?.id)),
-        if (current != null && current.hasValidBalance && review == null)
-          const VaultTransferPanel(),
+        const VaultTransferPanel(),
         if (current?.totalMinor == corruptedMinorSentinel)
           OutlinedButton(
               onPressed: () => showDialog<void>(
@@ -182,11 +193,10 @@ class _VaultBody extends ConsumerWidget {
         const SizedBox(height: 8),
         Text(
           current == null
-              ? 'No vault yet. It will start with the current month; earlier '
-                  'months are never swept retroactively.'
-              : 'Only a positive balance left at the end of a finished month is '
-                  'swept. A month with an unconfirmed opening balance or an '
-                  'unavailable rate pauses the sweep instead of guessing.',
+              ? 'No savings yet. Your first deposit starts the Vault; earlier '
+                  'months are never saved retroactively.'
+              : 'Only a transfer you review and confirm moves money. A planned '
+                  'withdrawal is a reminder and never withdraws by itself.',
           style: theme.textTheme.bodySmall
               ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
         ),
@@ -195,7 +205,7 @@ class _VaultBody extends ConsumerWidget {
   }
 
   String _totalText(SavingsVault? vault) {
-    if (vault == null) return 'Not started';
+    if (vault == null) return 'No savings yet';
     if (!vault.hasValidBalance) return 'Saved balance needs review';
     final code = vault.currencyCode;
     if (code == null) return 'Saved currency needs review (${vault.currency})';
@@ -203,57 +213,204 @@ class _VaultBody extends ConsumerWidget {
   }
 }
 
-class _SweepButton extends ConsumerStatefulWidget {
-  const _SweepButton({super.key});
+/// Suggests finished months with money left. It never writes a Vault entry or
+/// moves money; "Review deposit" opens the normal preview.
+class _SuggestionsCard extends ConsumerWidget {
   @override
-  ConsumerState<_SweepButton> createState() => _SweepButtonState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final suggestions = ref.watch(vaultDepositSuggestionsProvider).valueOrNull;
+    if (suggestions == null || suggestions.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final theme = Theme.of(context);
+    return Card(
+      key: const Key('vaultSuggestions'),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Money left to review',
+                style: theme.textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            Text(
+              'These finished months had money left. Nothing was saved '
+              'automatically; choose what to deposit.',
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+            const SizedBox(height: 8),
+            for (final suggestion in suggestions)
+              _SuggestionRow(suggestion: suggestion),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
-class _SweepButtonState extends ConsumerState<_SweepButton> {
+class _SuggestionRow extends ConsumerWidget {
+  const _SuggestionRow({required this.suggestion});
+
+  final PendingAction suggestion;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currency = CurrencyCode.tryParse(suggestion.currency ?? '');
+    final amount = suggestion.expectedAmountMinor;
+    final month = suggestion.expectedMonth ?? suggestion.recordRef;
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: const Icon(Icons.savings_outlined),
+      title: Text(suggestion.title),
+      subtitle: Text(
+        amount != null && currency != null
+            ? '${formatMinorUnits(amount, currency)} left in $month'
+            : 'Review the finished month',
+      ),
+      trailing: TextButton(
+        onPressed: () => showDialog<void>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => VaultTransferDialog(
+            kind: 'deposit',
+            initialAmountMinor: amount,
+            initialCurrency: suggestion.currency,
+            completesActionType: suggestion.actionType,
+            completesRecordRef: suggestion.recordRef,
+            completesCycleOrMonth:
+                suggestion.expectedMonth ?? suggestion.recordRef,
+          ),
+        ),
+        child: const Text('Review deposit'),
+      ),
+    );
+  }
+}
+
+/// Planned withdrawals are derived reminders. A due one opens the normal
+/// withdrawal preview; no money moves until the user confirms.
+class _PlannedWithdrawalsCard extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final planned = ref.watch(plannedVaultWithdrawalsProvider);
+    if (planned.isEmpty) return const SizedBox.shrink();
+    final currentMonth =
+        vaultSuggestionCurrentMonth(ref.watch(vaultClockProvider)());
+    final theme = Theme.of(context);
+    return Card(
+      key: const Key('vaultPlanned'),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Planned withdrawals',
+                style: theme.textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            Text(
+              'A target month is a reminder only. Withdraw when you confirm.',
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+            const SizedBox(height: 8),
+            for (final item in planned)
+              _PlannedRow(item: item, currentMonth: currentMonth),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PlannedRow extends StatelessWidget {
+  const _PlannedRow({required this.item, required this.currentMonth});
+
+  final PlannedVaultWithdrawal item;
+  final String currentMonth;
+
+  @override
+  Widget build(BuildContext context) {
+    final currency = CurrencyCode.tryParse(item.deposit.currency);
+    final due = item.isDue(currentMonth);
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(due ? Icons.notifications_active_outlined : Icons.schedule),
+      title: Text('Planned for ${item.targetMonth}'),
+      subtitle: Text(
+        currency == null
+            ? 'Amount needs review'
+            : '${formatMinorUnits(item.deposit.amountMinor.abs(), currency)}'
+                '${due ? ' - due now' : ''}',
+      ),
+      trailing: due
+          ? TextButton(
+              onPressed: () => showDialog<void>(
+                context: context,
+                barrierDismissible: false,
+                builder: (_) => VaultTransferDialog(
+                  kind: 'withdrawal',
+                  initialAmountMinor: item.deposit.amountMinor.abs(),
+                  initialCurrency: item.deposit.currency,
+                  completesActionType: vaultWithdrawalDueType,
+                  completesRecordRef: item.deposit.operationKey,
+                  completesCycleOrMonth: item.targetMonth,
+                ),
+              ),
+              child: const Text('Withdraw'),
+            )
+          : null,
+    );
+  }
+}
+
+class _CheckSavingsButton extends ConsumerStatefulWidget {
+  const _CheckSavingsButton();
+
+  @override
+  ConsumerState<_CheckSavingsButton> createState() =>
+      _CheckSavingsButtonState();
+}
+
+class _CheckSavingsButtonState extends ConsumerState<_CheckSavingsButton> {
   bool _busy = false;
   @override
   Widget build(BuildContext context) {
-    final result = ref.watch(sweepResultProvider);
-    final id = ref.watch(activeProfileProvider).valueOrNull?.id;
-    final code = result == null ? null : CurrencyCode.tryParse(result.currency);
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      FilledButton.tonalIcon(
-          onPressed: _busy
-              ? null
-              : () async {
-                  setState(() => _busy = true);
-                  try {
-                    final checked = await ref
-                        .read(sweepServiceProvider)
-                        .executeSweepCheck();
-                    if (context.mounted) {
-                      showFinancialFeedback(context, checked.message,
-                          kind: switch (checked.outcome) {
-                            SweepOutcome.failed => FinancialFeedbackKind.error,
-                            SweepOutcome.paused =>
-                              FinancialFeedbackKind.warning,
-                            _ => FinancialFeedbackKind.success,
-                          });
-                    }
-                  } catch (_) {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                          content: Text(
-                              'The check could not finish. Review savings and audit history; earlier completed steps may have saved.')));
-                    }
-                  } finally {
-                    if (mounted) setState(() => _busy = false);
-                  }
-                },
-          icon: const Icon(Icons.savings_outlined),
-          label: Text(_busy ? 'Checking…' : 'Check for finished months')),
-      if (result != null && result.profileId == id)
-        Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Text(
-                '${result.outcome.name.toUpperCase()}: ${result.message}'
-                '${result.addedMinor > 0 && code != null ? '\nAdded in this check: ${formatMinorUnits(result.addedMinor, code)}' : ''}')),
-    ]);
+    return FilledButton.tonalIcon(
+      onPressed: _busy
+          ? null
+          : () async {
+              setState(() => _busy = true);
+              try {
+                final check = ref.read(vaultSuggestionCheckProvider);
+                final result = await check();
+                if (context.mounted) {
+                  showFinancialFeedback(
+                    context,
+                    result.message,
+                    kind:
+                        result.pausedReason != null || result.skipped.isNotEmpty
+                            ? FinancialFeedbackKind.warning
+                            : FinancialFeedbackKind.success,
+                  );
+                }
+              } catch (_) {
+                if (context.mounted) {
+                  showFinancialFeedback(
+                    context,
+                    'The savings check could not finish. No savings were changed; retry safely.',
+                    kind: FinancialFeedbackKind.error,
+                  );
+                }
+              } finally {
+                if (mounted) setState(() => _busy = false);
+              }
+            },
+      icon: const Icon(Icons.savings_outlined),
+      label: Text(_busy ? 'Checking...' : 'Check savings'),
+    );
   }
 }
 
@@ -275,8 +432,8 @@ class _BlockedInSharedSpace extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Text(
-          'Switch back to your personal space to see money swept out of your '
-          'own finished months. Shared spaces never see or write this vault.',
+          'Switch back to your personal space to see money saved from your own '
+          'finished months. Shared spaces never see or write this vault.',
           textAlign: TextAlign.center,
           style: theme.textTheme.bodyMedium
               ?.copyWith(color: theme.colorScheme.onSurfaceVariant),

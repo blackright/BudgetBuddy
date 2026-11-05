@@ -3,7 +3,10 @@ import 'dart:async';
 import 'package:budget_buddy/core/models/consent_record.dart';
 import 'package:budget_buddy/core/models/identity.dart';
 import 'package:budget_buddy/core/providers/identity_provider.dart';
+import 'package:budget_buddy/features/budget_setup/domain/onboarding_startup.dart';
+import 'package:budget_buddy/features/budget_setup/providers/onboarding_readiness_provider.dart';
 import 'package:budget_buddy/features/identity/presentation/app_lock_gate.dart';
+import 'package:budget_buddy/features/identity/providers/device_auth_session.dart';
 import 'package:budget_buddy/features/identity/providers/device_key_session.dart';
 import 'package:budget_buddy/features/identity/repositories/device_authenticator.dart';
 import 'package:budget_buddy/features/identity/repositories/local_auth_outcome.dart';
@@ -91,6 +94,8 @@ ProviderContainer _containerWith({
 }) {
   final container = ProviderContainer(
     overrides: [
+      onboardingStartupProvider.overrideWith((ref) =>
+          Stream.value(OnboardingStartup(StartupKind.establishedUser))),
       identityProvider.overrideWith(
         (ref) => Stream<Identity?>.value(withIdentity ? _identity() : null),
       ),
@@ -189,53 +194,42 @@ void main() {
     expect(find.text('secret app'), findsOneWidget);
   });
 
-  testWidgets(
-      'a key left in memory is dropped after the frame, not during build',
+  testWidgets('owner resolution clears an existing key without a build write',
       (tester) async {
     final identityController = StreamController<Identity?>();
-    final consentController = StreamController<ConsentRecord?>();
     addTearDown(identityController.close);
-    addTearDown(consentController.close);
-
-    final container = ProviderContainer(
-      overrides: [
-        identityProvider.overrideWith((ref) => identityController.stream),
-        consentProvider.overrideWith((ref) => consentController.stream),
-        deviceAuthenticatorProvider
-            .overrideWithValue(_ScriptedAuthenticator([true])),
-        identityKeyLoaderProvider.overrideWithValue(_FakeKeyLoader(_keyPair())),
-      ],
-    );
+    final container = ProviderContainer(overrides: [
+      onboardingStartupProvider.overrideWith((ref) =>
+          Stream.value(OnboardingStartup(StartupKind.establishedUser))),
+      identityProvider.overrideWith((ref) => identityController.stream),
+      consentProvider
+          .overrideWith((ref) => Stream.value(_consent(deviceAuth: true))),
+      deviceAuthenticatorProvider
+          .overrideWithValue(_ScriptedAuthenticator([true])),
+      identityKeyLoaderProvider.overrideWithValue(_FakeKeyLoader(_keyPair())),
+    ]);
     addTearDown(container.dispose);
-
     await tester.pumpWidget(_app(container));
-    expect(find.text('secret app'), findsOneWidget,
-        reason: 'nothing has settled, so the gate cannot decide yet');
-
-    // Something already released the key this session (a tap-time prompt such
-    // as "Pair with a device"), so the guard has a real write to make. This is
-    // the case the in-build call crashed on.
+    expect(find.text('secret app'), findsNothing);
     expect(
-      await container
-          .read(deviceKeySessionProvider.notifier)
-          .require(reason: 'Pair with a device'),
-      isNotNull,
-    );
-    expect(container.read(deviceKeySessionProvider), isNotNull);
-
+        await container
+            .read(deviceKeySessionProvider.notifier)
+            .require(reason: 'Pair with a device'),
+        isNull,
+        reason: 'unknown identity cannot release a key');
     identityController.add(_identity());
-    consentController.add(_consent(deviceAuth: true));
-    await tester.pump();
-    await tester.pump();
-
-    expect(tester.takeException(), isNull,
-        reason: 'the write must not happen during the build pass');
-    expect(find.text('BudgetBuddy is locked'), findsOneWidget);
-    expect(container.read(deviceKeySessionProvider), isNull,
-        reason: 'the shut gate drops the key it found');
+    await _settle(tester);
+    await tester.tap(find.byKey(const Key('unlockButton')));
+    await tester.pumpAndSettle();
+    expect(container.read(deviceKeySessionProvider), isNotNull);
+    identityController.add(null);
+    await _settle(tester);
+    expect(tester.takeException(), isNull);
+    expect(find.text('secret app'), findsNothing);
+    expect(container.read(deviceKeySessionProvider), isNull);
   });
 
-  testWidgets('no identity leaves the gate inert and never prompts',
+  testWidgets('no identity still requires native authentication',
       (tester) async {
     final authenticator = _ScriptedAuthenticator([true]);
     final container = _containerWith(
@@ -249,11 +243,16 @@ void main() {
     await _settle(tester);
 
     expect(tester.takeException(), isNull);
-    expect(find.text('secret app'), findsOneWidget);
+    expect(find.text('secret app'), findsNothing);
     expect(authenticator.prompts, 0);
+    await tester.tap(find.byKey(const Key('unlockButton')));
+    await tester.pumpAndSettle();
+    expect(authenticator.prompts, 1);
+    expect(find.text('secret app'), findsOneWidget);
   });
 
-  testWidgets('declined device auth leaves the gate inert and never prompts',
+  testWidgets(
+      'old optional consent cannot disable mandatory native authentication',
       (tester) async {
     final authenticator = _ScriptedAuthenticator([true]);
     final container = _containerWith(
@@ -267,7 +266,88 @@ void main() {
     await _settle(tester);
 
     expect(tester.takeException(), isNull);
-    expect(find.text('secret app'), findsOneWidget);
+    expect(find.text('secret app'), findsNothing);
     expect(authenticator.prompts, 0);
+    await tester.tap(find.byKey(const Key('unlockButton')));
+    await tester.pumpAndSettle();
+    expect(authenticator.prompts, 1);
+    expect(find.text('secret app'), findsOneWidget);
   });
+
+  testWidgets('cold start never mounts the app behind the lock',
+      (tester) async {
+    final container = _containerWith(
+      withIdentity: false,
+      deviceAuth: true,
+      authenticator: _ScriptedAuthenticator([true]),
+      loader: _FakeKeyLoader(_keyPair()),
+    );
+
+    await tester.pumpWidget(_counterApp(container));
+    await _settle(tester);
+
+    expect(find.byType(_Counter), findsNothing,
+        reason: 'nothing private is built before the first unlock');
+  });
+
+  testWidgets('a re-lock keeps the screen state instead of restarting it',
+      (tester) async {
+    final authenticator = _ScriptedAuthenticator([true, true]);
+    final container = _containerWith(
+      withIdentity: false,
+      deviceAuth: true,
+      authenticator: authenticator,
+      loader: _FakeKeyLoader(_keyPair()),
+    );
+
+    await tester.pumpWidget(_counterApp(container));
+    await _settle(tester);
+    await tester.tap(find.byKey(const Key('unlockButton')));
+    await tester.pumpAndSettle();
+    expect(find.text('count 0'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('incrementButton')));
+    await tester.pump();
+    expect(find.text('count 1'), findsOneWidget);
+
+    container.read(deviceAuthSessionProvider.notifier).lock();
+    await tester.pumpAndSettle();
+    expect(find.text('BudgetBuddy is locked'), findsOneWidget);
+    expect(find.text('count 1'), findsNothing,
+        reason: 'the covered screen must not stay readable');
+
+    await tester.tap(find.byKey(const Key('unlockButton')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('count 1'), findsOneWidget,
+        reason: 'a re-lock resumes the same step, it does not restart it');
+    expect(authenticator.prompts, 2);
+  });
+}
+
+Widget _counterApp(ProviderContainer container) => UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: AppLockGate(child: _Counter())),
+    );
+
+class _Counter extends StatefulWidget {
+  const _Counter();
+  @override
+  State<_Counter> createState() => _CounterState();
+}
+
+class _CounterState extends State<_Counter> {
+  int value = 0;
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        body: Center(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text('count $value'),
+            TextButton(
+                key: const Key('incrementButton'),
+                onPressed: () => setState(() => value++),
+                child: const Text('increment')),
+          ]),
+        ),
+      );
 }
