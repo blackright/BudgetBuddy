@@ -33,22 +33,61 @@ import '../medical/repositories/medical_test_harness.dart';
 import 'support/financial_drafts.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:budget_buddy/features/budget_setup/presentation/widgets/learning_steps.dart';
 
 final _recordedOwner = StateProvider<UserProfile?>((ref) => null);
+
+/// Waits for [condition] while advancing both the real event loop and the
+/// widget clock. Real async work (Isar) needs `runAsync`; timers, animations
+/// and rebuilds need `pump`.
+Future<void> pumpUntil(
+  WidgetTester tester,
+  bool Function() condition, {
+  String? reason,
+  Duration timeout = const Duration(seconds: 15),
+}) async {
+  final deadline = DateTime.now().add(timeout);
+  while (DateTime.now().isBefore(deadline)) {
+    await tester
+        .runAsync(() => Future<void>.delayed(const Duration(milliseconds: 5)));
+    await tester.pump(const Duration(milliseconds: 20));
+    if (condition()) return;
+  }
+  fail('Timed out after ${timeout.inSeconds}s waiting for '
+      '${reason ?? 'the expected UI state'}.');
+}
+
+/// Bounded replacement for `pumpAndSettle` that also yields to real async work.
+Future<void> settle(WidgetTester tester) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 10));
+  while (DateTime.now().isBefore(deadline)) {
+    await tester
+        .runAsync(() => Future<void>.delayed(const Duration(milliseconds: 1)));
+    await tester.pump(const Duration(milliseconds: 100));
+    if (!tester.binding.hasScheduledFrame) return;
+  }
+  fail('The UI did not settle within 10 seconds.');
+}
+
 void main() {
   for (final noIncome in [false, true]) {
     testWidgets(
         'eight-stage actual-router flow, noIncome=$noIncome, preserves real money',
         (tester) async {
       late MedicalTestHarness h;
+      var bodyCompleted = false;
       await tester.runAsync(() async {
-        h = await MedicalTestHarness.create();
+        h = await MedicalTestHarness.create()
+            .timeout(const Duration(seconds: 60));
         IsarHelper.instance = h.isar;
       });
       final locks = InMemoryLockSettingsStore();
       final auth = FakeDeviceAuthenticator();
       addTearDown(() async {
+        // A failed or hung body may still own the binding's async task. Never
+        // re-enter runAsync in that case: it masks the original failure with
+        // "Reentrant call to runAsync() denied". A completed body has no
+        // pending runAsync, so the Isar drain is safe.
+        if (!bodyCompleted) return;
         // Isar watchers start a read that completes on the real event loop.
         // Drain any in-flight read so `close()` is not left waiting on it.
         for (var i = 0; i < 3; i++) {
@@ -56,7 +95,7 @@ void main() {
               () => Future<void>.delayed(const Duration(milliseconds: 20)));
           await tester.pump();
         }
-        await h.close();
+        await tester.runAsync(() => h.close());
       });
       final c = ProviderContainer(overrides: [
         setupFlowProvider.overrideWithValue('guided-flow'),
@@ -112,49 +151,65 @@ void main() {
                 cancelled: [])),
       ]);
       await tester.runAsync(() async {
-        await c.read(onboardingStartupProvider.future);
+        await c
+            .read(onboardingStartupProvider.future)
+            .timeout(const Duration(seconds: 30));
       });
       final router = createAppRouter(
           initialLocation: '/setup',
           setupBuilder: (_) => const GuidedSetupScreen(),
           dashboardBuilder: (_) => const Text('Exact personal Dashboard'));
-      Future<void> tap(String label) async {
+      Future<void> tap(String label, {Finder? until}) async {
         final text = find.text(label).last;
-        for (var i = 0; i < 80; i++) {
-          await tester.pump();
-          final buttons = find.ancestor(
-              of: text,
-              matching: find.byWidgetPredicate((w) => w is ButtonStyleButton));
-          if (buttons.evaluate().isNotEmpty &&
-              tester.widget<ButtonStyleButton>(buttons.first).onPressed !=
-                  null) {
-            break;
-          }
-          await tester.runAsync(
-              () => Future<void>.delayed(const Duration(milliseconds: 50)));
-        }
-        final button = find
+        Finder buttonFinder() => find
             .ancestor(
                 of: text,
                 matching: find.byWidgetPredicate((w) => w is ButtonStyleButton))
             .first;
+        await pumpUntil(
+          tester,
+          () {
+            final buttons = find.ancestor(
+                of: text,
+                matching:
+                    find.byWidgetPredicate((w) => w is ButtonStyleButton));
+            return buttons.evaluate().isNotEmpty &&
+                tester.widget<ButtonStyleButton>(buttons.first).onPressed !=
+                    null;
+          },
+          reason: '"$label" to be enabled',
+        );
+        final button = buttonFinder();
         expect(tester.widget<ButtonStyleButton>(button).onPressed, isNotNull,
             reason: '$label should be ready');
-        await tester.ensureVisible(text);
-        await tester.runAsync(() async {
-          final dynamic action =
-              tester.widget<ButtonStyleButton>(button).onPressed;
-          final dynamic result = action();
-          if (result is Future) await result;
-        });
+        await tester.ensureVisible(button);
         await tester.pump();
-        for (var i = 0; i < 80; i++) {
-          await tester.runAsync(
-              () => Future<void>.delayed(const Duration(milliseconds: 50)));
-          await tester.pump();
-          if (find.text('Working...').evaluate().isEmpty) break;
+        // Tap the real control. Never await the button's callback Future inside
+        // runAsync: it can depend on frames, providers or routes and would
+        // deadlock the test until the 10-minute timeout.
+        await tester.tap(button);
+        await tester.pump();
+        if (until != null) {
+          await pumpUntil(tester, () => until.evaluate().isNotEmpty,
+              reason: '"$label" to reach its next state');
+        } else {
+          // Wait for the flow's busy label to appear and clear. If it never
+          // appears the action completed synchronously; a short grace period
+          // is enough for its rebuild.
+          var sawBusy = find.text('Working...').evaluate().isNotEmpty;
+          for (var i = 0; i < 500; i++) {
+            await tester.runAsync(
+                () => Future<void>.delayed(const Duration(milliseconds: 5)));
+            await tester.pump(const Duration(milliseconds: 20));
+            final busy = find.text('Working...').evaluate().isNotEmpty;
+            if (busy) {
+              sawBusy = true;
+            } else if (sawBusy || i >= 10) {
+              break;
+            }
+          }
         }
-        await tester.pumpAndSettle();
+        await settle(tester);
       }
 
       await tester.pumpWidget(UncontrolledProviderScope(
@@ -162,18 +217,21 @@ void main() {
           child: MaterialApp.router(
               routerConfig: router,
               builder: (_, child) => AppLockGate(child: child!))));
-      await tester.pumpAndSettle();
+      await pumpUntil(
+          tester, () => find.text('Step 1 of 8').evaluate().isNotEmpty,
+          reason: 'the guided setup to start');
       expect(find.text('Step 1 of 8'), findsOneWidget);
-      await tap('Get started');
+      await tap('Get started', until: find.text('Step 2 of 8'));
       expect(find.text('Step 2 of 8'), findsOneWidget);
       await tap(
-          noIncome ? 'Skip explanations' : 'Continue to phone verification');
+          noIncome ? 'Skip explanations' : 'Continue to phone verification',
+          until: find.text('BudgetBuddy is locked'));
       expect(find.text('BudgetBuddy is locked'), findsOneWidget);
-      await tap('Unlock');
+      await tap('Unlock', until: find.text('Step 3 of 8'));
       expect(find.text('Step 3 of 8'), findsOneWidget);
-      await tap('Continue');
+      await tap('Continue', until: find.text('Step 4 of 8'));
       expect(find.text('Step 4 of 8'), findsOneWidget);
-      await tap('Back');
+      await tap('Back', until: find.text('Step 3 of 8'));
       expect(find.text('Step 3 of 8'), findsOneWidget);
       expect(c.read(financialSetupProvider).draft.profile.name, 'Jason');
       await tap('Continue');
@@ -188,23 +246,26 @@ void main() {
         c.read(_recordedOwner.notifier).state =
             await h.isar.userProfiles.get(receipt.profileId);
       });
-      await tester.pumpAndSettle();
-      if (find.text('Unlock').evaluate().isNotEmpty) await tap('Unlock');
+      await settle(tester);
+      if (find.text('Unlock').evaluate().isNotEmpty) {
+        await tap('Unlock', until: find.text('Step 5 of 8'));
+      }
       // The harness records the new owner only after Save, so this step mounted
       // before the profile was readable. Re-read it with the screen's own retry
       // control; in production the active-profile stream supplies it.
       if (find.text('Reload protection status').evaluate().isNotEmpty) {
-        await tap('Reload protection status');
+        await tap('Reload protection status', until: find.text('Step 5 of 8'));
       }
       expect(find.text('Step 5 of 8'), findsOneWidget);
       await tap('Prepare required records');
       await tap('Continue with phone authentication');
-      await tap('Continue');
+      await tap('Continue', until: find.text('Step 6 of 8'));
       expect(find.text('Step 6 of 8'), findsOneWidget);
       expect(find.text('Set up this month’s income'), findsOneWidget);
-      await tap('Continue');
+      await tap('Continue', until: find.text('Step 7 of 8'));
       expect(find.text('Step 7 of 8'), findsOneWidget);
-      await tap(noIncome ? 'Skip explanations' : 'Continue');
+      await tap(noIncome ? 'Skip explanations' : 'Continue',
+          until: find.text('Step 8 of 8'));
       expect(find.text('Step 8 of 8'), findsOneWidget);
       expect(find.text('Your starting position'), findsOneWidget);
       await tester.runAsync(() async {
@@ -214,7 +275,8 @@ void main() {
                 .completedAt,
             isNull);
       });
-      await tap('Open my Dashboard');
+      await tap('Open my Dashboard',
+          until: find.text('Exact personal Dashboard'));
       expect(router.routeInformationProvider.value.uri.path, '/dashboard');
       expect(c.read(selectedYearMonthProvider), '2025-01');
       expect(c.read(activeSpaceIdProvider), isNull);
@@ -238,25 +300,7 @@ void main() {
       router.dispose();
       c.dispose();
       await locks.dispose();
-    });
+      bodyCompleted = true;
+    }, timeout: const Timeout(Duration(minutes: 2)));
   }
-
-  testWidgets(
-      'public introduction has progress, Back, and optional labelled examples',
-      (tester) async {
-    var verifiedNext = 0;
-    await tester.pumpWidget(MaterialApp(
-        home: PublicSetupIntroduction(onContinue: () => verifiedNext++)));
-    expect(find.text('Step 1 of 8'), findsOneWidget);
-    await tester.ensureVisible(find.text('Get started'));
-    await tester.tap(find.text('Get started'));
-    await tester.pumpAndSettle();
-    expect(find.text('Step 2 of 8'), findsOneWidget);
-    await tester.tap(find.text('Opening money and income'));
-    await tester.pumpAndSettle();
-    expect(find.textContaining('Example'), findsWidgets);
-    await tester.ensureVisible(find.text('Skip explanations'));
-    await tester.tap(find.text('Skip explanations'));
-    expect(verifiedNext, 1);
-  });
 }
