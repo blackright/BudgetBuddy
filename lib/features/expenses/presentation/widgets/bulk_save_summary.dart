@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../../../../core/models/currency_code.dart';
 import '../../../../core/models/expense.dart';
 import '../../../../core/services/bulk_entry_service.dart';
-import '../../../../core/services/filter_service.dart';
 import '../../../../shared/presentation/money_format.dart';
 
 /// A durable handoff from recording a batch to finding its saved expenses.
@@ -25,7 +24,10 @@ class BulkSaveSummary extends StatelessWidget {
     final totals = <CurrencyCode, int>{};
     for (final row in saved) {
       final code = CurrencyCode.tryParse(row.currency)!;
-      totals[code] = (totals[code] ?? 0) + parseSearchAmount(row.amount, code)!;
+      final value = row.lineTotalMinor;
+      if (value != null) {
+        totals[code] = (totals[code] ?? 0) + value;
+      }
     }
     return Container(
       key: const ValueKey('bulk-save-summary'),

@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../../core/services/financial_adoption_service.dart';
 import '../../../core/services/receipt_snapshot_repository.dart';
 import '../../../features/sync/domain/sync_guid.dart';
+import '../../../shared/presentation/modals/app_sheet.dart';
 import '../../../shared/presentation/money_format.dart';
 
 /// The host supplies authenticated, context-bound commands. No direct database
@@ -131,121 +132,113 @@ class _ReceiptAdoptionSheetState extends State<ReceiptAdoptionSheet> {
         : '${p.source.currency.code.toUpperCase()} ${formatMinorUnitsInput(value, p.source.currency)}';
     return PopScope(
       canPop: !_saving,
-      child: SafeArea(
-          child: SingleChildScrollView(
-        padding: EdgeInsets.fromLTRB(
-            20, 12, 20, 24 + MediaQuery.viewInsetsOf(context).bottom),
-        child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Center(
-                  child: Container(
-                      width: 40,
-                      height: 4,
-                      margin: const EdgeInsets.only(bottom: 20),
-                      decoration: BoxDecoration(
-                          color: colors.outlineVariant,
-                          borderRadius: BorderRadius.circular(4)))),
-              Row(children: [
-                Icon(Icons.fact_check_outlined, color: colors.primary),
-                const SizedBox(width: 12),
-                Expanded(
-                    child: Text('Review receipt setup',
-                        style: Theme.of(context).textTheme.titleLarge))
-              ]),
-              const SizedBox(height: 12),
-              const Text(
-                  'Prepare a safe starting point for actual payments. Your existing records and money stay unchanged.'),
-              if (_loading)
-                const Padding(
-                    padding: EdgeInsets.all(24),
-                    child: Center(child: CircularProgressIndicator())),
-              if (p != null) ...[
-                const SizedBox(height: 16),
-                Card(
-                    color: colors.primaryContainer,
-                    margin: EdgeInsets.zero,
-                    child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(p.ownerName,
-                                  style:
-                                      Theme.of(context).textTheme.titleMedium),
-                              const SizedBox(height: 4),
-                              Text(
-                                  'Start month: ${DateFormat.yMMMM().format(DateTime.parse('${p.source.context.yearMonth}-01'))}'),
-                              const SizedBox(height: 8),
-                              const Text('New financial rules: not active yet'),
-                            ]))),
-                const SizedBox(height: 12),
-                _value('Current recorded income', amount(p.currentIncomeMinor)),
-                _value('After this review', amount(p.currentIncomeMinor)),
-                const Text(
-                    'No income is confirmed as received by this review.'),
-                ExpansionTile(
-                    tilePadding: EdgeInsets.zero,
-                    title: const Text('How current income is selected'),
-                    children: [
-                      _value(
-                          'Monthly override',
-                          p.overrideMinor == null
-                              ? 'Not set'
-                              : amount(p.overrideMinor)),
-                      _value('Income Sources for this month',
-                          amount(p.sourcesMinor)),
-                      _value('Fallback default', amount(p.defaultIncomeMinor)),
-                      const Text(
-                          'The current app uses the override when set; otherwise Income Sources when positive, then the default. This review changes none of them.'),
-                      const SizedBox(height: 8),
-                      Text(
-                          '${p.sourceLabels.length} income source(s) reviewed.'),
-                      const SizedBox(height: 8),
-                    ]),
-                for (final blocker in p.blockers)
-                  _notice(blockerMessage(blocker), colors.errorContainer),
-                if (p.canConfirm && !_saved)
-                  CheckboxListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text(
-                          'I reviewed this start month and the existing funding settings.'),
-                      value: _acknowledged,
-                      onChanged: _saving
-                          ? null
-                          : (v) => setState(() => _acknowledged = v ?? false)),
-              ],
-              if (_error != null)
-                Semantics(
-                    liveRegion: true,
-                    child: _notice(_error!, colors.errorContainer)),
-              if (_saved)
-                Semantics(
-                    liveRegion: true,
-                    child: _notice(
-                        'Review saved on this device. Money is unchanged. New financial rules remain inactive.',
-                        colors.secondaryContainer)),
-              const SizedBox(height: 12),
-              if (!_saved && p != null)
-                FilledButton.icon(
-                    onPressed: !_saving && p.canConfirm && _acknowledged
-                        ? _save
-                        : null,
-                    icon: Icon(_saving
-                        ? Icons.hourglass_top
-                        : Icons.check_circle_outline),
-                    label:
-                        Text(_saving ? 'Saving review...' : 'Confirm review')),
-              if (!_saved && !_loading)
-                TextButton(
-                    onPressed: _saving ? null : _load,
-                    child: const Text('Refresh review')),
-              TextButton(
-                  onPressed: _saving ? null : () => Navigator.of(context).pop(),
-                  child: Text(_saved ? 'Done' : 'Close')),
-            ]),
-      )),
+      child: AppSheet(
+          title: 'Review receipt setup',
+          leading: Icon(Icons.fact_check_outlined, color: colors.primary),
+          bodyScrollable: false,
+          body: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+            child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Text(
+                      'Prepare a safe starting point for actual payments. Your existing records and money stay unchanged.'),
+                  if (_loading)
+                    const Padding(
+                        padding: EdgeInsets.all(24),
+                        child: Center(child: CircularProgressIndicator())),
+                  if (p != null) ...[
+                    const SizedBox(height: 16),
+                    Card(
+                        color: colors.primaryContainer,
+                        margin: EdgeInsets.zero,
+                        child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(p.ownerName,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleMedium),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                      'Start month: ${DateFormat.yMMMM().format(DateTime.parse('${p.source.context.yearMonth}-01'))}'),
+                                  const SizedBox(height: 8),
+                                  const Text(
+                                      'New financial rules: not active yet'),
+                                ]))),
+                    const SizedBox(height: 12),
+                    _value('Current recorded income',
+                        amount(p.currentIncomeMinor)),
+                    _value('After this review', amount(p.currentIncomeMinor)),
+                    const Text(
+                        'No income is confirmed as received by this review.'),
+                    ExpansionTile(
+                        tilePadding: EdgeInsets.zero,
+                        title: const Text('How current income is selected'),
+                        children: [
+                          _value(
+                              'Monthly override',
+                              p.overrideMinor == null
+                                  ? 'Not set'
+                                  : amount(p.overrideMinor)),
+                          _value('Income Sources for this month',
+                              amount(p.sourcesMinor)),
+                          _value(
+                              'Fallback default', amount(p.defaultIncomeMinor)),
+                          const Text(
+                              'The current app uses the override when set; otherwise Income Sources when positive, then the default. This review changes none of them.'),
+                          const SizedBox(height: 8),
+                          Text(
+                              '${p.sourceLabels.length} income source(s) reviewed.'),
+                          const SizedBox(height: 8),
+                        ]),
+                    for (final blocker in p.blockers)
+                      _notice(blockerMessage(blocker), colors.errorContainer),
+                    if (p.canConfirm && !_saved)
+                      CheckboxListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text(
+                              'I reviewed this start month and the existing funding settings.'),
+                          value: _acknowledged,
+                          onChanged: _saving
+                              ? null
+                              : (v) =>
+                                  setState(() => _acknowledged = v ?? false)),
+                  ],
+                  if (_error != null)
+                    Semantics(
+                        liveRegion: true,
+                        child: _notice(_error!, colors.errorContainer)),
+                  if (_saved)
+                    Semantics(
+                        liveRegion: true,
+                        child: _notice(
+                            'Review saved on this device. Money is unchanged. New financial rules remain inactive.',
+                            colors.secondaryContainer)),
+                  const SizedBox(height: 12),
+                  if (!_saved && p != null)
+                    FilledButton.icon(
+                        onPressed: !_saving && p.canConfirm && _acknowledged
+                            ? _save
+                            : null,
+                        icon: Icon(_saving
+                            ? Icons.hourglass_top
+                            : Icons.check_circle_outline),
+                        label: Text(
+                            _saving ? 'Saving review...' : 'Confirm review')),
+                  if (!_saved && !_loading)
+                    TextButton(
+                        onPressed: _saving ? null : _load,
+                        child: const Text('Refresh review')),
+                  TextButton(
+                      onPressed:
+                          _saving ? null : () => Navigator.of(context).pop(),
+                      child: Text(_saved ? 'Done' : 'Close')),
+                ]),
+          )),
     );
   }
 

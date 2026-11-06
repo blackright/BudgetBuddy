@@ -6,6 +6,7 @@ import '../../../core/models/currency_code.dart';
 import '../../../core/models/pending_action.dart';
 import '../../../core/providers/active_profile_provider.dart';
 import '../../../core/providers/budget_context_provider.dart';
+import '../../../shared/presentation/modals/app_dialog.dart';
 import '../../../shared/presentation/money_format.dart';
 import '../models/savings_vault.dart';
 import '../providers/vault_providers.dart';
@@ -152,7 +153,7 @@ class _VaultBody extends ConsumerWidget {
         const VaultTransferPanel(),
         if (current?.totalMinor == corruptedMinorSentinel)
           OutlinedButton(
-              onPressed: () => showDialog<void>(
+              onPressed: () => showAppDialog<void>(
                   context: context,
                   builder: (_) => const VaultRecoveryDialog()),
               child: const Text('Review balance recovery')),
@@ -179,7 +180,7 @@ class _VaultBody extends ConsumerWidget {
                             label: Text(current.goalTargetMinor == null
                                 ? 'Add savings goal'
                                 : 'Edit savings goal'),
-                            onPressed: () => showDialog<void>(
+                            onPressed: () => showAppDialog<void>(
                                 context: context,
                                 builder: (_) =>
                                     VaultGoalEditor(vault: current))),
@@ -270,7 +271,7 @@ class _SuggestionRow extends ConsumerWidget {
             : 'Review the finished month',
       ),
       trailing: TextButton(
-        onPressed: () => showDialog<void>(
+        onPressed: () => showAppDialog<void>(
           context: context,
           barrierDismissible: false,
           builder: (_) => VaultTransferDialog(
@@ -347,7 +348,7 @@ class _PlannedRow extends StatelessWidget {
       ),
       trailing: due
           ? TextButton(
-              onPressed: () => showDialog<void>(
+              onPressed: () => showAppDialog<void>(
                 context: context,
                 barrierDismissible: false,
                 builder: (_) => VaultTransferDialog(

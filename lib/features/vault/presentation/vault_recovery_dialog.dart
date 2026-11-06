@@ -2,6 +2,7 @@ import '../../../shared/presentation/financial_feedback.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/models/currency_code.dart';
+import '../../../shared/presentation/modals/app_dialog.dart';
 import '../../../shared/presentation/money_format.dart';
 import '../providers/vault_providers.dart';
 import '../vault_recovery_service.dart';
@@ -73,7 +74,7 @@ class _VaultRecoveryDialogState extends ConsumerState<VaultRecoveryDialog> {
   @override
   Widget build(BuildContext context) => PopScope(
       canPop: !_busy,
-      child: AlertDialog(
+      child: AppDialog(
         title: const Text('Review balance recovery'),
         content: SingleChildScrollView(
             child: Column(

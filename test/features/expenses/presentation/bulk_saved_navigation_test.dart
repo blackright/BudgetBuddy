@@ -101,7 +101,7 @@ void main() {
     editor.purchase.header
       ..title = 'Bulk Farine'
       ..merchant = 'Spar'
-      ..amount = '2,000'
+      ..unitAmount = '2,000'
       ..currency = 'HUF'
       ..category = 'food'
       ..payment = 'card'
@@ -111,7 +111,7 @@ void main() {
     editor.purchase.receiptTotal = '2,000';
     editor.purchase.items.first
       ..title = 'Bulk Farine'
-      ..amount = '2,000'
+      ..unitAmount = '2,000'
       ..category = 'food'
       ..profileChosen = true;
     addBulkTestProof(editor.purchase.header);

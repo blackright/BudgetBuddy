@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../../shared/presentation/modals/app_date_picker.dart';
+import '../../../shared/presentation/modals/app_sheet.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/models/financial_report.dart';
 import '../../../core/models/currency_code.dart';
@@ -69,7 +71,7 @@ class _ReportsBodyState extends ConsumerState<_ReportsBody> {
 
   Future<void> month(bool starting) async {
     final value = starting ? first : last;
-    final date = await showDatePicker(
+    final date = await showAppDatePicker(
         context: context,
         initialDate: DateTime(
             int.parse(value.substring(0, 4)), int.parse(value.substring(5))),
@@ -153,74 +155,73 @@ class _ReportsBodyState extends ConsumerState<_ReportsBody> {
   Future<void> export(FinancialReport snapshot) async {
     ReportFileKind kind = ReportFileKind.pdf;
     bool notes = false, appendix = false;
-    final choice =
-        await showModalBottomSheet<(ReportFileKind, bool, bool, bool)>(
-            context: context,
-            isScrollControlled: true,
-            useSafeArea: true,
-            builder: (sheet) => StatefulBuilder(
-                builder: (sheet, update) => SingleChildScrollView(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Text('Export preview',
-                              style: Theme.of(sheet).textTheme.headlineSmall),
-                          Text(
-                              '${snapshot.request.label}\n${snapshot.request.firstMonth} — ${snapshot.request.lastMonth}\n${snapshot.request.currency.code.toUpperCase()} · ${snapshot.transactions.length} transaction entries\nGenerated ${reportTime(snapshot.generatedAt)}'),
-                          const SizedBox(height: 16),
-                          DropdownButtonFormField<ReportFileKind>(
-                              initialValue: kind,
-                              isExpanded: true,
-                              decoration: const InputDecoration(
-                                  labelText: 'File format',
-                                  border: OutlineInputBorder()),
-                              items: const [
-                                DropdownMenuItem(
-                                    value: ReportFileKind.pdf,
-                                    child: Text('PDF summary')),
-                                DropdownMenuItem(
-                                    value: ReportFileKind.summaryCsv,
-                                    child: Text('Summary CSV')),
-                                DropdownMenuItem(
-                                    value: ReportFileKind.transactionsCsv,
-                                    child: Text('Transactions CSV'))
-                              ],
-                              onChanged: (v) => update(() => kind = v!)),
-                          if (kind == ReportFileKind.pdf)
-                            SwitchListTile(
-                                contentPadding: EdgeInsets.zero,
-                                title: const Text('Transaction appendix'),
-                                subtitle: const Text(
-                                    'Add all selected transaction details as extra pages.'),
-                                value: appendix,
-                                onChanged: (v) => update(() => appendix = v)),
-                          if (kind == ReportFileKind.transactionsCsv ||
-                              (kind == ReportFileKind.pdf && appendix))
-                            SwitchListTile(
-                                contentPadding: EdgeInsets.zero,
-                                title: const Text('Include notes'),
-                                subtitle: const Text(
-                                    'Off by default. Receipts and payment files are excluded.'),
-                                value: notes,
-                                onChanged: (v) => update(() => notes = v)),
-                          const Text(
-                              'Only permitted selected data is exported. Space figures represent full shared amounts. No automatic upload.'),
-                          const SizedBox(height: 16),
-                          Wrap(spacing: 12, runSpacing: 8, children: [
-                            FilledButton.icon(
-                                onPressed: () => Navigator.pop(
-                                    sheet, (kind, notes, appendix, false)),
-                                icon: const Icon(Icons.save_alt),
-                                label: const Text('Save file')),
-                            OutlinedButton.icon(
-                                onPressed: () => Navigator.pop(
-                                    sheet, (kind, notes, appendix, true)),
-                                icon: const Icon(Icons.share_outlined),
-                                label: const Text('Share file'))
-                          ])
-                        ]))));
+    final choice = await showAppSheet<(ReportFileKind, bool, bool, bool)>(
+        context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        builder: (sheet) => StatefulBuilder(
+            builder: (sheet, update) => SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text('Export preview',
+                          style: Theme.of(sheet).textTheme.headlineSmall),
+                      Text(
+                          '${snapshot.request.label}\n${snapshot.request.firstMonth} — ${snapshot.request.lastMonth}\n${snapshot.request.currency.code.toUpperCase()} · ${snapshot.transactions.length} transaction entries\nGenerated ${reportTime(snapshot.generatedAt)}'),
+                      const SizedBox(height: 16),
+                      DropdownButtonFormField<ReportFileKind>(
+                          initialValue: kind,
+                          isExpanded: true,
+                          decoration: const InputDecoration(
+                              labelText: 'File format',
+                              border: OutlineInputBorder()),
+                          items: const [
+                            DropdownMenuItem(
+                                value: ReportFileKind.pdf,
+                                child: Text('PDF summary')),
+                            DropdownMenuItem(
+                                value: ReportFileKind.summaryCsv,
+                                child: Text('Summary CSV')),
+                            DropdownMenuItem(
+                                value: ReportFileKind.transactionsCsv,
+                                child: Text('Transactions CSV'))
+                          ],
+                          onChanged: (v) => update(() => kind = v!)),
+                      if (kind == ReportFileKind.pdf)
+                        SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('Transaction appendix'),
+                            subtitle: const Text(
+                                'Add all selected transaction details as extra pages.'),
+                            value: appendix,
+                            onChanged: (v) => update(() => appendix = v)),
+                      if (kind == ReportFileKind.transactionsCsv ||
+                          (kind == ReportFileKind.pdf && appendix))
+                        SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('Include notes'),
+                            subtitle: const Text(
+                                'Off by default. Receipts and payment files are excluded.'),
+                            value: notes,
+                            onChanged: (v) => update(() => notes = v)),
+                      const Text(
+                          'Only permitted selected data is exported. Space figures represent full shared amounts. No automatic upload.'),
+                      const SizedBox(height: 16),
+                      Wrap(spacing: 12, runSpacing: 8, children: [
+                        FilledButton.icon(
+                            onPressed: () => Navigator.pop(
+                                sheet, (kind, notes, appendix, false)),
+                            icon: const Icon(Icons.save_alt),
+                            label: const Text('Save file')),
+                        OutlinedButton.icon(
+                            onPressed: () => Navigator.pop(
+                                sheet, (kind, notes, appendix, true)),
+                            icon: const Icon(Icons.share_outlined),
+                            label: const Text('Share file'))
+                      ])
+                    ]))));
     if (choice == null || !mounted) return;
     setState(() => busy = true);
     try {

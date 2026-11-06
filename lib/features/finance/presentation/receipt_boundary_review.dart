@@ -6,6 +6,7 @@ import '../../../core/database/isar_helper.dart';
 import '../../../core/providers/active_profile_provider.dart';
 import '../../../core/providers/budget_context_provider.dart';
 import '../../../core/services/financial_adoption_service.dart';
+import '../../../shared/presentation/modals/app_sheet.dart';
 import '../../identity/providers/device_auth_session.dart';
 import '../../security/providers/lock_providers.dart';
 import '../repositories/month_finance_repository.dart';
@@ -42,11 +43,7 @@ Future<void> reviewReceiptSetup(BuildContext context, WidgetRef ref,
 
   final service = FinancialAdoptionService(IsarHelper.instance);
   final finance = ref.read(monthFinanceRepositoryProvider);
-  await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: true,
+  await showAppSheet<void>(context,
       builder: (sheetContext) => Consumer(builder: (_, innerRef, __) {
             // Remove private preview content immediately on lock or context change.
             innerRef.watch(budgetContextProvider);
@@ -54,16 +51,20 @@ Future<void> reviewReceiptSetup(BuildContext context, WidgetRef ref,
             innerRef.watch(deviceAuthSessionProvider);
             innerRef.watch(lockControllerProvider);
             if (!access()) {
-              return SafeArea(
-                  child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(mainAxisSize: MainAxisSize.min, children: [
+              return AppSheet(
+                  title: 'Review unavailable',
+                  showCloseButton: false,
+                  body: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
                         const Text(
                             'Access changed. Reopen this review after unlocking the correct budget.'),
+                        const SizedBox(height: 12),
                         TextButton(
                             onPressed: () => Navigator.of(sheetContext).pop(),
                             child: const Text('Close')),
-                      ])));
+                      ]));
             }
             if (balance) {
               return BalanceCheckpointSheet(

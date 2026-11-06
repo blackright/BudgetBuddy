@@ -12,6 +12,7 @@ import '../../spaces/presentation/space_switcher.dart';
 import '../../../core/services/month_end_report.dart';
 import '../../../core/services/refund_service.dart';
 import '../../../shared/presentation/money_format.dart';
+import '../../../shared/presentation/modals/app_confirm.dart';
 import '../../../shared/presentation/input_formatters/thousands_separator_input_formatter.dart';
 import '../providers/month_end_providers.dart';
 import '../../pending_actions/providers/pending_actions_providers.dart';
@@ -232,20 +233,14 @@ class _MonthEndBodyState extends ConsumerState<_MonthEndBody> {
     if (_busy || _previewOutdated || report == null || !report.ready) {
       return;
     }
-    final accepted = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-                title: Text('Finish ${report.yearMonth}?'),
-                content: Text(
-                    'Context: $_contextName. Carry ${formatMinorUnits(report.carried, _currency)} to ${report.destinationMonth} and release ${formatMinorUnits(report.released, _currency)} to reserve. This confirmed result cannot be rerun or edited.'),
-                actions: [
-                  TextButton(
-                      onPressed: () => Navigator.pop(context, false),
-                      child: const Text('Cancel')),
-                  FilledButton(
-                      onPressed: () => Navigator.pop(context, true),
-                      child: const Text('Confirm month-end'))
-                ]));
+    final accepted = await showAppConfirm(
+      context,
+      title: 'Finish ${report.yearMonth}?',
+      message:
+          'Context: $_contextName. Carry ${formatMinorUnits(report.carried, _currency)} to ${report.destinationMonth} and release ${formatMinorUnits(report.released, _currency)} to reserve. This confirmed result cannot be rerun or edited.',
+      confirmLabel: 'Confirm month-end',
+      destructive: true,
+    );
     if (accepted != true || !mounted || _busy) return;
     setState(() => _busy = true);
     try {

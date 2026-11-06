@@ -123,45 +123,50 @@ const ExpenseSchema = CollectionSchema(
       name: r'purchaseSyncGuid',
       type: IsarType.string,
     ),
-    r'receiptPath': PropertySchema(
+    r'quantity': PropertySchema(
       id: 21,
+      name: r'quantity',
+      type: IsarType.long,
+    ),
+    r'receiptPath': PropertySchema(
+      id: 22,
       name: r'receiptPath',
       type: IsarType.string,
     ),
     r'sharedSpaceId': PropertySchema(
-      id: 22,
+      id: 23,
       name: r'sharedSpaceId',
       type: IsarType.long,
     ),
     r'status': PropertySchema(
-      id: 23,
+      id: 24,
       name: r'status',
       type: IsarType.byte,
       enumMap: _ExpensestatusEnumValueMap,
     ),
     r'syncGuid': PropertySchema(
-      id: 24,
+      id: 25,
       name: r'syncGuid',
       type: IsarType.string,
     ),
     r'tags': PropertySchema(
-      id: 25,
+      id: 26,
       name: r'tags',
       type: IsarType.stringList,
     ),
     r'title': PropertySchema(
-      id: 26,
+      id: 27,
       name: r'title',
       type: IsarType.string,
     ),
     r'type': PropertySchema(
-      id: 27,
+      id: 28,
       name: r'type',
       type: IsarType.byte,
       enumMap: _ExpensetypeEnumValueMap,
     ),
     r'yearMonth': PropertySchema(
-      id: 28,
+      id: 29,
       name: r'yearMonth',
       type: IsarType.string,
     )
@@ -392,14 +397,15 @@ void _expenseSerialize(
   writer.writeLong(offsets[18], object.profileId);
   writer.writeString(offsets[19], object.purchaseEvidenceOwnerGuid);
   writer.writeString(offsets[20], object.purchaseSyncGuid);
-  writer.writeString(offsets[21], object.receiptPath);
-  writer.writeLong(offsets[22], object.sharedSpaceId);
-  writer.writeByte(offsets[23], object.status.index);
-  writer.writeString(offsets[24], object.syncGuid);
-  writer.writeStringList(offsets[25], object.tags);
-  writer.writeString(offsets[26], object.title);
-  writer.writeByte(offsets[27], object.type.index);
-  writer.writeString(offsets[28], object.yearMonth);
+  writer.writeLong(offsets[21], object.quantity);
+  writer.writeString(offsets[22], object.receiptPath);
+  writer.writeLong(offsets[23], object.sharedSpaceId);
+  writer.writeByte(offsets[24], object.status.index);
+  writer.writeString(offsets[25], object.syncGuid);
+  writer.writeStringList(offsets[26], object.tags);
+  writer.writeString(offsets[27], object.title);
+  writer.writeByte(offsets[28], object.type.index);
+  writer.writeString(offsets[29], object.yearMonth);
 }
 
 Expense _expenseDeserialize(
@@ -433,17 +439,18 @@ Expense _expenseDeserialize(
     profileId: reader.readLong(offsets[18]),
     purchaseEvidenceOwnerGuid: reader.readStringOrNull(offsets[19]),
     purchaseSyncGuid: reader.readStringOrNull(offsets[20]),
-    receiptPath: reader.readStringOrNull(offsets[21]),
-    sharedSpaceId: reader.readLongOrNull(offsets[22]),
-    status: _ExpensestatusValueEnumMap[reader.readByteOrNull(offsets[23])] ??
+    quantity: reader.readLongOrNull(offsets[21]) ?? 1,
+    receiptPath: reader.readStringOrNull(offsets[22]),
+    sharedSpaceId: reader.readLongOrNull(offsets[23]),
+    status: _ExpensestatusValueEnumMap[reader.readByteOrNull(offsets[24])] ??
         ExpenseStatus.paid,
-    title: reader.readString(offsets[26]),
-    type: _ExpensetypeValueEnumMap[reader.readByteOrNull(offsets[27])] ??
+    title: reader.readString(offsets[27]),
+    type: _ExpensetypeValueEnumMap[reader.readByteOrNull(offsets[28])] ??
         ExpenseType.standard,
-    yearMonth: reader.readString(offsets[28]),
+    yearMonth: reader.readString(offsets[29]),
   );
-  object.syncGuid = reader.readString(offsets[24]);
-  object.tags = reader.readStringList(offsets[25]) ?? [];
+  object.syncGuid = reader.readString(offsets[25]);
+  object.tags = reader.readStringList(offsets[26]) ?? [];
   return object;
 }
 
@@ -498,22 +505,24 @@ P _expenseDeserializeProp<P>(
     case 20:
       return (reader.readStringOrNull(offset)) as P;
     case 21:
-      return (reader.readStringOrNull(offset)) as P;
+      return (reader.readLongOrNull(offset) ?? 1) as P;
     case 22:
-      return (reader.readLongOrNull(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 23:
+      return (reader.readLongOrNull(offset)) as P;
+    case 24:
       return (_ExpensestatusValueEnumMap[reader.readByteOrNull(offset)] ??
           ExpenseStatus.paid) as P;
-    case 24:
-      return (reader.readString(offset)) as P;
     case 25:
-      return (reader.readStringList(offset) ?? []) as P;
-    case 26:
       return (reader.readString(offset)) as P;
+    case 26:
+      return (reader.readStringList(offset) ?? []) as P;
     case 27:
+      return (reader.readString(offset)) as P;
+    case 28:
       return (_ExpensetypeValueEnumMap[reader.readByteOrNull(offset)] ??
           ExpenseType.standard) as P;
-    case 28:
+    case 29:
       return (reader.readString(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -3592,6 +3601,59 @@ extension ExpenseQueryFilter
     });
   }
 
+  QueryBuilder<Expense, Expense, QAfterFilterCondition> quantityEqualTo(
+      int value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'quantity',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterFilterCondition> quantityGreaterThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'quantity',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterFilterCondition> quantityLessThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'quantity',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterFilterCondition> quantityBetween(
+    int lower,
+    int upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'quantity',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
   QueryBuilder<Expense, Expense, QAfterFilterCondition> receiptPathIsNull() {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(const FilterCondition.isNull(
@@ -4786,6 +4848,18 @@ extension ExpenseQuerySortBy on QueryBuilder<Expense, Expense, QSortBy> {
     });
   }
 
+  QueryBuilder<Expense, Expense, QAfterSortBy> sortByQuantity() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'quantity', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterSortBy> sortByQuantityDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'quantity', Sort.desc);
+    });
+  }
+
   QueryBuilder<Expense, Expense, QAfterSortBy> sortByReceiptPath() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'receiptPath', Sort.asc);
@@ -5142,6 +5216,18 @@ extension ExpenseQuerySortThenBy
     });
   }
 
+  QueryBuilder<Expense, Expense, QAfterSortBy> thenByQuantity() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'quantity', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Expense, Expense, QAfterSortBy> thenByQuantityDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'quantity', Sort.desc);
+    });
+  }
+
   QueryBuilder<Expense, Expense, QAfterSortBy> thenByReceiptPath() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'receiptPath', Sort.asc);
@@ -5377,6 +5463,12 @@ extension ExpenseQueryWhereDistinct
     });
   }
 
+  QueryBuilder<Expense, Expense, QDistinct> distinctByQuantity() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'quantity');
+    });
+  }
+
   QueryBuilder<Expense, Expense, QDistinct> distinctByReceiptPath(
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
@@ -5565,6 +5657,12 @@ extension ExpenseQueryProperty
   QueryBuilder<Expense, String?, QQueryOperations> purchaseSyncGuidProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'purchaseSyncGuid');
+    });
+  }
+
+  QueryBuilder<Expense, int, QQueryOperations> quantityProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'quantity');
     });
   }
 

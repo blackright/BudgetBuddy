@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'modals/app_dialog.dart';
+
 /// What the user chose in the shared-save confirmation dialog (US6, T054).
 enum SpaceSaveDecision {
   /// Go ahead and save into the shared space.
@@ -24,9 +26,9 @@ Future<SpaceSaveDecision?> confirmSpaceOnSave(
   required String amountText,
   required String spaceName,
 }) {
-  return showDialog<SpaceSaveDecision>(
+  return showAppDialog<SpaceSaveDecision>(
     context: context,
-    builder: (dialogContext) => AlertDialog(
+    builder: (dialogContext) => AppDialog(
       title: const Text('Save to a shared space?'),
       content: Text(
         'Add "$title" ($amountText) to "$spaceName"?',

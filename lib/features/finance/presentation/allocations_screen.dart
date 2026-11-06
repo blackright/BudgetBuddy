@@ -21,6 +21,7 @@ import '../../engine/providers/rate_registry_provider.dart';
 import '../../engine/providers/true_available_provider.dart';
 import '../../../shared/presentation/input_formatters/thousands_separator_input_formatter.dart';
 import '../../../shared/presentation/money_format.dart';
+import '../../../shared/presentation/modals/app_dialog.dart';
 import '../../dashboard/providers/dashboard_providers.dart';
 import '../../dashboard/presentation/budget_status.dart';
 import '../../spaces/providers/spaces_providers.dart';
@@ -591,9 +592,9 @@ class _BudgetProfileRow extends ConsumerWidget {
   Future<void> _reserve(BuildContext context, WidgetRef ref) async {
     final controller = TextEditingController();
     final operationKey = DateTime.now().microsecondsSinceEpoch.toString();
-    await showDialog<void>(
+    await showAppDialog<void>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
+      builder: (dialogContext) => AppDialog(
         title: Text('Reserve for ${profile.name}'),
         content: TextField(
           controller: controller,
@@ -640,9 +641,9 @@ class _BudgetProfileRow extends ConsumerWidget {
         text: formatMinorUnitsInput(remaining, contextCurrency));
     final reason = TextEditingController();
     final operationKey = DateTime.now().microsecondsSinceEpoch.toString();
-    await showDialog<void>(
+    await showAppDialog<void>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
+      builder: (dialogContext) => AppDialog(
         title: Text('Release from ${profile.name}'),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
           TextField(
@@ -696,9 +697,9 @@ class _BudgetProfileRow extends ConsumerWidget {
         text: formatMinorUnitsInput(remaining, contextCurrency));
     final note = TextEditingController();
     final operationKey = DateTime.now().microsecondsSinceEpoch.toString();
-    await showDialog<void>(
+    await showAppDialog<void>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
+      builder: (dialogContext) => AppDialog(
         title: Text('Move ${profile.name} to Vault'),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
           const Text(
@@ -765,9 +766,9 @@ class _BudgetProfileRow extends ConsumerWidget {
         text: formatMinorUnitsInput(profile.allocation, contextCurrency));
     final reason = TextEditingController();
     final operationKey = DateTime.now().microsecondsSinceEpoch.toString();
-    await showDialog<void>(
+    await showAppDialog<void>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
+      builder: (dialogContext) => AppDialog(
         title: Text('Correct ${profile.name}'),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
           const Text(
@@ -834,10 +835,10 @@ class _BudgetProfileRow extends ConsumerWidget {
     final controller = TextEditingController(
       text: formatMinorUnitsInput(profile.allocation, contextCurrency),
     );
-    await showDialog<void>(
+    await showAppDialog<void>(
       context: context,
       builder: (context) {
-        return AlertDialog(
+        return AppDialog(
           title: Text('Edit allocation: ${profile.name}'),
           content: TextField(
             controller: controller,

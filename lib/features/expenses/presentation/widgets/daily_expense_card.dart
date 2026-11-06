@@ -5,6 +5,7 @@ import '../../../../core/models/currency_code.dart';
 import '../../../../core/models/expense.dart';
 import '../../../../core/providers/budget_context_provider.dart';
 import '../../../../shared/presentation/money_format.dart';
+import '../../../../shared/presentation/modals/app_sheet.dart';
 import '../../providers/daily_cards_provider.dart';
 
 String expenseDayLabel(DateTime date, DateTime now) {
@@ -36,11 +37,7 @@ class DailyExpenseCardTile extends StatelessWidget {
                 side: BorderSide(color: colors.outlineVariant)),
             clipBehavior: Clip.antiAlias,
             child: InkWell(
-                onTap: () => showModalBottomSheet<void>(
-                    context: context,
-                    isScrollControlled: true,
-                    useSafeArea: true,
-                    showDragHandle: true,
+                onTap: () => showAppSheet<void>(context,
                     builder: (_) => FractionallySizedBox(
                         heightFactor: .92,
                         child: _DayExpenseModal(
@@ -162,76 +159,61 @@ class _DayExpenseModalState extends ConsumerState<_DayExpenseModal> {
       if (previous != next && mounted) Navigator.pop(context);
     });
     final days = ref.watch(dailyCardsProvider);
-    return Column(children: [
-      Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 8, 8),
-          child: Row(children: [
-            Expanded(
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                  Text(expenseDayLabel(widget.date, DateTime.now()),
-                      style: Theme.of(context).textTheme.titleLarge),
-                  Text(DateFormat.yMMMd().format(widget.date),
-                      style: Theme.of(context).textTheme.bodySmall)
-                ])),
-            IconButton(
-                tooltip: 'Close day',
-                onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.close))
-          ])),
-      const Divider(height: 1),
-      Expanded(
-          child: days.when(
-              data: (values) {
-                final found = values.where((d) => d.date == widget.date);
-                final expenses =
-                    found.isEmpty ? const <Expense>[] : found.first.expenses;
-                final pages = (expenses.length + 19) ~/ 20;
-                final current = pages == 0 ? 0 : page.clamp(0, pages - 1);
-                return Column(children: [
-                  if (widget.footnote != null) widget.footnote!,
-                  Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Text(
-                          '${expenses.length} expenses · Page ${pages == 0 ? 0 : current + 1} of $pages')),
-                  Expanded(
-                      child: expenses.isEmpty
-                          ? const Center(
-                              child: Text(
-                                  'No matching expenses remain for this day.'))
-                          : ListView(
-                              controller: scroll,
-                              padding: const EdgeInsets.only(bottom: 16),
-                              children: [
-                                  for (final expense
-                                      in expenses.skip(current * 20).take(20))
-                                    widget.expenseBuilder(expense)
-                                ])),
-                  if (expenses.length > 20)
-                    SafeArea(
-                        top: false,
-                        child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              TextButton(
-                                  onPressed: current > 0
-                                      ? () => changePage(current - 1)
-                                      : null,
-                                  child: const Text('Previous')),
-                              const SizedBox(width: 24),
-                              TextButton(
-                                  onPressed: current + 1 < pages
-                                      ? () => changePage(current + 1)
-                                      : null,
-                                  child: const Text('Next'))
-                            ])),
-                ]);
-              },
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (_, __) => const Center(
+    return AppSheet(
+      title: expenseDayLabel(widget.date, DateTime.now()),
+      subtitle: DateFormat.yMMMd().format(widget.date),
+      closeTooltip: 'Close day',
+      bodyScrollable: false,
+      body: days.when(
+          data: (values) {
+            final found = values.where((d) => d.date == widget.date);
+            final expenses =
+                found.isEmpty ? const <Expense>[] : found.first.expenses;
+            final pages = (expenses.length + 19) ~/ 20;
+            final current = pages == 0 ? 0 : page.clamp(0, pages - 1);
+            return Column(children: [
+              if (widget.footnote != null) widget.footnote!,
+              Padding(
+                  padding: const EdgeInsets.all(12),
                   child: Text(
-                      'This day could not be loaded. Close and try again.')))),
-    ]);
+                      '${expenses.length} expenses · Page ${pages == 0 ? 0 : current + 1} of $pages')),
+              Expanded(
+                  child: expenses.isEmpty
+                      ? const Center(
+                          child:
+                              Text('No matching expenses remain for this day.'))
+                      : ListView(
+                          controller: scroll,
+                          padding: const EdgeInsets.only(bottom: 16),
+                          children: [
+                              for (final expense
+                                  in expenses.skip(current * 20).take(20))
+                                widget.expenseBuilder(expense)
+                            ])),
+              if (expenses.length > 20)
+                SafeArea(
+                    top: false,
+                    child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          TextButton(
+                              onPressed: current > 0
+                                  ? () => changePage(current - 1)
+                                  : null,
+                              child: const Text('Previous')),
+                          const SizedBox(width: 24),
+                          TextButton(
+                              onPressed: current + 1 < pages
+                                  ? () => changePage(current + 1)
+                                  : null,
+                              child: const Text('Next'))
+                        ])),
+            ]);
+          },
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (_, __) => const Center(
+              child:
+                  Text('This day could not be loaded. Close and try again.'))),
+    );
   }
 }

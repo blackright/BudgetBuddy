@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../shared/presentation/modals/app_sheet.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/models/shared_member.dart';
@@ -254,27 +255,17 @@ class _InviteSheetState extends ConsumerState<InviteSheet> {
         if (!memberIds.contains(profile.id)) profile,
     ];
 
-    return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.only(
-          left: 24,
-          right: 24,
-          top: 24,
-          bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-        ),
+    return AppSheet(
+      title: 'Invite to this space',
+      subtitle: 'Only the Owner can invite (FR-002).',
+      bodyScrollable: false,
+      body: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Invite to this space',
-                  style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: 4),
-              Text(
-                'Only the Owner can invite (FR-002).',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              const SizedBox(height: 20),
               SegmentedButton<_InviteMode>(
                 segments: const [
                   ButtonSegment(

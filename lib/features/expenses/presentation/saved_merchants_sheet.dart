@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers/budget_context_provider.dart';
+import '../../../shared/presentation/modals/app_modal_tokens.dart';
+import '../../../shared/presentation/modals/app_sheet.dart';
 import '../providers/expense_search_provider.dart';
 
 /// A searchable list of the merchants saved for the active profile or space.
@@ -17,11 +19,8 @@ class SavedMerchantsSheet extends ConsumerStatefulWidget {
   final String? selected;
 
   static Future<String?> show(BuildContext context, {String? selected}) =>
-      showModalBottomSheet<String>(
-        context: context,
-        isScrollControlled: true,
-        useSafeArea: true,
-        showDragHandle: true,
+      showAppSheet<String>(
+        context,
         builder: (_) => SavedMerchantsSheet(selected: selected),
       );
 
@@ -51,26 +50,17 @@ class _SavedMerchantsSheetState extends ConsumerState<SavedMerchantsSheet> {
             m.canonicalName.toLowerCase().contains(_query.toLowerCase()))
         .toList();
 
-    return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(
-            16, 4, 16, MediaQuery.viewInsetsOf(context).bottom + 16),
+    return AppSheet(
+      title: 'Saved merchants',
+      subtitle:
+          scope.isShared ? 'Saved for this space' : 'Saved for this profile',
+      bodyScrollable: false,
+      body: Padding(
+        padding: AppModalTokens.sheetBodyPadding,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Saved merchants',
-                style: theme.textTheme.titleMedium
-                    ?.copyWith(fontWeight: FontWeight.w700)),
-            const SizedBox(height: 2),
-            Text(
-              scope.isShared
-                  ? 'Saved for this space'
-                  : 'Saved for this profile',
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: scheme.onSurfaceVariant),
-            ),
-            const SizedBox(height: 12),
             TextField(
               controller: _search,
               autofocus: true,

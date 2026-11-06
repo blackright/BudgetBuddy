@@ -10,6 +10,7 @@ import '../../settings/presentation/profile_switcher_section.dart';
 import '../providers/spaces_providers.dart';
 import '../repositories/spaces_repository.dart';
 import 'create_space_sheet.dart';
+import '../../../shared/presentation/modals/app_sheet.dart';
 import '../../../shared/presentation/providers/context_navigation_provider.dart';
 import '../../../shared/presentation/financial_feedback.dart';
 
@@ -27,8 +28,8 @@ Future<SharedSpace?> showCreateSpaceFlow(
   BuildContext context,
   WidgetRef ref,
 ) async {
-  final draft = await showModalBottomSheet<SpaceDraft>(
-    context: context,
+  final draft = await showAppSheet<SpaceDraft>(
+    context,
     isScrollControlled: true,
     builder: (_) => const CreateSpaceSheet(),
   );

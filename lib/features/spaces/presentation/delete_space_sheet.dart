@@ -9,6 +9,8 @@ import '../../../core/providers/budget_context_provider.dart';
 import '../providers/spaces_providers.dart';
 import '../repositories/month_move_operations.dart';
 import '../repositories/space_role_guard.dart';
+import '../../../shared/presentation/modals/app_dialog.dart';
+import '../../../shared/presentation/modals/app_sheet.dart';
 import '../repositories/spaces_repository.dart';
 
 /// US2/FR-014: the Owner's per-month resolution flow for deleting a space.
@@ -21,8 +23,8 @@ import '../repositories/spaces_repository.dart';
 class DeleteSpaceSheet extends ConsumerStatefulWidget {
   const DeleteSpaceSheet({super.key});
 
-  static Future<void> show(BuildContext context) => showModalBottomSheet<void>(
-        context: context,
+  static Future<void> show(BuildContext context) => showAppSheet<void>(
+        context,
         isScrollControlled: true,
         builder: (_) => const DeleteSpaceSheet(),
       );
@@ -81,8 +83,8 @@ class _DeleteSpaceSheetState extends ConsumerState<DeleteSpaceSheet> {
 
   Future<void> _pickDestination(SharedSpace space, String yearMonth) async {
     final profiles = ref.read(profilesProvider).value ?? const <UserProfile>[];
-    final choice = await showModalBottomSheet<_Disposition>(
-      context: context,
+    final choice = await showAppSheet<_Disposition>(
+      context,
       builder: (_) => _DestinationSheet(profiles: profiles),
     );
     if (choice == null) return;
@@ -94,7 +96,7 @@ class _DeleteSpaceSheetState extends ConsumerState<DeleteSpaceSheet> {
   }
 
   Future<void> _finish(SharedSpace space) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showAppDialog<bool>(
       context: context,
       builder: (_) => TypedNameConfirmDialog(spaceName: space.name),
     );
@@ -271,7 +273,7 @@ class _TypedNameConfirmDialogState extends State<TypedNameConfirmDialog> {
   @override
   Widget build(BuildContext context) {
     final matches = _confirm.text.trim() == widget.spaceName;
-    return AlertDialog(
+    return AppDialog(
       title: Text(widget.title),
       content: Column(
         mainAxisSize: MainAxisSize.min,

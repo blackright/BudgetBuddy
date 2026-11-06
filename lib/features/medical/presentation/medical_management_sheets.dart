@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../../shared/presentation/modals/app_sheet.dart';
+import '../../../shared/presentation/modals/app_date_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
@@ -22,8 +24,8 @@ class MedicalSubmitRequestSheet extends ConsumerStatefulWidget {
   final MedicalBill bill;
 
   static Future<bool?> show(BuildContext context, MedicalBill bill) {
-    return showModalBottomSheet<bool>(
-      context: context,
+    return showAppSheet<bool>(
+      context,
       isScrollControlled: true,
       useSafeArea: true,
       builder: (sheet) => MedicalSubmitRequestSheet(bill: bill),
@@ -216,8 +218,8 @@ class MedicalInsuranceSubmitSheet extends ConsumerStatefulWidget {
   final MedicalBill bill;
 
   static Future<bool?> show(BuildContext context, MedicalBill bill) {
-    return showModalBottomSheet<bool>(
-      context: context,
+    return showAppSheet<bool>(
+      context,
       isScrollControlled: true,
       useSafeArea: true,
       builder: (sheet) => MedicalInsuranceSubmitSheet(bill: bill),
@@ -357,8 +359,8 @@ class MedicalReceiptConfirmationSheet extends ConsumerStatefulWidget {
   final MedicalBill bill;
 
   static Future<bool?> show(BuildContext context, MedicalBill bill) {
-    return showModalBottomSheet<bool>(
-      context: context,
+    return showAppSheet<bool>(
+      context,
       useSafeArea: true,
       builder: (sheet) => MedicalReceiptConfirmationSheet(bill: bill),
     );
@@ -485,8 +487,8 @@ class MedicalDecisionSheet extends ConsumerStatefulWidget {
   final MedicalBill bill;
 
   static Future<bool?> show(BuildContext context, MedicalBill bill) {
-    return showModalBottomSheet<bool>(
-      context: context,
+    return showAppSheet<bool>(
+      context,
       isScrollControlled: true,
       useSafeArea: true,
       showDragHandle: true,
@@ -740,8 +742,8 @@ class MedicalApprovedAmountsSheet extends ConsumerStatefulWidget {
   final MedicalBill bill;
 
   static Future<bool?> show(BuildContext context, MedicalBill bill) {
-    return showModalBottomSheet<bool>(
-      context: context,
+    return showAppSheet<bool>(
+      context,
       isScrollControlled: true,
       useSafeArea: true,
       showDragHandle: true,
@@ -1061,8 +1063,8 @@ class MedicalRefundSheet extends ConsumerStatefulWidget {
   final MedicalBill bill;
 
   static Future<bool?> show(BuildContext context, MedicalBill bill) {
-    return showModalBottomSheet<bool>(
-      context: context,
+    return showAppSheet<bool>(
+      context,
       isScrollControlled: true,
       useSafeArea: true,
       showDragHandle: true,
@@ -1411,8 +1413,8 @@ class MedicalRejectionSheet extends ConsumerStatefulWidget {
   final MedicalBill bill;
 
   static Future<bool?> show(BuildContext context, MedicalBill bill) {
-    return showModalBottomSheet<bool>(
-      context: context,
+    return showAppSheet<bool>(
+      context,
       useSafeArea: true,
       builder: (sheet) => MedicalRejectionSheet(bill: bill),
     );
@@ -1535,8 +1537,8 @@ class _ResolutionDetailsSheet extends ConsumerStatefulWidget {
 
   static Future<bool?> show(BuildContext context, MedicalBill bill,
       MedicalRejectionResolution resolution) {
-    return showModalBottomSheet<bool>(
-      context: context,
+    return showAppSheet<bool>(
+      context,
       isScrollControlled: true,
       useSafeArea: true,
       builder: (sheet) =>
@@ -1736,8 +1738,8 @@ class MedicalAppealSheet extends ConsumerStatefulWidget {
   final MedicalBill bill;
 
   static Future<bool?> show(BuildContext context, MedicalBill bill) {
-    return showModalBottomSheet<bool>(
-      context: context,
+    return showAppSheet<bool>(
+      context,
       isScrollControlled: true,
       useSafeArea: true,
       builder: (sheet) => MedicalAppealSheet(bill: bill),
@@ -1868,8 +1870,8 @@ class MedicalAppealOutcomeSheet extends ConsumerWidget {
   final MedicalBill bill;
 
   static Future<bool?> show(BuildContext context, MedicalBill bill) {
-    return showModalBottomSheet<bool>(
-      context: context,
+    return showAppSheet<bool>(
+      context,
       useSafeArea: true,
       builder: (sheet) => MedicalAppealOutcomeSheet(bill: bill),
     );
@@ -1931,8 +1933,8 @@ class MedicalCancelRequestSheet extends ConsumerStatefulWidget {
   final MedicalBill bill;
 
   static Future<bool?> show(BuildContext context, MedicalBill bill) {
-    return showModalBottomSheet<bool>(
-      context: context,
+    return showAppSheet<bool>(
+      context,
       isScrollControlled: true,
       useSafeArea: true,
       builder: (sheet) => MedicalCancelRequestSheet(bill: bill),
@@ -2040,8 +2042,8 @@ class MedicalProviderRefundSheet extends ConsumerStatefulWidget {
   final MedicalBill bill;
 
   static Future<bool?> show(BuildContext context, MedicalBill bill) {
-    return showModalBottomSheet<bool>(
-      context: context,
+    return showAppSheet<bool>(
+      context,
       isScrollControlled: true,
       useSafeArea: true,
       builder: (sheet) => MedicalProviderRefundSheet(bill: bill),
@@ -2199,8 +2201,8 @@ class MedicalReopenSheet extends ConsumerStatefulWidget {
   final MedicalBill bill;
 
   static Future<bool?> show(BuildContext context, MedicalBill bill) {
-    return showModalBottomSheet<bool>(
-      context: context,
+    return showAppSheet<bool>(
+      context,
       isScrollControlled: true,
       useSafeArea: true,
       builder: (sheet) => MedicalReopenSheet(bill: bill),
@@ -2305,8 +2307,8 @@ class MedicalCorrectionSheet extends ConsumerStatefulWidget {
   final MedicalBill bill;
 
   static Future<bool?> show(BuildContext context, MedicalBill bill) {
-    return showModalBottomSheet<bool>(
-      context: context,
+    return showAppSheet<bool>(
+      context,
       isScrollControlled: true,
       useSafeArea: true,
       builder: (sheet) => MedicalCorrectionSheet(bill: bill),
@@ -2495,7 +2497,7 @@ class _DateTile extends StatelessWidget {
       subtitle: Text(DateFormat.yMMMd().format(date)),
       trailing: const Icon(Icons.calendar_today_outlined),
       onTap: () async {
-        final picked = await showDatePicker(
+        final picked = await showAppDatePicker(
           context: context,
           initialDate: initial,
           firstDate: first,

@@ -76,7 +76,7 @@ void main() {
     for (final amount in ['1,000', '2,000']) {
       p.addItem()
         ..title = 'Item $amount'
-        ..amount = amount
+        ..unitAmount = amount
         ..category = 'food'
         ..profileChosen = true;
     }
@@ -143,8 +143,8 @@ void main() {
     final rows = await h.isar.expenses.where().findAll();
     final edit = purchaseDraftFromSaved(stored, rows);
     final stale = purchaseDraftFromSaved(stored, rows);
-    edit.items.first.amount = '1,500';
-    edit.items.last.amount = '1,500';
+    edit.items.first.unitAmount = '1,500';
+    edit.items.last.unitAmount = '1,500';
     await c.read(purchaseSubmitProvider)(edit, owner, h.profileId);
     final updated = await h.isar.expenses.where().findAll();
     expect(updated.map((r) => r.amount).toList(), [150000, 150000]);
@@ -187,8 +187,8 @@ void main() {
     final saved = (await h.isar.expensePurchases.where().findFirst())!;
     final edit =
         purchaseDraftFromSaved(saved, await h.isar.expenses.where().findAll());
-    edit.items.first.amount = '1,500';
-    edit.items.last.amount = '1,500';
+    edit.items.first.unitAmount = '1,500';
+    edit.items.last.unitAmount = '1,500';
     await expectLater(c.read(purchaseSubmitProvider)(edit, owner, h.profileId),
         throwsStateError);
     expect((await h.isar.expenses.where().findFirst())!.amount, 100000);

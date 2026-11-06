@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/models/expense.dart';
+import '../../../shared/presentation/modals/app_dialog.dart';
 
 /// What the user chose in the destination guard.
 enum ExpenseDestinationDecision { save, changeProfile, cancel }
@@ -134,9 +135,9 @@ Future<ExpenseDestinationDecision> confirmExpenseDestination(
       ? Colors.white
       : Colors.black;
 
-  final decision = await showDialog<ExpenseDestinationDecision>(
+  final decision = await showAppDialog<ExpenseDestinationDecision>(
     context: context,
-    builder: (dialogContext) => AlertDialog(
+    builder: (dialogContext) => AppDialog(
       key: const Key('destinationGuardDialog'),
       icon: Icon(Icons.warning_amber_rounded, color: tone),
       title: Text(titleText),

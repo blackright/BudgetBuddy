@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../shared/presentation/modals/app_dialog.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers/identity_provider.dart';
@@ -26,9 +27,9 @@ class IdentitySection extends ConsumerWidget {
   }
 
   Future<void> _wipe(BuildContext context, WidgetRef ref) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showAppDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
+      builder: (dialogContext) => AppDialog(
         title: const Text('Remove your identity?'),
         content: const Text(
           'This deletes your identity key and local data on this phone. '

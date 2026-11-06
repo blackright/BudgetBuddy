@@ -25,6 +25,8 @@ import '../../engine/providers/rate_registry_provider.dart';
 import '../../../shared/presentation/input_formatters/thousands_separator_input_formatter.dart';
 import '../../../shared/presentation/money_conversion.dart';
 import '../../../shared/presentation/money_format.dart';
+import '../../../shared/presentation/modals/app_date_picker.dart';
+import '../../../shared/presentation/modals/app_dialog.dart';
 import '../providers/income_source_providers.dart';
 import 'income_confirmation.dart';
 
@@ -250,12 +252,12 @@ class _IncomeSourcesScreenState extends ConsumerState<IncomeSourcesScreen> {
     DateTime? endDate = existing?.endDate;
 
     if (!context.mounted) return;
-    await showDialog<void>(
+    await showAppDialog<void>(
       context: context,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            return AlertDialog(
+            return AppDialog(
               title: Text(existing == null
                   ? 'Add Income Source'
                   : 'Edit Income Source'),
@@ -336,7 +338,7 @@ class _IncomeSourcesScreenState extends ConsumerState<IncomeSourcesScreen> {
                           : startDate!.toIso8601String().split('T').first),
                       trailing: const Icon(Icons.calendar_today),
                       onTap: () async {
-                        final picked = await showDatePicker(
+                        final picked = await showAppDatePicker(
                           context: context,
                           firstDate: DateTime(2000),
                           lastDate: DateTime(2100),
@@ -355,7 +357,7 @@ class _IncomeSourcesScreenState extends ConsumerState<IncomeSourcesScreen> {
                           : endDate!.toIso8601String().split('T').first),
                       trailing: const Icon(Icons.calendar_today),
                       onTap: () async {
-                        final picked = await showDatePicker(
+                        final picked = await showAppDatePicker(
                           context: context,
                           firstDate: DateTime(2000),
                           lastDate: DateTime(2100),
@@ -637,10 +639,10 @@ class _IncomeCycleSummary extends ConsumerWidget {
       BuildContext context, WidgetRef ref, SalaryCycle cycle) async {
     var reason = '';
     var canSubmit = false;
-    final accepted = await showDialog<bool>(
+    final accepted = await showAppDialog<bool>(
       context: context,
       builder: (dialog) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
+        builder: (context, setDialogState) => AppDialog(
           title: const Text('Cancel expected income'),
           content: TextField(
             key: const Key('incomeCancelReason'),
@@ -686,9 +688,9 @@ class _IncomeCycleSummary extends ConsumerWidget {
     final reason = TextEditingController();
     final operationKey = DateTime.now().microsecondsSinceEpoch.toString();
     final access = medicalAccessCheck(context, ref);
-    await showDialog<void>(
+    await showAppDialog<void>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
+      builder: (dialogContext) => AppDialog(
         title: const Text('Correct salary receipt'),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
           const Text(

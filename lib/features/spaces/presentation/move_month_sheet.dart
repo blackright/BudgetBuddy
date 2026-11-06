@@ -5,6 +5,7 @@ import '../../../core/models/shared_space.dart';
 import '../../../core/models/user_profile.dart';
 import '../../../core/providers/active_profile_provider.dart';
 import '../../../core/providers/budget_context_provider.dart';
+import '../../../shared/presentation/modals/app_sheet.dart';
 import '../providers/spaces_providers.dart';
 import '../repositories/month_move_operations.dart';
 import '../repositories/space_role_guard.dart';
@@ -21,8 +22,8 @@ class MoveMonthSheet extends ConsumerStatefulWidget {
   const MoveMonthSheet({super.key});
 
   static Future<void> show(BuildContext context) {
-    return showModalBottomSheet<void>(
-      context: context,
+    return showAppSheet<void>(
+      context,
       isScrollControlled: true,
       builder: (_) => const MoveMonthSheet(),
     );

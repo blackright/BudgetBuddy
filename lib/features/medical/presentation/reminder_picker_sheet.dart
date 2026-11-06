@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../../shared/presentation/modals/app_sheet.dart';
+import '../../../shared/presentation/modals/app_date_picker.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
@@ -27,8 +29,8 @@ class ReminderPickerSheet extends StatefulWidget {
     DateTime? initialDate,
     bool allowClear = false,
   }) {
-    return showModalBottomSheet<DateTime>(
-      context: context,
+    return showAppSheet<DateTime>(
+      context,
       isScrollControlled: true,
       builder: (context) =>
           ReminderPickerSheet(initialDate: initialDate, allowClear: allowClear),
@@ -148,7 +150,7 @@ class _ReminderPickerSheetState extends State<ReminderPickerSheet> {
               title: const Text('Date'),
               trailing: Text(DateFormat.yMMMd().format(_selectedDate)),
               onTap: () async {
-                final date = await showDatePicker(
+                final date = await showAppDatePicker(
                   context: context,
                   initialDate: _selectedDate,
                   firstDate: DateTime

@@ -1,8 +1,11 @@
 import '../../../shared/presentation/financial_feedback.dart';
+import '../../../shared/presentation/modals/app_confirm.dart';
+import '../../../shared/presentation/modals/app_dialog.dart';
 import 'widgets/expense_evidence_view.dart';
 import 'purchase_screen.dart';
 import '../../../core/services/merchant_service.dart';
 import '../../../core/services/fx_booking_service.dart';
+import '../../../core/services/quantity_math.dart';
 import '../../../shared/presentation/money_format.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -164,7 +167,7 @@ class _ActionBar extends ConsumerWidget {
         if (isPaid && expense.type == ExpenseType.standard) ...[
           FilledButton.icon(
               key: const Key('recordRefund'),
-              onPressed: () => showDialog<bool>(
+              onPressed: () => showAppDialog<bool>(
                   context: context,
                   barrierDismissible: false,
                   builder: (_) => RefundDialog(expenseId: expense.id)),
@@ -213,24 +216,12 @@ class _ActionBar extends ConsumerWidget {
               ),
             OutlinedButton.icon(
               onPressed: () async {
-                final confirmed = await showDialog<bool>(
-                  context: context,
-                  builder: (ctx) => AlertDialog(
-                    title: const Text('Delete Expense?'),
-                    content: const Text(
-                        'Are you sure you want to delete this expense?'),
-                    actions: [
-                      TextButton(
-                          onPressed: () => Navigator.pop(ctx, false),
-                          child: const Text('Cancel')),
-                      FilledButton(
-                        onPressed: () => Navigator.pop(ctx, true),
-                        style:
-                            FilledButton.styleFrom(backgroundColor: Colors.red),
-                        child: const Text('Delete'),
-                      ),
-                    ],
-                  ),
+                final confirmed = await showAppConfirm(
+                  context,
+                  title: 'Delete Expense?',
+                  message: 'Are you sure you want to delete this expense?',
+                  confirmLabel: 'Delete',
+                  destructive: true,
                 );
                 if (confirmed == true && context.mounted) {
                   final removed = await runFinancialAction(context,
@@ -289,9 +280,24 @@ class _HeroSection extends ConsumerWidget {
         ),
         const SizedBox(height: 8),
         _HeroAmount(expense: expense),
+        if (expense.quantity > 1) ...[
+          const SizedBox(height: 6),
+          Text(
+            _quantityLine(expense),
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant),
+          ),
+        ],
       ],
     );
   }
+}
+
+String _quantityLine(Expense expense) {
+  final unit = expense.unitAmountMinor;
+  final code = expense.currencyCode;
+  if (unit == null || code == null) return 'Quantity ${expense.quantity}';
+  return 'Quantity ${expense.quantity} · ${formatMinorUnits(unit, code)} each';
 }
 
 /// The hero amount: converted into the month's display currency, with the

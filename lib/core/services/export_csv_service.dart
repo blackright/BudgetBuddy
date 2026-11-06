@@ -49,6 +49,8 @@ class ExportCsvService {
         'Original currency',
         'Original amount',
         'Original minor units',
+        'Quantity',
+        'Unit price',
         'Report currency',
         'Report amount',
         'Report minor units',
@@ -81,6 +83,11 @@ class ExportCsvService {
               : ReportCsvNumber(exactReportDecimal(
                   r.amount, CurrencyCode.tryParse(r.currency)!)),
           r.amount,
+          r.quantity,
+          r.unitAmountMinor == null || CurrencyCode.tryParse(r.currency) == null
+              ? null
+              : ReportCsvNumber(exactReportDecimal(
+                  r.unitAmountMinor!, CurrencyCode.tryParse(r.currency)!)),
           report.request.currency.code.toUpperCase(),
           r.converted == null
               ? null

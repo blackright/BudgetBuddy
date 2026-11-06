@@ -42,6 +42,35 @@ void main() {
     expect(fields.singleWhere((e) => e.key == 'amount').section, 'Money');
     expect(row.newValue, original);
   });
+  test('missing quantity on older expense payloads is treated as 1', () {
+    final row = AuditEvent()
+      ..objectType = 'Expense'
+      ..previousValue = '{"amount":1000,"currency":"huf","title":"Books"}'
+      ..newValue =
+          '{"amount":1000,"quantity":1,"currency":"huf","title":"Books"}';
+
+    final unchanged =
+        auditFieldChanges(row).singleWhere((e) => e.key == 'quantity');
+    expect(unchanged.label, 'Quantity');
+    expect(unchanged.section, 'Record details');
+    expect(unchanged.before, '1');
+    expect(unchanged.after, '1');
+    expect(unchanged.changed, isFalse);
+
+    row.newValue =
+        '{"amount":1000,"quantity":2,"currency":"huf","title":"Books"}';
+    final changed =
+        auditFieldChanges(row).singleWhere((e) => e.key == 'quantity');
+    expect(changed.before, '1');
+    expect(changed.after, '2');
+    expect(changed.changed, isTrue);
+
+    row.previousValue = null;
+    final created =
+        auditFieldChanges(row).singleWhere((e) => e.key == 'quantity');
+    expect(created.before, 'Not recorded');
+    expect(created.after, '2');
+  });
   test('original expense currency is kept separate from context currency', () {
     final row = AuditEvent()
       ..objectType = 'Expense'

@@ -6,6 +6,7 @@ import '../../../core/providers/active_profile_provider.dart';
 import '../../../core/providers/budget_context_provider.dart';
 import '../../../core/services/purchase_draft.dart';
 import '../../../shared/presentation/financial_feedback.dart';
+import '../../../shared/presentation/modals/app_confirm.dart';
 import '../../spaces/providers/spaces_providers.dart';
 import '../providers/bulk_entry_providers.dart';
 import '../providers/purchase_provider.dart';
@@ -38,20 +39,15 @@ class _BulkEntryScreenState extends ConsumerState<BulkEntryScreen> {
   Future<void> leave({bool view = false}) async {
     if (busy) return;
     if (dirty && purchases.any((p) => !p.saved)) {
-      final discard = await showDialog<bool>(
-          context: context,
-          builder: (c) => AlertDialog(
-                  title: const Text('Discard unfinished purchases?'),
-                  content: const Text(
-                      'Saved purchases stay. Unsaved items and uploads will be discarded.'),
-                  actions: [
-                    TextButton(
-                        onPressed: () => Navigator.pop(c, false),
-                        child: const Text('Keep editing')),
-                    FilledButton(
-                        onPressed: () => Navigator.pop(c, true),
-                        child: const Text('Discard'))
-                  ]));
+      final discard = await showAppConfirm(
+        context,
+        title: 'Discard unfinished purchases?',
+        message:
+            'Saved purchases stay. Unsaved items and uploads will be discarded.',
+        confirmLabel: 'Discard',
+        cancelLabel: 'Keep editing',
+        destructive: true,
+      );
       if (discard != true || !mounted) return;
     }
     if (view) {
@@ -93,20 +89,13 @@ class _BulkEntryScreenState extends ConsumerState<BulkEntryScreen> {
     }
     setState(() => busy = true);
     try {
-      final confirm = await showDialog<bool>(
-          context: context,
-          builder: (c) => AlertDialog(
-                  title: Text('Save ${ready.length} complete purchases?'),
-                  content: Text(
-                      '${ready.fold<int>(0, (n, p) => n + p.items.length)} expense items\n${purchases.where((p) => !p.saved).length - ready.length} purchases need correction.\n\n${ready.map((p) => '${p.header.merchant} · ${p.items.length} items · ${p.header.status.name}\nItems total: ${purchaseMoney(p, p.totalMinor)}').join('\n')}\n\nOnly item amounts count as spending.'),
-                  actions: [
-                    TextButton(
-                        onPressed: () => Navigator.pop(c, false),
-                        child: const Text('Cancel')),
-                    FilledButton(
-                        onPressed: () => Navigator.pop(c, true),
-                        child: const Text('Save complete purchases'))
-                  ]));
+      final confirm = await showAppConfirm(
+        context,
+        title: 'Save ${ready.length} complete purchases?',
+        message:
+            '${ready.fold<int>(0, (n, p) => n + p.items.length)} expense items\n${purchases.where((p) => !p.saved).length - ready.length} purchases need correction.\n\n${ready.map((p) => '${p.header.merchant} · ${p.items.length} items · ${p.header.status.name}\nItems total: ${purchaseMoney(p, p.totalMinor)}').join('\n')}\n\nOnly item amounts count as spending.',
+        confirmLabel: 'Save complete purchases',
+      );
       if (confirm != true || !mounted) return;
       for (final p in ready) {
         try {
@@ -257,6 +246,7 @@ class _BulkEntryScreenState extends ConsumerState<BulkEntryScreen> {
                                         padding: const EdgeInsets.all(16),
                                         child: Column(children: [
                                           PurchaseEditor(
+                                              key: ValueKey(p.guid),
                                               purchase: p,
                                               month: owner!.yearMonth,
                                               canAdd: itemCount < 50,
@@ -282,6 +272,9 @@ class _BulkEntryScreenState extends ConsumerState<BulkEntryScreen> {
                                                 onPressed: () => setState(() {
                                                       p.evidence.dispose();
                                                       purchases.remove(p);
+                                                      if (expanded == p.guid) {
+                                                        expanded = '';
+                                                      }
                                                       dirty = true;
                                                     }),
                                                 icon: const Icon(

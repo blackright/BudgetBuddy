@@ -24,6 +24,7 @@ import '../../../core/models/month_end_run.dart';
 import '../../../core/providers/budget_context_provider.dart';
 import '../../../core/services/bulk_entry_service.dart';
 import '../../../core/services/profile_spending_service.dart';
+import '../../../core/services/quantity_math.dart';
 import '../../../core/services/expense_profile_identity.dart';
 import '../../../core/providers/active_budget_provider.dart';
 import '../../../core/providers/active_profile_provider.dart';
@@ -130,6 +131,10 @@ class ExpensesNotifier extends StateNotifier<AsyncValue<List<Expense>>> {
   }
 
   Future<void> addExpense(Expense expense, {int? targetBudgetId}) async {
+    if (!isValidQuantity(expense.quantity)) {
+      throw ArgumentError.value(
+          expense.quantity, 'quantity', 'must be between 1 and 999');
+    }
     // The target month may differ from the one on screen when the expense is
     // dated in the past (or planned for the future). The row carries its own
     // yearMonth; only the owning budget id needs to follow it.
@@ -644,6 +649,10 @@ class ExpensesNotifier extends StateNotifier<AsyncValue<List<Expense>>> {
   Future<ExpenseDelta> updateExpense(Expense updated) async {
     if (updated.amount <= 0) {
       throw ArgumentError.value(updated.amount, 'amount', 'must be > 0');
+    }
+    if (!isValidQuantity(updated.quantity)) {
+      throw ArgumentError.value(
+          updated.quantity, 'quantity', 'must be between 1 and 999');
     }
     if (updated.title.trim().isEmpty) {
       throw ArgumentError.value(updated.title, 'title', 'cannot be empty');

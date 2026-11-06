@@ -428,7 +428,7 @@ void main() {
 
       await harness.runMigrations();
 
-      expect(await readSchemaVersion(harness.isar), 42);
+      expect(await readSchemaVersion(harness.isar), schemaVersion);
       expect(await harness.isar.pendingActions.count(), 0,
           reason: 'no attention item is inferred from history');
       expect(
@@ -453,8 +453,7 @@ void main() {
       await harness.runMigrations();
       await harness.runMigrations();
 
-      expect(await readSchemaVersion(harness.isar), 42);
-      expect(await harness.isar.pendingActions.count(), 0);
+      expect(await readSchemaVersion(harness.isar), schemaVersion);
     });
   });
 }

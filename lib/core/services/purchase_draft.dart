@@ -41,7 +41,7 @@ class PurchaseDraft {
     var total = BigInt.zero;
     try {
       for (final item in items) {
-        final value = parseSearchAmount(item.amount, code);
+        final value = item.lineTotalMinor;
         if (value == null || value <= 0) return null;
         total += BigInt.from(value);
       }

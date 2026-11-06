@@ -3,6 +3,7 @@ import '../models/expense.dart';
 import 'filter_service.dart';
 import 'merchant_service.dart';
 import 'expense_evidence_draft.dart';
+import 'quantity_math.dart';
 import '../../features/sync/domain/sync_guid.dart';
 
 /// Temporary row identity survives retries but is never shared by a copied row.
@@ -11,7 +12,9 @@ class BulkExpenseDraft {
       : guid = identity ?? newSyncGuid(),
         evidence = ExpenseEvidenceDraft(source);
   final String guid;
-  String title = '', amount = '', merchant = '', notes = '', tags = '';
+  String title = '', unitAmount = '', merchant = '', notes = '', tags = '';
+  int quantity = 1;
+  bool needsQuantityCorrection = false;
   String? currency, category, payment, profileType, profileGuid;
   int? profileId;
   String? profileName;
@@ -21,6 +24,20 @@ class BulkExpenseDraft {
   GuiltLevel guilt = GuiltLevel.essential;
   Map<String, String> errors = {};
   final ExpenseEvidenceDraft evidence;
+
+  /// The checked line total. While a saved purchase total needs correction,
+  /// [unitAmount] temporarily holds the stored total and is returned unchanged.
+  int? get lineTotalMinor {
+    final code = CurrencyCode.tryParse(currency);
+    try {
+      final unit = parseSearchAmount(unitAmount, code);
+      if (unit == null || unit <= 0) return null;
+      if (needsQuantityCorrection) return unit;
+      return quantityLineTotalMinor(unitMinor: unit, quantity: quantity);
+    } on FormatException {
+      return null;
+    }
+  }
 
   BulkExpenseDraft copy({bool includeDetails = true}) {
     final row = BulkExpenseDraft()
@@ -42,7 +59,8 @@ class BulkExpenseDraft {
         ..reimbursable = reimbursable
         ..guilt = guilt;
     }
-    // No amount, paid status, saved marker or identity is inherited.
+    // No unit amount, quantity, paid status, saved marker or identity is
+    // inherited.
     return row;
   }
 }
@@ -60,12 +78,22 @@ class BulkEntryService {
     }
     final currency = CurrencyCode.tryParse(row.currency);
     if (currency == null) errors['currency'] = 'Choose a currency.';
-    try {
-      if ((parseSearchAmount(row.amount, currency) ?? 0) <= 0) {
-        errors['amount'] = 'Enter an amount greater than zero.';
+    if (row.needsQuantityCorrection) {
+      errors['quantity'] =
+          'Set quantity to 1 or enter a unit price for this saved total.';
+    } else if (!isValidQuantity(row.quantity)) {
+      errors['quantity'] = 'Choose a quantity from 1 to 999.';
+    } else {
+      try {
+        final unit = parseSearchAmount(row.unitAmount, currency);
+        if (unit == null || unit <= 0) {
+          errors['amount'] = 'Enter a unit price greater than zero.';
+        } else if (row.lineTotalMinor == null) {
+          errors['amount'] = 'The line total is too large.';
+        }
+      } on FormatException catch (e) {
+        errors['amount'] = e.message;
       }
-    } on FormatException catch (e) {
-      errors['amount'] = e.message;
     }
     if (row.category == null || row.category!.isEmpty) {
       errors['category'] = 'Choose a category.';
@@ -126,8 +154,8 @@ class BulkEntryService {
       sharedSpaceId: space,
       yearMonth: month,
       title: row.title.trim(),
-      amount:
-          parseSearchAmount(row.amount, CurrencyCode.tryParse(row.currency))!,
+      amount: row.lineTotalMinor!,
+      quantity: row.quantity,
       currency: row.currency!.toUpperCase(),
       categoryId: row.category!,
       status: row.status,

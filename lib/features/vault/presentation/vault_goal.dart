@@ -5,6 +5,8 @@ import '../../../core/providers/active_profile_provider.dart';
 import '../../../core/providers/budget_context_provider.dart';
 import '../../../core/services/refund_service.dart';
 import '../../../shared/presentation/input_formatters/thousands_separator_input_formatter.dart';
+import '../../../shared/presentation/modals/app_date_picker.dart';
+import '../../../shared/presentation/modals/app_dialog.dart';
 import '../../../shared/presentation/money_format.dart';
 import '../models/savings_vault.dart';
 import '../repositories/vault_repository.dart';
@@ -146,7 +148,7 @@ class _VaultGoalEditorState extends ConsumerState<VaultGoalEditor> {
   @override
   Widget build(BuildContext context) => PopScope(
       canPop: !_busy,
-      child: AlertDialog(
+      child: AppDialog(
         title: const Text('Savings goal'),
         content: SingleChildScrollView(
             child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -182,7 +184,7 @@ class _VaultGoalEditorState extends ConsumerState<VaultGoalEditor> {
                       final parsed = validGoalMonth(_targetMonth)
                           ? DateTime.parse('${_targetMonth!}-01')
                           : first;
-                      final selected = await showDatePicker(
+                      final selected = await showAppDatePicker(
                           context: context,
                           helpText: 'Choose a date in your target month',
                           firstDate: first,

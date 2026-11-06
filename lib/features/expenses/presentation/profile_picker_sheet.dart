@@ -5,6 +5,9 @@ import '../../../core/models/budget_profile.dart';
 import '../../../core/models/expense.dart';
 import '../../../core/models/direct_expense_profile.dart';
 import '../../../shared/presentation/profile_identity_color.dart';
+import '../../../shared/presentation/modals/app_dialog.dart';
+import '../../../shared/presentation/modals/app_modal_tokens.dart';
+import '../../../shared/presentation/modals/app_sheet.dart';
 import '../../finance/providers/profile_providers.dart';
 
 /// The result of the profile picker: the chosen profile id, or `null` for
@@ -44,10 +47,8 @@ class ProfilePickerSheet extends ConsumerStatefulWidget {
     int? selectedProfileId,
     String? selectedProfileType,
   }) async {
-    return showModalBottomSheet<ProfilePickerResult>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
+    return showAppSheet<ProfilePickerResult>(
+      context,
       builder: (context) => ProfilePickerSheet(
         selectedProfileId: selectedProfileId,
         selectedProfileType: selectedProfileType,
@@ -84,24 +85,15 @@ class _ProfilePickerSheetState extends ConsumerState<ProfilePickerSheet> {
     final budget = budgetProfiles.where((p) => _matches(p.name)).toList();
     final direct = directProfiles.where((p) => _matches(p.name)).toList();
 
-    return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.only(
-          left: 16,
-          right: 16,
-          top: 8,
-          bottom: MediaQuery.of(context).viewInsets.bottom + 16,
-        ),
+    return AppSheet(
+      title: 'Choose a profile',
+      bodyScrollable: false,
+      body: Padding(
+        padding: AppModalTokens.sheetBodyPadding,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Choose a profile',
-              style: theme.textTheme.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 12),
             TextField(
               controller: _searchController,
               autofocus: true,
@@ -221,12 +213,12 @@ class _ProfilePickerSheetState extends ConsumerState<ProfilePickerSheet> {
     final nameController = TextEditingController();
     var isBudget = true;
 
-    final created = await showDialog<bool>(
+    final created = await showAppDialog<bool>(
       context: context,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            return AlertDialog(
+            return AppDialog(
               title: const Text('New Profile'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,

@@ -1,6 +1,7 @@
 import 'widgets/expense_metadata_fields.dart';
 import 'purchase_screen.dart';
 import '../../../shared/presentation/financial_feedback.dart';
+import '../../../shared/presentation/modals/app_date_picker.dart';
 import 'package:flutter/material.dart';
 import '../../../core/services/expense_evidence.dart';
 import '../../../core/services/filter_service.dart';
@@ -13,6 +14,7 @@ import '../../../core/models/currency_code.dart';
 import '../../../core/models/expense.dart';
 import '../../../core/models/money.dart';
 import '../../../core/network/rate_types.dart';
+import '../../../core/services/quantity_math.dart';
 import '../../../core/providers/active_budget_provider.dart';
 import '../../../core/providers/active_profile_provider.dart';
 import '../../../core/providers/active_space_provider.dart';
@@ -20,6 +22,8 @@ import '../../../core/providers/selected_month_provider.dart';
 import '../../../shared/presentation/money_format.dart';
 import '../../../shared/presentation/profile_identity_color.dart';
 import '../../../shared/presentation/widgets/money_field.dart';
+import '../../../shared/presentation/widgets/quantity_stepper.dart';
+import '../../../shared/presentation/widgets/line_total_preview.dart';
 import '../../engine/currency_resolution.dart';
 import '../../engine/expense_delta.dart';
 import '../../engine/providers/rate_registry_provider.dart';
@@ -60,6 +64,9 @@ class _EditExpenseScreenState extends ConsumerState<EditExpenseScreen> {
   late GuiltLevel _guiltLevel;
   late String _categoryId;
   late DateTime _purchaseDate;
+  late int _quantity;
+  bool _needsQuantityCorrection = false;
+  String? _quantityError;
   int? _budgetProfileId;
   String? _profileType, _profileGuid;
 
@@ -72,11 +79,18 @@ class _EditExpenseScreenState extends ConsumerState<EditExpenseScreen> {
     _metadata = ExpenseMetadataDraft(e);
     _original = ExpenseSnapshot.of(e);
     _titleController = TextEditingController(text: e.title);
+    _quantity = e.quantity < 1 ? 1 : e.quantity;
+    final code = e.currencyCode;
+    final unit = code == null
+        ? null
+        : quantityUnitMinor(totalMinor: e.amount, quantity: _quantity);
+    _needsQuantityCorrection = _quantity > 1 && unit == null;
     _originalAmountText =
-        formatMinorUnitsInput(e.amount, e.currencyCode ?? CurrencyCode.huf);
+        formatMinorUnitsInput(unit ?? e.amount, code ?? CurrencyCode.huf);
     _amountController = TextEditingController(text: _originalAmountText)
       ..addListener(() => setState(() {
             _metadata.evidence.cashConfirmed = false;
+            if (_needsQuantityCorrection) _needsQuantityCorrection = false;
           }));
     _currency = e.currency.toUpperCase();
     _status = e.status;
@@ -97,7 +111,37 @@ class _EditExpenseScreenState extends ConsumerState<EditExpenseScreen> {
     super.dispose();
   }
 
-  static double? _parseAmount(String? raw) => parseMoneyInput(raw ?? '');
+  int? _unitMinor() {
+    final code = CurrencyCode.tryParse(_currency);
+    if (code == null) return null;
+    try {
+      return parseSearchAmount(_amountController.text, code);
+    } on FormatException {
+      return null;
+    }
+  }
+
+  int? _totalMinor() {
+    if (_needsQuantityCorrection) {
+      // Until the user resolves the saved total, show the recorded total.
+      try {
+        return parseSearchAmount(
+            _amountController.text, CurrencyCode.tryParse(_currency));
+      } on FormatException {
+        return null;
+      }
+    }
+    final unit = _unitMinor();
+    if (unit == null) return null;
+    return quantityLineTotalMinor(unitMinor: unit, quantity: _quantity);
+  }
+
+  double? _totalMajor() {
+    final total = _totalMinor();
+    final code = CurrencyCode.tryParse(_currency);
+    if (total == null || code == null) return null;
+    return total / code.minorUnitsPerMajor;
+  }
 
   Future<void> _onCurrencyChanged(String currency) async {
     setState(() {
@@ -110,12 +154,7 @@ class _EditExpenseScreenState extends ConsumerState<EditExpenseScreen> {
   ExpenseDelta _currentDelta(CurrencyCode display, RateTable? table) {
     final code = CurrencyCode.tryParse(_currency);
     if (code == null) return ExpenseDelta.zero;
-    int? amount;
-    try {
-      amount = parseSearchAmount(_amountController.text, code);
-    } on FormatException {
-      return ExpenseDelta.zero;
-    }
+    final amount = _totalMinor();
     if (amount == null || amount <= 0) return ExpenseDelta.zero;
     final booked = expenseFx(widget.expense)?.current;
     var afterAmount = amount;
@@ -148,9 +187,28 @@ class _EditExpenseScreenState extends ConsumerState<EditExpenseScreen> {
   // ---- T006: save --------------------------------------------------------
   Future<void> _save() async {
     if (_saving || !_formKey.currentState!.validate()) return;
-    setState(() => _saving = true);
-
+    if (_needsQuantityCorrection) {
+      showFinancialFeedback(context,
+          'This saved total cannot be divided evenly. Set quantity to 1 or enter a unit price before saving.',
+          kind: FinancialFeedbackKind.error);
+      return;
+    }
+    if (!isValidQuantity(_quantity)) {
+      setState(() => _quantityError = 'Choose a quantity from 1 to 999.');
+      return;
+    }
     final code = CurrencyCode.tryParse(_currency);
+    final total = code == null ? widget.expense.amount : _totalMinor();
+    if (total == null) {
+      setState(() => _quantityError =
+          'The unit price and quantity produce an unsupported total.');
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _quantityError = null;
+    });
+
     final e = widget.expense.copyForEditing()
       ..budgetProfileId = _budgetProfileId
       ..financialProfileType = _profileType
@@ -161,9 +219,8 @@ class _EditExpenseScreenState extends ConsumerState<EditExpenseScreen> {
               ? _purchaseDate
               : widget.expense.paidAt
       ..date = _purchaseDate
-      ..amount = code == null
-          ? widget.expense.amount
-          : parseSearchAmount(_amountController.text, code)!
+      ..amount = total
+      ..quantity = _quantity
       ..currency = _currency == widget.expense.currency.toUpperCase()
           ? widget.expense.currency
           : _currency
@@ -201,6 +258,22 @@ class _EditExpenseScreenState extends ConsumerState<EditExpenseScreen> {
     if (_saving || !_formKey.currentState!.validate()) return;
     final budget = ref.read(activeBudgetProvider).value;
     if (budget == null) return;
+    if (_needsQuantityCorrection) {
+      showFinancialFeedback(context,
+          'This saved total cannot be divided evenly. Set quantity to 1 or enter a unit price before making a copy.',
+          kind: FinancialFeedbackKind.error);
+      return;
+    }
+    if (!isValidQuantity(_quantity)) {
+      setState(() => _quantityError = 'Choose a quantity from 1 to 999.');
+      return;
+    }
+    final total = _totalMinor();
+    if (total == null) {
+      setState(() => _quantityError =
+          'The unit price and quantity produce an unsupported total.');
+      return;
+    }
     setState(() => _saving = true);
 
     final src = widget.expense;
@@ -218,7 +291,8 @@ class _EditExpenseScreenState extends ConsumerState<EditExpenseScreen> {
       yearMonth: budget.yearMonth,
       type: src.type,
       title: _titleController.text.trim(),
-      amount: parseSearchAmount(_amountController.text, code)!,
+      amount: total,
+      quantity: _quantity,
       currency: _currency,
       categoryId: _categoryId,
       status: ExpenseStatus.planned,
@@ -432,7 +506,7 @@ class _EditExpenseScreenState extends ConsumerState<EditExpenseScreen> {
                     child: MoneyField(
                       key: const Key('editExpenseAmountField'),
                       controller: _amountController,
-                      label: 'Amount',
+                      label: _quantity == 1 ? 'Amount' : 'Unit price',
                       validator: (value) {
                         if (value == null || value.isEmpty) return 'Required';
                         if (CurrencyCode.tryParse(_currency) == null &&
@@ -477,8 +551,40 @@ class _EditExpenseScreenState extends ConsumerState<EditExpenseScreen> {
                   ),
                 ],
               ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 20,
+                runSpacing: 12,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  QuantityStepper(
+                    key: const Key('editExpenseQuantity'),
+                    value: _quantity,
+                    inputKey: const Key('editExpenseQuantityField'),
+                    decrementKey: const Key('editExpenseQuantityDecrease'),
+                    incrementKey: const Key('editExpenseQuantityIncrease'),
+                    errorText: _quantityError,
+                    onChanged: (value) => setState(() {
+                      _quantity = value;
+                      if (value == 1) _needsQuantityCorrection = false;
+                      _quantityError = null;
+                      _metadata.evidence.cashConfirmed = false;
+                    }),
+                  ),
+                  LineTotalPreview(
+                    key: const Key('editExpenseLineTotal'),
+                    unitMinor: _needsQuantityCorrection ? null : _unitMinor(),
+                    quantity: _quantity,
+                    currency: CurrencyCode.tryParse(_currency),
+                    totalMinor: _needsQuantityCorrection ? _totalMinor() : null,
+                    note: _needsQuantityCorrection
+                        ? 'The saved total cannot be divided evenly. Set quantity to 1 or enter a unit price.'
+                        : null,
+                  ),
+                ],
+              ),
               AmountConversionHint(
-                amount: _parseAmount(_amountController.text),
+                amount: _totalMajor(),
                 currency: CurrencyCode.tryParse(_currency),
                 display: display,
                 main: main,
@@ -590,7 +696,7 @@ class _EditExpenseScreenState extends ConsumerState<EditExpenseScreen> {
                           .toList();
                       final first = DateTime(parts[0], parts[1]),
                           last = DateTime(parts[0], parts[1] + 1, 0);
-                      final selected = await showDatePicker(
+                      final selected = await showAppDatePicker(
                           context: context,
                           initialDate: _purchaseDate,
                           firstDate: first,

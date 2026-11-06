@@ -13,11 +13,15 @@ import '../../../core/providers/active_profile_provider.dart';
 import '../../../core/providers/active_space_provider.dart';
 import '../../../core/providers/budget_context_provider.dart';
 import '../../../core/providers/selected_month_provider.dart';
+import '../../../core/services/quantity_math.dart';
 import '../../../shared/presentation/confirm_space_on_save.dart';
 import '../../../shared/presentation/money_format.dart';
 import '../../../shared/presentation/profile_identity_color.dart';
 import '../../../shared/presentation/widgets/app_card.dart';
 import '../../../shared/presentation/widgets/money_field.dart';
+import '../../../shared/presentation/widgets/quantity_stepper.dart';
+import '../../../shared/presentation/widgets/line_total_preview.dart';
+import '../../../shared/presentation/modals/app_date_picker.dart';
 import '../../engine/currency_resolution.dart';
 import '../../engine/providers/rate_registry_provider.dart';
 import '../../settings/providers/settings_provider.dart';
@@ -54,6 +58,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   ExpenseStatus _status = ExpenseStatus.paid;
   bool _isReimbursable = false;
   GuiltLevel _guiltLevel = GuiltLevel.essential;
+  int _quantity = 1;
+  String? _quantityError;
 
   /// The budget or direct profile the expense is filed under (T141).
   ///
@@ -117,7 +123,28 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     super.dispose();
   }
 
-  static double? _parseAmount(String? raw) => parseMoneyInput(raw ?? '');
+  int? _unitMinor() {
+    final code = CurrencyCode.tryParse(_effectiveCurrency);
+    if (code == null) return null;
+    try {
+      return parseSearchAmount(_amountController.text, code);
+    } on FormatException {
+      return null;
+    }
+  }
+
+  int? _totalMinor() {
+    final unit = _unitMinor();
+    if (unit == null) return null;
+    return quantityLineTotalMinor(unitMinor: unit, quantity: _quantity);
+  }
+
+  double? _totalMajor() {
+    final total = _totalMinor();
+    final code = CurrencyCode.tryParse(_effectiveCurrency);
+    if (total == null || code == null) return null;
+    return total / code.minorUnitsPerMajor;
+  }
 
   /// The currency the form records in: the user's pick, or the profile's main
   /// currency until the user picks (T056).
@@ -148,7 +175,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
             : current.isAfter(last)
                 ? last
                 : current;
-    final picked = await showDatePicker(
+    final picked = await showAppDatePicker(
         context: context,
         initialDate: initial,
         firstDate: first,
@@ -222,6 +249,17 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
     if (_saving || _resolvingMonth || !_formKey.currentState!.validate()) {
       return;
     }
+    final total = _totalMinor();
+    if (!isValidQuantity(_quantity)) {
+      setState(() => _quantityError = 'Choose a quantity from 1 to 999.');
+      return;
+    }
+    if (total == null) {
+      setState(() => _quantityError =
+          'The unit price and quantity produce an unsupported total.');
+      return;
+    }
+    setState(() => _quantityError = null);
     final date = _purchaseDate;
     if (date == null) {
       setState(() => _dateError = 'Choose the expense date.');
@@ -242,7 +280,6 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       profileColor: destination.color,
     );
     if (guard != null) {
-      final amount = _parseAmount(_amountController.text) ?? 0.0;
       final code =
           CurrencyCode.tryParse(_effectiveCurrency) ?? CurrencyCode.huf;
       final main = ref.read(mainCurrencyProvider);
@@ -250,7 +287,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       final decision = await confirmExpenseDestination(
         context,
         kind: guard.kind,
-        amountText: formatMoney(Money.fromMajor(amount, code)),
+        amountText: formatMinorUnits(total, code),
         status: _status,
         title: _titleController.text.trim(),
         spaceName: shared
@@ -295,7 +332,10 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   }
 
   Future<void> _saveValidatedExpense() async {
-    final amount = _parseAmount(_amountController.text) ?? 0.0;
+    final total = _totalMinor();
+    if (total == null) {
+      throw StateError('Enter a valid unit price and quantity.');
+    }
     final budgetContext = ref.read(budgetContextProvider);
     final active = ref.read(activeBudgetProvider).value;
     final target = _targetMonth ?? active;
@@ -317,7 +357,7 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       final decision = await confirmSpaceOnSave(
         context,
         title: title.isEmpty ? 'Expense' : title,
-        amountText: formatMoney(Money.fromMajor(amount, code)),
+        amountText: formatMinorUnits(total, code),
         spaceName: spaceName,
       );
       if (!mounted) return;
@@ -334,7 +374,8 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
       sharedSpaceId: budgetContext.spaceId,
       yearMonth: targetYearMonth,
       title: _titleController.text,
-      amount: parseSearchAmount(_amountController.text, code)!,
+      amount: total,
+      quantity: _quantity,
       currency: code.code.toUpperCase(),
       categoryId: _categoryId,
       status: _status,
@@ -470,15 +511,14 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
   /// budget profile's remaining allocation.
   int _expenseAmountInMain() {
     try {
-      final code =
-          CurrencyCode.tryParse(_effectiveCurrency) ?? CurrencyCode.huf;
-      final minor = parseSearchAmount(_amountController.text, code) ?? 0;
-      if (minor <= 0) return 0;
+      final code = CurrencyCode.tryParse(_effectiveCurrency);
+      final total = _totalMinor();
+      if (code == null || total == null || total <= 0) return 0;
       final String month =
           _targetMonth?.yearMonth ?? ref.read(selectedYearMonthProvider);
       final table = ref.read(rateRegistryProvider).tableFor(month);
       return toDisplay(
-              Money(minor, code), ref.read(mainCurrencyProvider), table)
+              Money(total, code), ref.read(mainCurrencyProvider), table)
           .minorUnits;
     } on FormatException {
       // The amount is invalid/oversized; the field validator reports it and no
@@ -574,8 +614,9 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                               controller: _amountController,
                               textStyle: theme.textTheme.displaySmall
                                   ?.copyWith(fontWeight: FontWeight.w800),
-                              decoration: const InputDecoration(
-                                labelText: 'Amount',
+                              decoration: InputDecoration(
+                                labelText:
+                                    _quantity == 1 ? 'Amount' : 'Unit price',
                                 border: InputBorder.none,
                                 isDense: true,
                               ),
@@ -595,8 +636,39 @@ class _AddExpenseScreenState extends ConsumerState<AddExpenseScreen> {
                                 return null;
                               },
                             ),
+                            const SizedBox(height: 12),
+                            Wrap(
+                              spacing: 20,
+                              runSpacing: 12,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                QuantityStepper(
+                                  key: const Key('addExpenseQuantity'),
+                                  value: _quantity,
+                                  inputKey:
+                                      const Key('addExpenseQuantityField'),
+                                  decrementKey:
+                                      const Key('addExpenseQuantityDecrease'),
+                                  incrementKey:
+                                      const Key('addExpenseQuantityIncrease'),
+                                  errorText: _quantityError,
+                                  onChanged: (value) => setState(() {
+                                    _quantity = value;
+                                    _quantityError = null;
+                                    _metadata.evidence.cashConfirmed = false;
+                                  }),
+                                ),
+                                LineTotalPreview(
+                                  key: const Key('addExpenseLineTotal'),
+                                  unitMinor: _unitMinor(),
+                                  quantity: _quantity,
+                                  currency:
+                                      CurrencyCode.tryParse(_effectiveCurrency),
+                                ),
+                              ],
+                            ),
                             AmountConversionHint(
-                              amount: _parseAmount(_amountController.text),
+                              amount: _totalMajor(),
                               currency:
                                   CurrencyCode.tryParse(_effectiveCurrency),
                               display: display,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../modals/app_sheet.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/providers/active_profile_provider.dart';
@@ -121,8 +122,7 @@ class SpacesDropdown extends ConsumerWidget {
 
 Future<void> showContextChooser(BuildContext context, WidgetRef ref) async {
   ref.invalidate(contextDestinationsProvider);
-  final result = await showModalBottomSheet<ContextDestination>(
-      context: context,
+  final result = await showAppSheet<ContextDestination>(context,
       isScrollControlled: true,
       useSafeArea: true,
       showDragHandle: true,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../shared/presentation/modals/app_dialog.dart';
 import '../../../../core/models/currency_code.dart';
 import '../../../../shared/presentation/widgets/app_card.dart';
 import '../../../../shared/presentation/widgets/money_field.dart';
@@ -96,10 +97,10 @@ class _SetupInputState extends State<SetupInput> {
 
 Future<bool> confirmDraftRemoval(BuildContext context,
         {required String title, required String message}) async =>
-    await showDialog<bool>(
+    await showAppDialog<bool>(
         context: context,
         builder: (context) =>
-            AlertDialog(title: Text(title), content: Text(message), actions: [
+            AppDialog(title: Text(title), content: Text(message), actions: [
               TextButton(
                   onPressed: () => Navigator.pop(context, false),
                   child: const Text('Keep entries')),

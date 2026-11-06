@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../shared/presentation/modals/app_dialog.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/models/shared_space.dart';
@@ -198,7 +199,7 @@ class SecuritySection extends ConsumerWidget {
   /// Turning the lock off demands the current PIN (FR-009): a locked phone left
   /// on a table must not lose its lock to a tap.
   Future<void> _confirmDisable(BuildContext context, LockSubject subject) {
-    return showDialog<void>(
+    return showAppDialog<void>(
       context: context,
       // The dialog owns its own controller (see [_DisableLockDialog]): disposing
       // it from here would race the dialog's exit transition, which keeps
@@ -435,7 +436,7 @@ class _DisableLockDialogState extends ConsumerState<_DisableLockDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
+    return AppDialog(
       title: const Text('Turn off the app lock?'),
       content: Column(
         mainAxisSize: MainAxisSize.min,

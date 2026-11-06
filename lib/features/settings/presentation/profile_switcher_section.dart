@@ -28,6 +28,7 @@ import '../../../core/models/shared_space.dart';
 import '../../../core/models/user_profile.dart';
 import '../../../core/providers/active_profile_provider.dart';
 import '../../../core/providers/active_space_provider.dart';
+import '../../../shared/presentation/modals/app_dialog.dart';
 import '../../../shared/presentation/money_format.dart';
 import '../../../shared/presentation/widgets/money_field.dart';
 import '../../expenses/models/reimbursement.dart';
@@ -422,7 +423,7 @@ class ProfileSwitcherSection extends ConsumerWidget {
   // closed. Disposing it here instead (right after `showDialog` resolves)
   // races the exit animation and blows up with "used after being disposed".
   Future<void> _createProfile(BuildContext context, WidgetRef ref) async {
-    final result = await showDialog<_NewProfileDraft>(
+    final result = await showAppDialog<_NewProfileDraft>(
       context: context,
       builder: (_) => const _NewProfileDialog(),
     );
@@ -449,7 +450,7 @@ class ProfileSwitcherSection extends ConsumerWidget {
     final summary = await controller.summarizeProfile(profile.id);
     if (!context.mounted) return;
 
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showAppDialog<bool>(
       context: context,
       builder: (_) => TypedNameConfirmDialog(
         spaceName: profile.name,
@@ -695,7 +696,7 @@ class _NewProfileDialogState extends State<_NewProfileDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
+    return AppDialog(
       title: const Text('New profile'),
       content: Column(
         mainAxisSize: MainAxisSize.min,

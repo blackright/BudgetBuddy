@@ -7,10 +7,12 @@ import '../../../core/models/expense.dart';
 import '../../../core/models/expense_purchase.dart';
 import '../../../core/services/purchase_draft.dart';
 import '../../../core/services/bulk_entry_service.dart';
+import '../../../core/services/quantity_math.dart';
 import '../../../core/providers/budget_context_provider.dart';
 import '../../../core/providers/active_profile_provider.dart';
 import '../../../shared/presentation/money_format.dart';
 import '../../../shared/presentation/financial_feedback.dart';
+import '../../../shared/presentation/modals/app_confirm.dart';
 import '../../spaces/providers/spaces_providers.dart';
 import '../providers/expense_search_provider.dart';
 import '../providers/category_provider.dart';
@@ -71,9 +73,13 @@ PurchaseDraft purchaseDraftFromSaved(ExpensePurchase p, List<Expense> items) {
       ? ''
       : formatMinorUnitsInput(p.receiptTotalMinor, first.currencyCode!);
   for (final item in items) {
+    final unit = item.unitAmountMinor;
     result.items.add(BulkExpenseDraft(identity: item.syncGuid)
       ..title = item.title
-      ..amount = formatMinorUnitsInput(item.amount, item.currencyCode!)
+      ..unitAmount =
+          formatMinorUnitsInput(unit ?? item.amount, item.currencyCode!)
+      ..quantity = item.quantity
+      ..needsQuantityCorrection = item.quantity > 1 && unit == null
       ..category = item.categoryId
       ..profileChosen = true
       ..profileId = item.budgetProfileId
@@ -107,18 +113,13 @@ class _PurchaseScreenState extends ConsumerState<PurchaseScreen> {
   Future<void> back() async {
     if (busy) return;
     if (dirty) {
-      final discard = await showDialog<bool>(
-          context: context,
-          builder: (c) => AlertDialog(
-                  title: const Text('Discard purchase changes?'),
-                  actions: [
-                    TextButton(
-                        onPressed: () => Navigator.pop(c, false),
-                        child: const Text('Keep editing')),
-                    FilledButton(
-                        onPressed: () => Navigator.pop(c, true),
-                        child: const Text('Discard'))
-                  ]));
+      final discard = await showAppConfirm(
+        context,
+        title: 'Discard purchase changes?',
+        confirmLabel: 'Discard',
+        cancelLabel: 'Keep editing',
+        destructive: true,
+      );
       if (discard != true || !mounted) return;
     }
     setState(() => leaving = true);
@@ -130,20 +131,13 @@ class _PurchaseScreenState extends ConsumerState<PurchaseScreen> {
   Future<void> save() async {
     setState(() => busy = true);
     try {
-      final confirm = await showDialog<bool>(
-          context: context,
-          builder: (c) => AlertDialog(
-                  title: const Text('Update the whole purchase?'),
-                  content: Text(
-                      'All ${draft!.items.length} linked items share these payment details. Review item amounts and receipt total before confirming.'),
-                  actions: [
-                    TextButton(
-                        onPressed: () => Navigator.pop(c, false),
-                        child: const Text('Cancel')),
-                    FilledButton(
-                        onPressed: () => Navigator.pop(c, true),
-                        child: const Text('Confirm changes'))
-                  ]));
+      final confirm = await showAppConfirm(
+        context,
+        title: 'Update the whole purchase?',
+        message:
+            'All ${draft!.items.length} linked items share these payment details. Review item amounts and receipt total before confirming.',
+        confirmLabel: 'Confirm changes',
+      );
       if (confirm != true || !mounted) return;
       await ref.read(purchaseSubmitProvider)(draft!,
           ref.read(budgetContextProvider), ref.read(actingProfileIdProvider)!);
@@ -227,12 +221,9 @@ class _PurchaseScreenState extends ConsumerState<PurchaseScreen> {
                                     onTap: () => context.push('/expense_detail',
                                         extra: item),
                                     title: Text(item.title),
-                                    subtitle: Text(categories
-                                            ?.where((c) =>
-                                                c.categoryId == item.categoryId)
-                                            .firstOrNull
-                                            ?.name ??
-                                        'Category unavailable'),
+                                    subtitle: Text(
+                                        '${categories?.where((c) => c.categoryId == item.categoryId).firstOrNull?.name ?? 'Category unavailable'}'
+                                        '${item.quantity > 1 && item.unitAmountMinor != null ? ' · ${item.quantity} × ${formatMinorUnits(item.unitAmountMinor!, item.currencyCode!)}' : ''}'),
                                     trailing: Text(
                                         '${item.currency} ${formatMinorUnits(item.amount, item.currencyCode!)}')),
                               ExpenseEvidenceView(expense: items.first),
@@ -250,27 +241,14 @@ class _PurchaseScreenState extends ConsumerState<PurchaseScreen> {
                               if (canEdit)
                                 TextButton.icon(
                                     onPressed: () async {
-                                      final yes = await showDialog<bool>(
-                                          context: context,
-                                          builder: (c) => AlertDialog(
-                                                  title: const Text(
-                                                      'Remove this whole purchase?'),
-                                                  content: Text(
-                                                      'This removes all ${items.length} expense items. Receipts remain in private history. Purchases with refunds or locked months cannot be removed.'),
-                                                  actions: [
-                                                    TextButton(
-                                                        onPressed: () =>
-                                                            Navigator.pop(
-                                                                c, false),
-                                                        child: const Text(
-                                                            'Cancel')),
-                                                    FilledButton(
-                                                        onPressed: () =>
-                                                            Navigator.pop(
-                                                                c, true),
-                                                        child: const Text(
-                                                            'Remove purchase'))
-                                                  ]));
+                                      final yes = await showAppConfirm(
+                                        context,
+                                        title: 'Remove this whole purchase?',
+                                        message:
+                                            'This removes all ${items.length} expense items. Receipts remain in private history. Purchases with refunds or locked months cannot be removed.',
+                                        confirmLabel: 'Remove purchase',
+                                        destructive: true,
+                                      );
                                       if (yes != true || !context.mounted) {
                                         return;
                                       }
@@ -304,6 +282,7 @@ class _PurchaseScreenState extends ConsumerState<PurchaseScreen> {
                                     label: const Text('Remove whole purchase')),
                             ] else ...[
                               PurchaseEditor(
+                                  key: ValueKey(draft!.guid),
                                   purchase: draft!,
                                   month: p.yearMonth,
                                   canAdd: false,

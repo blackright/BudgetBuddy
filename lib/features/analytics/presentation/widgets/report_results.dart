@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../shared/presentation/modals/app_dialog.dart';
 import '../../../../core/models/financial_report.dart';
 import '../../../../core/models/currency_code.dart';
 import '../../../../core/services/report_format.dart';
@@ -93,9 +94,9 @@ class _ReportResultsState extends State<ReportResults> {
               for (final issue in report.issues.take(3)) Text(issue),
               if (report.issues.length > 3)
                 TextButton(
-                    onPressed: () => showDialog<void>(
+                    onPressed: () => showAppDialog<void>(
                         context: context,
-                        builder: (c) => AlertDialog(
+                        builder: (c) => AppDialog(
                                 title: const Text('Report data issues'),
                                 content: SingleChildScrollView(
                                     child: Text(report.issues.join('\n\n'))),

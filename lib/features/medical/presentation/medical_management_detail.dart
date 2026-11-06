@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../../shared/presentation/modals/app_dialog.dart';
+import '../../../shared/presentation/modals/app_sheet.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -412,9 +414,9 @@ class MedicalManagementDetail extends ConsumerWidget {
       case MedicalManagementAction.checkPayslip:
         changed = await MedicalRefundSheet.show(context, bill);
       case MedicalManagementAction.completeCase:
-        final confirmed = await showDialog<bool>(
+        final confirmed = await showAppDialog<bool>(
           context: context,
-          builder: (dialog) => AlertDialog(
+          builder: (dialog) => AppDialog(
             title: const Text('Confirm case complete?'),
             content: const Text(
                 'Insurance approved 100% of the bill. Confirm that the case is complete in the insurer’s own application.'),
@@ -499,13 +501,13 @@ class MedicalManagementDetail extends ConsumerWidget {
         ? formatMinorUnitsInput(minor, currency)
         : MedicalTheme.moneyMinor(currency, minor);
     final direct = bill.paymentMethod == MedicalPaymentMethod.insurerPaid;
-    return showDialog<bool>(
+    return showAppDialog<bool>(
       context: context,
       barrierDismissible: true,
       builder: (dialog) {
         var acknowledged = false;
         return StatefulBuilder(
-          builder: (context, setDialogState) => AlertDialog(
+          builder: (context, setDialogState) => AppDialog(
             icon: const Icon(Icons.task_alt_outlined),
             title: const Text('Close this bill?'),
             content: SingleChildScrollView(
@@ -653,8 +655,8 @@ class MedicalManagementDetail extends ConsumerWidget {
 
   Future<void> _setReminder(
       BuildContext context, WidgetRef ref, MedicalBill bill) async {
-    final date = await showModalBottomSheet<DateTime>(
-      context: context,
+    final date = await showAppSheet<DateTime>(
+      context,
       isScrollControlled: true,
       useSafeArea: true,
       builder: (sheet) => ReminderPickerSheet(initialDate: bill.followUpDate),
@@ -681,8 +683,8 @@ class MedicalManagementDetail extends ConsumerWidget {
     final money = code == null
         ? (int minor) => formatMinorUnitsInput(minor, CurrencyCode.huf)
         : (int minor) => MedicalTheme.moneyMinor(code, minor);
-    await showModalBottomSheet<void>(
-      context: context,
+    await showAppSheet<void>(
+      context,
       isScrollControlled: true,
       useSafeArea: true,
       builder: (sheet) => SingleChildScrollView(

@@ -14,6 +14,7 @@ Expense _expense({
   required int id,
   required String title,
   required int amount,
+  int quantity = 1,
   int profileId = 1,
   String? syncGuid,
 }) =>
@@ -24,6 +25,7 @@ Expense _expense({
       yearMonth: '2026-03',
       title: title,
       amount: amount,
+      quantity: quantity,
       currency: 'usd',
       categoryId: 'general',
       date: DateTime.utc(2026, 3, 5),
@@ -113,6 +115,50 @@ void main() {
     await otherEngine.applyIncoming(recordB);
     await otherEngine.applyIncoming(recordA);
     expect((await otherHarness.expenseByGuid(guid))!.title, 'from B');
+  });
+
+  test('a quantity-only difference still merges deterministically', () async {
+    final guid = newSyncGuid();
+    final recordA = await signedChange(
+      keys: keys,
+      deviceId: 'A',
+      hlcMillis: 1000,
+      payload: const ExpenseCodec().toPayload(_expense(
+          id: 31,
+          title: 'Same item',
+          amount: 100,
+          quantity: 2,
+          syncGuid: guid)),
+    );
+    final recordB = await signedChange(
+      keys: keys,
+      deviceId: 'B',
+      hlcMillis: 1000,
+      payload: const ExpenseCodec().toPayload(_expense(
+          id: 31,
+          title: 'Same item',
+          amount: 100,
+          quantity: 3,
+          syncGuid: guid)),
+    );
+
+    final engine = engineOn(harness);
+    await engine.applyIncoming(recordA);
+    await engine.applyIncoming(recordB);
+    final winnerForward = (await harness.expenseByGuid(guid))!;
+
+    final otherHarness = await SyncTestHarness.create();
+    addTearDown(otherHarness.close);
+    final otherEngine = engineOn(otherHarness);
+    await otherEngine.applyIncoming(recordB);
+    await otherEngine.applyIncoming(recordA);
+    final winnerReverse = (await otherHarness.expenseByGuid(guid))!;
+
+    expect(winnerForward.quantity, winnerReverse.quantity);
+    expect(winnerForward.quantity, 3,
+        reason: 'the same device tie-break as the equal-time case picks B');
+    expect(winnerForward.amount, 100);
+    expect(winnerReverse.amount, 100);
   });
 
   test('a losing change is retained and counted, never silently dropped',

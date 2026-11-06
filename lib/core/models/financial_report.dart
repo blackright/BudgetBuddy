@@ -156,6 +156,8 @@ class ReportTransaction {
       this.recordedAt,
       this.notes,
       this.paidAt,
+      this.quantity,
+      this.unitAmountMinor,
       this.effect = 0});
   final String profileKey;
   final ReportOwner owner;
@@ -173,6 +175,11 @@ class ReportTransaction {
       evidence;
   final int amount;
   final int? converted;
+
+  /// Whole-number quantity and derived unit price for expense rows. Null for
+  /// refunds, allocations, transfers and other non-expense transactions.
+  final int? quantity;
+  final int? unitAmountMinor;
 
   /// Spending effect: +paid, -refund, 0 planned/allocations/vault movements.
   final int effect;

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
-import 'medical_theme.dart';
-
 /// Shared sheet header: one title, optional explanation and a close action.
+///
+/// Medical management sheets share this header so every sheet has the same
+/// theme-derived title hierarchy and 48 dp close target as the app-wide modal
+/// system.
 class MedicalSheetHeader extends StatelessWidget {
   const MedicalSheetHeader({
     super.key,
@@ -17,6 +19,7 @@ class MedicalSheetHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context), scheme = theme.colorScheme;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -28,15 +31,18 @@ class MedicalSheetHeader extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
-                      fontSize: 20, fontWeight: FontWeight.w800),
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    color: scheme.onSurface,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 if (subtitle != null) ...[
                   const SizedBox(height: 4),
                   Text(
                     subtitle!,
-                    style: TextStyle(
-                        fontSize: 13, color: MedicalTheme.subtleText(context)),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
                   ),
                 ],
               ],

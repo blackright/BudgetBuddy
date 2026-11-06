@@ -144,7 +144,7 @@ void main() {
       'mixed validation saves only ready rows and retry never duplicates audit or money',
       () async {
     final good = readyBulkRow();
-    final bad = readyBulkRow()..amount = '';
+    final bad = readyBulkRow()..unitAmount = '';
     final valid = [good, bad]
         .where((r) =>
             const BulkEntryService().validate(r, owner.yearMonth).isEmpty)
@@ -158,7 +158,7 @@ void main() {
         assertContext: () {});
     expect(await h.isar.expenses.count(), 1);
     expect(await h.isar.auditEvents.count(), auditCount);
-    good.amount = '2';
+    good.unitAmount = '2';
     await expectLater(
         writer.addBulkExpenses([expense(good)], owner, assertContext: () {}),
         throwsStateError);
@@ -256,7 +256,7 @@ void main() {
         writer
             .addBulkExpenses([repeated, repeated], owner, assertContext: () {}),
         throwsStateError);
-    final huge = expense(readyBulkRow()..amount = '90,071,992,547,409.91');
+    final huge = expense(readyBulkRow()..unitAmount = '90,071,992,547,409.91');
     await h.isar.writeTxn(() async {
       final month = (await h.isar.monthlyBudgets.get(h.budgetId))!
         ..currency = 'HUF';
@@ -280,7 +280,7 @@ void main() {
     final rows = List.generate(
         50,
         (i) => expense(readyBulkRow()
-          ..amount = '1.00'
+          ..unitAmount = '1.00'
           ..profileId = profile.id
           ..profileType = FinancialProfileType.budget
           ..profileGuid = profile.syncGuid

@@ -13,7 +13,7 @@ void main() {
     for (final amount in ['5,000', '3,000', '2,000']) {
       p.addItem()
         ..title = 'Item'
-        ..amount = amount
+        ..unitAmount = amount
         ..category = 'general'
         ..profileChosen = true;
     }
@@ -42,11 +42,23 @@ void main() {
     expect(copy.evidence.cashConfirmed, isFalse);
     expect(copy.evidence.documents, isEmpty);
     expect(copy.items.first.guid, isNot(p.items.first.guid));
-    expect(copy.items.first.amount, isEmpty);
+    expect(copy.items.first.unitAmount, isEmpty);
+    expect(copy.items.first.quantity, 1);
+  });
+  test('line totals multiply unit amount by quantity', () {
+    final p = example();
+    p.items.first
+      ..unitAmount = '500'
+      ..quantity = 2;
+    expect(p.items.first.lineTotalMinor, 1000);
+    expect(p.totalMinor, 6000);
+    expect(p.validate('2026-10'), isEmpty);
   });
   test('overflow never wraps into a small amount', () {
     final p = example();
-    p.items.first.amount = '9,007,199,254,740,991';
+    p.items.first
+      ..unitAmount = '9,007,199,254,740,991'
+      ..quantity = 2;
     expect(p.totalMinor, isNull);
   });
   test('category and profile defaults affect new items only', () {

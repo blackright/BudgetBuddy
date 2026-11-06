@@ -7,6 +7,9 @@ import '../../../core/services/medical_bill_basis.dart';
 import '../../../core/services/medical_receipt_service.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import '../../../shared/presentation/modals/app_dialog.dart';
+import '../../../shared/presentation/modals/app_sheet.dart';
+import '../../../shared/presentation/modals/app_date_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
@@ -289,7 +292,7 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
 
   /// Choose the month + year the bill belongs to, including historical years.
   Future<void> _pickBudgetPeriod() async {
-    final picked = await showDialog<DateTime>(
+    final picked = await showAppDialog<DateTime>(
       context: context,
       builder: (dialog) => _BudgetPeriodDialog(initial: _budgetPeriod),
     );
@@ -397,9 +400,9 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
     var replyForSave = _insurerReplyPath;
     if (_paymentMethod == MedicalPaymentMethod.insurerPaid &&
         replyForSave != null) {
-      final remove = await showDialog<bool>(
+      final remove = await showAppDialog<bool>(
           context: context,
-          builder: (dialog) => AlertDialog(
+          builder: (dialog) => AppDialog(
                 title: const Text('Remove insurance reply?'),
                 content: const Text(
                     'This document belongs to a bill you pay yourself. Keep editing to change the payment choice, or remove the reply from this bill and save. The file itself is not deleted.'),
@@ -597,7 +600,7 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
   }
 
   Future<void> _pickServiceDate() async {
-    final picked = await showDatePicker(
+    final picked = await showAppDatePicker(
       context: context,
       initialDate: _serviceDate,
       firstDate: DateTime(DateTime.now().year - 20),
@@ -640,7 +643,7 @@ class _MedicalBillFormState extends ConsumerState<MedicalBillForm> {
     required String title,
     required String label,
   }) {
-    return showDialog<String>(
+    return showAppDialog<String>(
       context: context,
       builder: (dialog) => _NameDialog(title: title, label: label),
     );
@@ -1443,7 +1446,7 @@ class _NameDialogState extends State<_NameDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
+    return AppDialog(
       title: Text(widget.title),
       content: TextField(
         controller: _controller,
@@ -1489,7 +1492,7 @@ class _BudgetPeriodDialogState extends State<_BudgetPeriodDialog> {
       for (var year = currentYear + 1; year >= currentYear - 20; year--) year,
       if (_year > currentYear + 1 || _year < currentYear - 20) _year,
     ];
-    return AlertDialog(
+    return AppDialog(
       title: const Text('Budget period'),
       content: Row(
         children: [
@@ -1810,8 +1813,8 @@ class _DocumentTile extends StatelessWidget {
         ),
     ];
     if (actions.isEmpty) return;
-    await showModalBottomSheet<void>(
-      context: context,
+    await showAppSheet<void>(
+      context,
       showDragHandle: true,
       builder: (sheet) => SafeArea(
         child: Column(
