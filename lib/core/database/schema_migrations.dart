@@ -48,7 +48,7 @@ part 'schema_migrations.g.dart';
 
 /// Schema version this build expects. Bump whenever a numbered step is added to
 /// [_applySteps]; databases stamped at or above it are left untouched.
-const int schemaVersion = 42;
+const int schemaVersion = 43;
 
 const String schemaVersionKey = 'schema_version';
 
@@ -280,6 +280,7 @@ Future<void> _applySteps(Isar isar, int current) async {
   }
   if (current < 41) await backfillMedicalManagementTrackers(isar);
   if (current < 42) await _step42AddPendingActions(isar);
+  if (current < 43) await _step43AddExpenseQuantity(isar);
 }
 
 /// Step 42 (022-salary-vault-pending-actions, data-model §New Collection) —
@@ -293,6 +294,24 @@ Future<void> _applySteps(Isar isar, int current) async {
 /// upgrade and the specification's numbering stays visible.
 Future<void> _step42AddPendingActions(Isar isar) async {
   // Intentionally empty: additive schema only — see doc comment.
+}
+
+/// Step 43 (025-expense-quantity-modern-modals, data-model §9) — additive only:
+/// `Expense` gains its `quantity` column.
+///
+/// Isar reconciles the new column on open. A missing non-nullable integer can
+/// be read as `0`, so this step normalizes every existing row to the supported
+/// minimum of 1. No amount, currency, date, status, ownership, evidence, seal
+/// or month total is rewritten. Idempotent: the version stamp short-circuits a
+/// second run.
+Future<void> _step43AddExpenseQuantity(Isar isar) async {
+  final expenses = await isar.expenses.where().findAll();
+  final invalid = expenses.where((expense) => expense.quantity < 1).toList();
+  if (invalid.isEmpty) return;
+  for (final expense in invalid) {
+    expense.quantity = 1;
+  }
+  await isar.expenses.putAll(invalid);
 }
 
 /// Step 23: preserve ambiguous IDs for explicit user review. No money changes.

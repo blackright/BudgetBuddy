@@ -62,6 +62,7 @@ Expense _expense() => Expense(
       type: ExpenseType.standard,
       title: 'Groceries',
       amount: 54321,
+      quantity: 3,
       currency: 'usd',
       categoryId: 'food',
       status: ExpenseStatus.paid,

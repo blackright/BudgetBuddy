@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../shared/presentation/modals/app_dialog.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/database/isar_helper.dart';
@@ -134,9 +135,9 @@ class SecurityRecovery {
     LockSubject subject, {
     required VoidCallback onErased,
   }) async {
-    final choice = await showDialog<String>(
+    final choice = await showAppDialog<String>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
+      builder: (dialogContext) => AppDialog(
         title: const Text('Forgot your PIN?'),
         content: const Text(
           'To reset this PIN, another profile on this phone must be unlocked '
@@ -241,9 +242,9 @@ class SecurityRecovery {
     WidgetRef ref, {
     required VoidCallback onErased,
   }) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showAppDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
+      builder: (dialogContext) => AppDialog(
         title: const Text('Erase and start over?'),
         content: const Text(
           'Nothing on this phone can open this lock. The only way forward is '
@@ -276,9 +277,9 @@ class SecurityRecovery {
     BuildContext context,
     List<UserProfile> candidates,
   ) {
-    return showDialog<UserProfile>(
+    return showAppDialog<UserProfile>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
+      builder: (dialogContext) => AppDialog(
         title: const Text('Choose a profile'),
         content: SizedBox(
           width: double.maxFinite,
@@ -308,9 +309,9 @@ class SecurityRecovery {
 
   static Future<String?> _askForPin(BuildContext context, String title) async {
     final controller = TextEditingController();
-    final result = await showDialog<String>(
+    final result = await showAppDialog<String>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
+      builder: (dialogContext) => AppDialog(
         title: Text(title),
         content: TextField(
           controller: controller,

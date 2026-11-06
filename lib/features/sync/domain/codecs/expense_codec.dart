@@ -23,6 +23,7 @@ class ExpenseCodec extends SyncCodec<Expense> {
         'financialProfileSyncGuid': value.financialProfileSyncGuid,
         'title': value.title,
         'amount': value.amount,
+        'quantity': value.quantity,
         'fxHistoryJson': value.fxHistoryJson,
         'currency': value.currency,
         'categoryId': value.categoryId,
@@ -50,6 +51,7 @@ class ExpenseCodec extends SyncCodec<Expense> {
         type: decodeEnum(ExpenseType.values, json['type']),
         title: (json['title'] as String?) ?? '',
         amount: decodeInt(json['amount']),
+        quantity: _decodeQuantity(json['quantity']),
         fxHistoryJson: json['fxHistoryJson'] as String?,
         currency: (json['currency'] as String?) ?? '',
         categoryId:
@@ -78,4 +80,13 @@ class ExpenseCodec extends SyncCodec<Expense> {
         ..tags = (json['tags'] as List? ?? []).cast<String>()
         ..cashYearMonth = json['cashYearMonth'] as String?
         ..syncGuid = decodeGuid(json['syncGuid']);
+}
+
+/// Quantity is additive metadata. Payloads from older peers omit it; an
+/// invalid non-positive value is normalized to the supported minimum. The
+/// upper bound is enforced by the write boundary, not silently clamped here.
+int _decodeQuantity(Object? value) {
+  if (value == null) return 1;
+  final quantity = decodeInt(value);
+  return quantity < 1 ? 1 : quantity;
 }

@@ -18,6 +18,7 @@ import '../../features/engine/providers/rate_registry_provider.dart';
 import '../../features/vault/models/vault_entry.dart';
 import '../../features/vault/vault_transfer_ledger.dart';
 import 'expense_evidence.dart';
+import 'quantity_math.dart';
 import 'expense_profile_identity.dart';
 import 'profile_spending_service.dart';
 import 'income_aggregation_service.dart';
@@ -244,6 +245,8 @@ CalculatedReportMonth calculateReportMonth(
         recordedAt: input.recorded[e.id],
         paidAt: e.paidAt,
         amount: e.amount,
+        quantity: e.quantity,
+        unitAmountMinor: e.unitAmountMinor,
         currency: e.currency.toUpperCase(),
         converted: bookedDisplay(() => expenseContext(e)),
         rateBasis: fxPaid(e.status)

@@ -57,6 +57,7 @@ void main() {
             yearMonth: '2026-10',
             title: 'Item $i',
             amount: 1000,
+            quantity: i + 2,
             currency: 'HUF',
             categoryId: 'food',
             date: DateTime(2026, 10, 26),
@@ -96,6 +97,9 @@ void main() {
     expect(await engine.applyIncoming(change), ApplyOutcome.applied);
     expect(await h.isar.expensePurchases.count(), 1);
     expect(await h.isar.expenses.count(), 2);
+    final applied = await h.isar.expenses.where().findAll();
+    expect(applied.map((row) => row.quantity).toSet(), {2, 3});
+    expect(applied.map((row) => row.amount).toSet(), {1000});
     expect(await engine.applyIncoming(change), ApplyOutcome.duplicate);
     final oldItem =
         Map<String, Object?>.from((json['items'] as List).first as Map)

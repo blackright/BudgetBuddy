@@ -405,6 +405,7 @@ String _auditFieldLabel(String key) =>
       'receiptTotalMinor': 'Receipt total',
       'categoryId': 'Category reference',
       'type': 'Type',
+      'quantity': 'Quantity',
       'recordedValue': 'Recorded value',
     }[key] ??
     _sentence(key);
@@ -432,6 +433,7 @@ String _auditSection(String key) {
     'guiltLevel',
     'notes',
     'tags',
+    'quantity',
     'type'
   }.contains(key)) {
     return 'Record details';
@@ -546,6 +548,16 @@ String _auditFieldValue(
   return _describe(value, currency, key);
 }
 
+Object? _auditComparableValue(String key, Map<String, Object?> snapshot) {
+  final value = snapshot[key];
+  // Older expense update payloads have no quantity. Treat that as the supported
+  // default so the first edit after upgrade does not show a false change. A
+  // creation/deletion has an empty side; keep its explicit Not recorded/Removed
+  // display instead of inventing a value there.
+  if (key == 'quantity' && value == null && snapshot.isNotEmpty) return 1;
+  return value;
+}
+
 List<AuditFieldChange> auditFieldChanges(AuditEvent event) {
   final before = _auditSnapshot(event.previousValue),
       after = _auditSnapshot(event.newValue);
@@ -554,21 +566,28 @@ List<AuditFieldChange> auditFieldChanges(AuditEvent event) {
   return [
     for (final key in keys)
       if (_hasAuditValue(before[key]) || _hasAuditValue(after[key]))
-        AuditFieldChange(
-            key: key,
-            label: _auditFieldLabel(key),
-            before: before.containsKey(key)
-                ? _auditFieldValue(key, before[key], before, event.objectType)
-                : 'Not recorded',
-            after: after.containsKey(key)
-                ? _auditFieldValue(key, after[key], after, event.objectType)
-                : 'Removed',
-            changed: jsonEncode(_orderedAuditValue(before[key])) !=
-                    jsonEncode(_orderedAuditValue(after[key])) ||
-                _auditFieldValue(key, before[key], before, event.objectType) !=
-                    _auditFieldValue(key, after[key], after, event.objectType),
-            section: _auditSection(key)),
+        _auditFieldChange(key, before, after, event.objectType),
   ];
+}
+
+AuditFieldChange _auditFieldChange(String key, Map<String, Object?> before,
+    Map<String, Object?> after, String type) {
+  final beforeValue = _auditComparableValue(key, before);
+  final afterValue = _auditComparableValue(key, after);
+  return AuditFieldChange(
+      key: key,
+      label: _auditFieldLabel(key),
+      before: before.containsKey(key) || beforeValue != null
+          ? _auditFieldValue(key, beforeValue, before, type)
+          : 'Not recorded',
+      after: after.containsKey(key) || afterValue != null
+          ? _auditFieldValue(key, afterValue, after, type)
+          : 'Removed',
+      changed: jsonEncode(_orderedAuditValue(beforeValue)) !=
+              jsonEncode(_orderedAuditValue(afterValue)) ||
+          _auditFieldValue(key, beforeValue, before, type) !=
+              _auditFieldValue(key, afterValue, after, type),
+      section: _auditSection(key));
 }
 
 /// Only a recorded, valid original amount may become a card headline.

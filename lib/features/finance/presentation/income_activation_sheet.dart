@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../../core/models/currency_code.dart';
 import '../../../core/models/income_source.dart';
 import '../../../shared/presentation/money_format.dart';
+import '../../../shared/presentation/modals/app_sheet.dart';
 
 enum IncomeActivationChoice {
   alreadyReceived,
@@ -45,16 +46,16 @@ class IncomeActivationSheet extends StatelessWidget {
         ? DateFormat.yMMMM().format(source.startDate!)
         : period;
 
-    return SafeArea(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+    return AppSheet(
+      title: 'What about your income for the current period?',
+      onClose: onClose,
+      bodyScrollable: false,
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('What about your income for the current period?',
-                style: theme.textTheme.titleLarge),
-            const SizedBox(height: 6),
             Text(
               '${source.name} · $amount · ${startsInFuture ? 'starts $starts' : period}',
               style: theme.textTheme.bodyMedium,

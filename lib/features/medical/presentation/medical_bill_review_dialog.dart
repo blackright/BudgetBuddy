@@ -8,6 +8,7 @@ import '../../identity/providers/device_auth_session.dart';
 import '../../security/providers/lock_providers.dart';
 import '../providers/medical_providers.dart' show MedicalDirectory;
 import 'package:flutter/material.dart';
+import '../../../shared/presentation/modals/app_dialog.dart';
 import '../../../core/models/medical_bill.dart';
 import '../../../core/models/currency_code.dart';
 import '../../../core/services/medical_bill_review_service.dart';
@@ -16,7 +17,7 @@ import '../../../shared/presentation/money_format.dart';
 /// Explicit reason is collected before constructing a source-bound preview.
 Future<String?> medicalReviewReason(BuildContext context, String title,
         {bool Function()? isAccessCurrent}) =>
-    showDialog<String>(
+    showAppDialog<String>(
         context: context,
         builder: (dialog) => guardMedicalReview(
             dialog, isAccessCurrent, () => _MedicalReasonDialog(title: title)));
@@ -34,7 +35,7 @@ Widget guardMedicalReview(
     ref.watch(activeSpaceIdProvider);
     ref.watch(selectedYearMonthProvider);
     if (!access()) {
-      return AlertDialog(
+      return AppDialog(
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: const Text('Access changed'),
@@ -68,7 +69,7 @@ class _MedicalReasonDialogState extends State<_MedicalReasonDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
+  Widget build(BuildContext context) => AppDialog(
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Text(widget.title),
@@ -120,12 +121,12 @@ Future<bool> confirmMedicalBillReview(
       'Provider: ${directory?.providerName(b.providerId) ?? 'Not recorded'}\n'
       'Person: ${directory?.memberName(b.familyMemberId) ?? 'Not recorded'}\n'
       'Service: ${services[b.serviceTypeId] ?? 'Not recorded'}';
-  return await showDialog<bool>(
+  return await showAppDialog<bool>(
           context: context,
           builder: (dialog) => guardMedicalReview(
               dialog,
               isAccessCurrent,
-              () => AlertDialog(
+              () => AppDialog(
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16)),
                       title: Text(review.remove

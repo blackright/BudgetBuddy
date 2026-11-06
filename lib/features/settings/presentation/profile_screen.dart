@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../shared/presentation/modals/app_dialog.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/providers/active_profile_provider.dart';
@@ -84,7 +85,7 @@ class ProfileScreen extends ConsumerWidget {
                               else
                                 OutlinedButton.icon(
                                     key: const Key('editProfileNameButton'),
-                                    onPressed: () => showDialog<void>(
+                                    onPressed: () => showAppDialog<void>(
                                         context: context,
                                         builder: (_) => _EditName(
                                             profileId: value.id,
@@ -178,7 +179,7 @@ class _EditNameState extends ConsumerState<_EditName> {
   @override
   Widget build(BuildContext context) => PopScope(
       canPop: !busy,
-      child: AlertDialog(
+      child: AppDialog(
           title: const Text('Edit your name'),
           content: SingleChildScrollView(
               child: Column(mainAxisSize: MainAxisSize.min, children: [

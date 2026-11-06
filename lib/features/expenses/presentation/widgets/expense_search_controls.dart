@@ -6,6 +6,9 @@ import '../../../../core/services/filter_service.dart';
 import '../../../../core/services/merchant_service.dart';
 import '../../../../shared/presentation/money_format.dart';
 import '../../../../shared/presentation/input_formatters/thousands_separator_input_formatter.dart';
+import '../../../../shared/presentation/modals/app_date_picker.dart';
+import '../../../../shared/presentation/modals/app_modal_tokens.dart';
+import '../../../../shared/presentation/modals/app_sheet.dart';
 import '../../providers/category_provider.dart';
 import '../../providers/expense_search_provider.dart';
 
@@ -121,11 +124,7 @@ class _ExpenseSearchControlsState extends ConsumerState<ExpenseSearchControls> {
                 FilledButton.tonalIcon(
                     onPressed: () async {
                       ref.invalidate(expenseSearchProfileNamesProvider);
-                      await showModalBottomSheet<void>(
-                          context: context,
-                          isScrollControlled: true,
-                          useSafeArea: true,
-                          showDragHandle: true,
+                      await showAppSheet<void>(context,
                           builder: (_) => const ExpenseFiltersSheet());
                     },
                     icon: const Icon(Icons.tune, size: 18),
@@ -222,7 +221,7 @@ class _ExpenseFiltersSheetState extends ConsumerState<ExpenseFiltersSheet> {
           ],
           onChanged: (v) => setState(() => update(v == '' ? null : v)));
   Future<void> pick(bool first) async {
-    final date = await showDatePicker(
+    final date = await showAppDatePicker(
         context: context,
         initialDate: (first ? start : end) ?? DateTime.now(),
         firstDate: DateTime(1900),
@@ -282,105 +281,101 @@ class _ExpenseFiltersSheetState extends ConsumerState<ExpenseFiltersSheet> {
     for (final key in used) {
       profiles.putIfAbsent(key, () => 'Needs profile review');
     }
-    return Padding(
-        padding: EdgeInsets.fromLTRB(
-            16, 12, 16, MediaQuery.viewInsetsOf(context).bottom + 16),
-        child: SizedBox(
-            height: MediaQuery.sizeOf(context).height * .8,
-            child: Column(children: [
-              const Text('Filter expenses', style: TextStyle(fontSize: 20)),
-              Expanded(
-                  child: ListView(children: [
-                DropdownButtonFormField<ExpenseDateScope>(
-                    initialValue: scope,
-                    decoration: const InputDecoration(labelText: 'Dates'),
-                    items: const [
-                      DropdownMenuItem(
-                          value: ExpenseDateScope.month,
-                          child: Text('Selected month')),
-                      DropdownMenuItem(
-                          value: ExpenseDateScope.range,
-                          child: Text('Custom date range')),
-                      DropdownMenuItem(
-                          value: ExpenseDateScope.all,
-                          child: Text('All months'))
-                    ],
-                    onChanged: (v) => setState(() => scope = v!)),
-                if (scope == ExpenseDateScope.range)
-                  Wrap(children: [
-                    TextButton(
-                        onPressed: () => pick(true),
-                        child: Text(start == null
-                            ? 'Start date'
-                            : start.toString().split(' ').first)),
-                    TextButton(
-                        onPressed: () => pick(false),
-                        child: Text(end == null
-                            ? 'End date'
-                            : end.toString().split(' ').first))
-                  ]),
-                select(
-                    'Merchant',
-                    merchant,
-                    {
-                      'unknown': 'Not recorded',
-                      for (final m in merchants) m.syncGuid: m.canonicalName
-                    },
-                    (v) => merchant = v),
-                select(
-                    'Financial profile', profile, profiles, (v) => profile = v),
-                select(
-                    'Category',
-                    category,
-                    {for (final c in categories) c.categoryId: c.name},
-                    (v) => category = v),
-                select('Original currency', currency, {
-                  for (final c in CurrencyCode.values)
-                    c.code: c.code.toUpperCase()
-                }, (v) {
-                  currency = v;
-                  minimum.clear();
-                  maximum.clear();
-                }),
-                select(
-                    'Payment method',
-                    payment,
-                    {'unknown': 'Not recorded', ...expensePaymentMethods},
-                    (v) => payment = v),
-                select(
-                    'Status',
-                    status?.name,
-                    {
-                      for (final s in ExpenseStatus.values)
-                        s.name: s.name.replaceAll('Reimbursed', ' reimbursed')
-                    },
-                    (v) => status =
-                        v == null ? null : ExpenseStatus.values.byName(v)),
-                TextField(
-                    controller: minimum,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
-                    inputFormatters: const [ThousandsSeparatorInputFormatter()],
-                    decoration:
-                        const InputDecoration(labelText: 'Minimum amount')),
-                TextField(
-                    controller: maximum,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
-                    inputFormatters: const [ThousandsSeparatorInputFormatter()],
-                    decoration:
-                        const InputDecoration(labelText: 'Maximum amount')),
-                if (error != null)
-                  Text(error!,
-                      style: TextStyle(
-                          color: Theme.of(context).colorScheme.error)),
-              ])),
-              Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Cancel')),
-                FilledButton(onPressed: apply, child: const Text('Apply'))
-              ]),
-            ])));
+    return AppSheet(
+      title: 'Filter expenses',
+      bodyScrollable: false,
+      body: ListView(
+        padding: AppModalTokens.sheetBodyPadding,
+        children: [
+          DropdownButtonFormField<ExpenseDateScope>(
+              initialValue: scope,
+              decoration: const InputDecoration(labelText: 'Dates'),
+              items: const [
+                DropdownMenuItem(
+                    value: ExpenseDateScope.month,
+                    child: Text('Selected month')),
+                DropdownMenuItem(
+                    value: ExpenseDateScope.range,
+                    child: Text('Custom date range')),
+                DropdownMenuItem(
+                    value: ExpenseDateScope.all, child: Text('All months'))
+              ],
+              onChanged: (v) => setState(() => scope = v!)),
+          if (scope == ExpenseDateScope.range)
+            Wrap(children: [
+              TextButton(
+                  onPressed: () => pick(true),
+                  child: Text(start == null
+                      ? 'Start date'
+                      : start.toString().split(' ').first)),
+              TextButton(
+                  onPressed: () => pick(false),
+                  child: Text(end == null
+                      ? 'End date'
+                      : end.toString().split(' ').first))
+            ]),
+          select(
+              'Merchant',
+              merchant,
+              {
+                'unknown': 'Not recorded',
+                for (final m in merchants) m.syncGuid: m.canonicalName
+              },
+              (v) => merchant = v),
+          select('Financial profile', profile, profiles, (v) => profile = v),
+          select(
+              'Category',
+              category,
+              {for (final c in categories) c.categoryId: c.name},
+              (v) => category = v),
+          select('Original currency', currency, {
+            for (final c in CurrencyCode.values) c.code: c.code.toUpperCase()
+          }, (v) {
+            currency = v;
+            minimum.clear();
+            maximum.clear();
+          }),
+          select(
+              'Payment method',
+              payment,
+              {'unknown': 'Not recorded', ...expensePaymentMethods},
+              (v) => payment = v),
+          select(
+              'Status',
+              status?.name,
+              {
+                for (final s in ExpenseStatus.values)
+                  s.name: s.name.replaceAll('Reimbursed', ' reimbursed')
+              },
+              (v) =>
+                  status = v == null ? null : ExpenseStatus.values.byName(v)),
+          TextField(
+              controller: minimum,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: const [ThousandsSeparatorInputFormatter()],
+              decoration: const InputDecoration(labelText: 'Minimum amount')),
+          TextField(
+              controller: maximum,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: const [ThousandsSeparatorInputFormatter()],
+              decoration: const InputDecoration(labelText: 'Maximum amount')),
+          if (error != null)
+            Text(error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error)),
+        ],
+      ),
+      footer: OverflowBar(
+        alignment: MainAxisAlignment.end,
+        overflowAlignment: OverflowBarAlignment.end,
+        children: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel')),
+          FilledButton(onPressed: apply, child: const Text('Apply')),
+        ],
+      ),
+    );
   }
 }

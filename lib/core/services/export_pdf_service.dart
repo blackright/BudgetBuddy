@@ -41,6 +41,15 @@ String reportPdfText(String value, Set<int> supported) =>
             ? [c]
             : '[U+${c.toRadixString(16).toUpperCase()}]'.runes));
 
+String _quantityText(ReportTransaction r) {
+  if (r.quantity == null || r.quantity! <= 1) return '';
+  final code = CurrencyCode.tryParse(r.currency);
+  final unit = r.unitAmountMinor == null || code == null
+      ? 'not recorded'
+      : reportMoney(r.unitAmountMinor!, code);
+  return ' Quantity ${r.quantity}; unit $unit.';
+}
+
 Future<Uint8List> renderFinancialReportPdf(ReportPdfJob job) async {
   final report = job.report;
   report.requireExportable();
@@ -207,7 +216,7 @@ Future<Uint8List> renderFinancialReportPdf(ReportPdfJob job) async {
         ...paragraphs(
             '${r.context} · Budget month ${r.month} · ${r.profile}\n${r.merchant} · ${r.category} · ${reportPayment(r.payment)} · ${reportStatus(r.status)}'),
         ...paragraphs(
-            'Original ${reportMoney(r.amount, CurrencyCode.tryParse(r.currency)!)}; report ${reportMoney(r.converted, code)}. Recorded ${reportTime(r.recordedAt)}. Paid ${r.paidAt == null ? 'Not recorded' : reportDate(r.paidAt!)}. Evidence: ${r.evidence}. Rate basis: ${r.rateBasis}.'),
+            'Original ${reportMoney(r.amount, CurrencyCode.tryParse(r.currency)!)}; report ${reportMoney(r.converted, code)}.${_quantityText(r)} Recorded ${reportTime(r.recordedAt)}. Paid ${r.paidAt == null ? 'Not recorded' : reportDate(r.paidAt!)}. Evidence: ${r.evidence}. Rate basis: ${r.rateBasis}.'),
         if (job.options.notes && r.notes?.isNotEmpty == true)
           ...paragraphs('Notes: ${r.notes}'),
       ]

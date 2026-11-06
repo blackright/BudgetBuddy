@@ -6,6 +6,7 @@ import '../../../core/services/refund_service.dart';
 import '../../sync/domain/sync_guid.dart';
 import '../../../shared/presentation/money_format.dart';
 import '../../../shared/presentation/widgets/money_field.dart';
+import '../../../shared/presentation/modals/app_dialog.dart';
 import '../providers/refund_provider.dart';
 
 /// Amounts are entered in the original expense currency. The preview is in the
@@ -110,7 +111,7 @@ class _RefundDialogState extends ConsumerState<RefundDialog> {
     }
     return PopScope(
         canPop: !_saving,
-        child: AlertDialog(
+        child: AppDialog(
           title: const Text('Record refund'),
           content: SizedBox(
               width: 400,

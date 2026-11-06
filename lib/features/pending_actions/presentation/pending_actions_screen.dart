@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/models/currency_code.dart';
 import '../../../core/models/pending_action.dart';
+import '../../../shared/presentation/modals/app_dialog.dart';
 import '../../../shared/presentation/money_format.dart';
 import '../providers/pending_actions_providers.dart';
 import '../services/pending_action_service.dart';
@@ -54,9 +55,9 @@ class _PendingActionsScreenState extends ConsumerState<PendingActionsScreen> {
 
   Future<void> _close(PendingAction action, {required bool dismiss}) async {
     final reason = TextEditingController();
-    final accepted = await showDialog<bool>(
+    final accepted = await showAppDialog<bool>(
       context: context,
-      builder: (dialog) => AlertDialog(
+      builder: (dialog) => AppDialog(
         title: Text(dismiss ? 'Dismiss action' : 'Cancel action'),
         content: TextField(
           controller: reason,

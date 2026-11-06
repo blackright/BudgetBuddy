@@ -9,6 +9,7 @@ import '../../../engine/providers/rate_registry_provider.dart';
 import '../../providers/dashboard_providers.dart';
 import '../../../medical/presentation/medical_theme.dart';
 import '../../../settings/providers/settings_provider.dart';
+import '../../../../shared/presentation/modals/app_dialog.dart';
 import '../../../../shared/presentation/money_format.dart';
 import '../../../../shared/presentation/widgets/conversion_footnote.dart';
 
@@ -90,9 +91,9 @@ class MonthSummaryCard extends ConsumerWidget {
                       icon: const Icon(Icons.info_outline, size: 16),
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
-                      onPressed: () => showDialog<void>(
+                      onPressed: () => showAppDialog<void>(
                         context: context,
-                        builder: (context) => AlertDialog(
+                        builder: (context) => AppDialog(
                           title: const Text('Free to spend'),
                           content: const Text(
                             'This is the money free to spend. Money set aside in '

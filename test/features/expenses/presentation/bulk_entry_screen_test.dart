@@ -85,7 +85,7 @@ void main() {
       ..date = DateTime(2026, 10, 26);
     editor.purchase.items.first
       ..title = 'Lunch'
-      ..amount = '1,000'
+      ..unitAmount = '1,000'
       ..category = 'food'
       ..profileChosen = true;
     editor.onChanged();
@@ -97,7 +97,7 @@ void main() {
     var calls = 0;
     await open(tester, (p, destination, actor) async {
       calls++;
-      expect(p.items.single.amount, '1,000');
+      expect(p.items.single.unitAmount, '1,000');
       p.saved = true;
       for (final item in p.items) {
         item.saved = true;
@@ -127,7 +127,8 @@ void main() {
     final copy =
         tester.widget<PurchaseEditor>(find.byType(PurchaseEditor)).purchase;
     expect(copy.guid, isNot(original.guid));
-    expect(copy.items.first.amount, isEmpty);
+    expect(copy.items.first.unitAmount, isEmpty);
+    expect(copy.items.first.quantity, 1);
     expect(copy.evidence.cashConfirmed, isFalse);
     await tester.tap(find.byTooltip('Back'));
     await tester.pumpAndSettle();
@@ -193,6 +194,22 @@ void main() {
               .items
               .length,
           2);
+      final items = tester
+          .widget<PurchaseEditor>(find.byType(PurchaseEditor))
+          .purchase
+          .items;
+      expect(
+          tester
+              .widget<ExpansionTile>(find.byKey(ValueKey(items.first.guid)))
+              .controller!
+              .isExpanded,
+          isFalse);
+      expect(
+          tester
+              .widget<ExpansionTile>(find.byKey(ValueKey(items.last.guid)))
+              .controller!
+              .isExpanded,
+          isTrue);
       expect(tester.takeException(), isNull);
     });
   }

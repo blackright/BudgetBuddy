@@ -14,6 +14,8 @@ import '../../../shared/presentation/widgets/sync_status_chip.dart';
 import '../../pairing/presentation/pair_device_screen.dart';
 import '../providers/spaces_providers.dart';
 import '../repositories/space_role_guard.dart';
+import '../../../shared/presentation/modals/app_dialog.dart';
+import '../../../shared/presentation/modals/app_sheet.dart';
 import '../repositories/spaces_repository.dart';
 import 'delete_space_sheet.dart';
 import 'invite_sheet.dart';
@@ -55,7 +57,7 @@ class _RenameSpaceDialogState extends State<_RenameSpaceDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
+    return AppDialog(
       title: const Text('Rename space'),
       content: TextField(
         key: const Key('spaceNameEditField'),
@@ -108,7 +110,7 @@ class _IncomeDialogState extends State<_IncomeDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
+    return AppDialog(
       title: const Text('Our income'),
       content: MoneyField(
         key: const Key('ourIncomeField'),
@@ -158,7 +160,7 @@ class _TransferDialogState extends State<_TransferDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
+    return AppDialog(
       title: const Text('Make someone else the Owner'),
       content: SizedBox(
         width: double.maxFinite,
@@ -216,7 +218,7 @@ class SpaceSettingsSection extends ConsumerWidget {
     final space = ref.read(activeSpaceProvider).value;
     final profileId = ref.read(activeProfileProvider).value?.id;
     if (space == null || profileId == null) return;
-    final name = await showDialog<String>(
+    final name = await showAppDialog<String>(
       context: context,
       builder: (_) => _RenameSpaceDialog(initialName: space.name),
     );
@@ -232,7 +234,7 @@ class SpaceSettingsSection extends ConsumerWidget {
     final space = ref.read(activeSpaceProvider).value;
     final profileId = ref.read(activeProfileProvider).value?.id;
     if (space == null || profileId == null) return;
-    final income = await showDialog<int>(
+    final income = await showAppDialog<int>(
       context: context,
       builder: (_) => _IncomeDialog(
           currency: space.currency, defaultIncome: space.defaultIncome),
@@ -251,7 +253,7 @@ class SpaceSettingsSection extends ConsumerWidget {
     final members =
         ref.read(activeSpaceMembersProvider).value ?? const <SharedMember>[];
     if (space == null || profileId == null) return;
-    final target = await showDialog<int>(
+    final target = await showAppDialog<int>(
       context: context,
       builder: (_) {
         return _TransferDialog(
@@ -286,9 +288,9 @@ class SpaceSettingsSection extends ConsumerWidget {
     final names = ref.read(memberDisplayNamesProvider);
     final name = names[member.profileId] ?? 'This member';
 
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showAppDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
+      builder: (dialogContext) => AppDialog(
         title: const Text('Remove this member?'),
         content: Text(
           '$name loses access to ${space.name} on their phone. Money already '
@@ -339,7 +341,7 @@ class SpaceSettingsSection extends ConsumerWidget {
       return;
     }
 
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showAppDialog<bool>(
       context: context,
       builder: (_) => TypedNameConfirmDialog(spaceName: space.name),
     );
@@ -424,8 +426,8 @@ class SpaceSettingsSection extends ConsumerWidget {
               title: TextButton(
                 key: const Key('inviteMemberButton'),
                 onPressed: () {
-                  showModalBottomSheet<void>(
-                    context: context,
+                  showAppSheet<void>(
+                    context,
                     isScrollControlled: true,
                     builder: (_) => const InviteSheet(),
                   );

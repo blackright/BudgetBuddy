@@ -3,6 +3,7 @@ import '../models/expense_purchase.dart';
 import '../../features/sync/domain/codecs/expense_codec.dart';
 import '../../features/sync/domain/sync_codec.dart';
 import 'expense_evidence.dart';
+import 'quantity_math.dart';
 
 List<int> oldRowsIds(List<Expense> rows) => rows.map((e) => e.id).toList();
 
@@ -47,6 +48,9 @@ void validatePurchaseItems(ExpensePurchase purchase, List<Expense> rows) {
     }
     if (row.amount <= 0 || row.amount > 9007199254740991) {
       throw StateError('Invalid purchase amount.');
+    }
+    if (!isValidQuantity(row.quantity)) {
+      throw StateError('Invalid purchase quantity.');
     }
     total += BigInt.from(row.amount);
     final manifest = ExpenseEvidence.decode(row.paymentEvidenceJson);

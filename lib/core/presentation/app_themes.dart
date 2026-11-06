@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../shared/presentation/modals/app_modal_tokens.dart';
+
 /// Phase 9-E (T060): the app's two Material 3 themes, built from one seed so a
 /// mode switch only changes tone, never structure.
 ///
@@ -50,10 +52,113 @@ ThemeData buildAppTheme({
       ),
   };
 
+  final dialogShape = RoundedRectangleBorder(
+    borderRadius: BorderRadius.circular(AppModalTokens.dialogRadius),
+  );
+  final textTheme = ThemeData(
+    colorScheme: scheme,
+    fontFamily: fontFamily,
+    useMaterial3: true,
+  ).textTheme;
+
   return ThemeData(
     colorScheme: scheme,
     fontFamily: fontFamily,
     useMaterial3: true,
     scaffoldBackgroundColor: scheme.surface,
+    dialogTheme: DialogThemeData(
+      backgroundColor: scheme.surfaceContainerHigh,
+      elevation: 3,
+      surfaceTintColor: Colors.transparent,
+      shape: dialogShape,
+      insetPadding: AppModalTokens.dialogInsetPadding,
+      iconColor: scheme.primary,
+      titleTextStyle: textTheme.titleLarge?.copyWith(
+        color: scheme.onSurface,
+        fontWeight: FontWeight.w700,
+      ),
+      contentTextStyle: textTheme.bodyMedium?.copyWith(
+        color: scheme.onSurfaceVariant,
+        height: 1.4,
+      ),
+      actionsPadding: AppModalTokens.dialogActionsPadding,
+      barrierColor: scheme.scrim.withValues(alpha: 0.52),
+      clipBehavior: Clip.antiAlias,
+      constraints:
+          const BoxConstraints(maxWidth: AppModalTokens.dialogMaxWidth),
+    ),
+    bottomSheetTheme: BottomSheetThemeData(
+      backgroundColor: scheme.surfaceContainerLow,
+      modalBackgroundColor: scheme.surfaceContainerLow,
+      surfaceTintColor: Colors.transparent,
+      elevation: 6,
+      modalElevation: 6,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+            top: Radius.circular(AppModalTokens.sheetRadius)),
+      ),
+      showDragHandle: true,
+      dragHandleColor: scheme.onSurfaceVariant.withValues(alpha: 0.4),
+      dragHandleSize: AppModalTokens.dragHandleSize,
+      clipBehavior: Clip.antiAlias,
+      constraints: AppModalTokens.sheetConstraints,
+    ),
+    datePickerTheme: DatePickerThemeData(
+      backgroundColor: scheme.surfaceContainerHigh,
+      elevation: 3,
+      surfaceTintColor: Colors.transparent,
+      shape: dialogShape,
+      headerBackgroundColor: scheme.primaryContainer,
+      headerForegroundColor: scheme.onPrimaryContainer,
+      todayForegroundColor: WidgetStatePropertyAll<Color?>(scheme.primary),
+      todayBorder: BorderSide(color: scheme.primary),
+      dayShape: const WidgetStatePropertyAll<OutlinedBorder>(CircleBorder()),
+      yearShape: const WidgetStatePropertyAll<OutlinedBorder>(CircleBorder()),
+      dayForegroundColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.disabled)) {
+          return scheme.onSurface.withValues(alpha: 0.38);
+        }
+        if (states.contains(WidgetState.selected)) {
+          return scheme.onPrimary;
+        }
+        return scheme.onSurface;
+      }),
+      cancelButtonStyle: TextButton.styleFrom(
+        foregroundColor: scheme.onSurfaceVariant,
+      ),
+      confirmButtonStyle: TextButton.styleFrom(
+        foregroundColor: scheme.primary,
+      ),
+    ),
+    timePickerTheme: TimePickerThemeData(
+      backgroundColor: scheme.surfaceContainerHigh,
+      elevation: 3,
+      shape: dialogShape,
+      dialBackgroundColor: scheme.surfaceContainerHighest,
+      dialHandColor: scheme.primary,
+      dialTextColor: scheme.onSurface,
+      hourMinuteColor: scheme.primaryContainer,
+      hourMinuteTextColor: scheme.onPrimaryContainer,
+      dayPeriodColor: scheme.primaryContainer,
+      dayPeriodTextColor: scheme.onPrimaryContainer,
+      helpTextStyle: textTheme.labelLarge?.copyWith(
+        color: scheme.onSurfaceVariant,
+      ),
+      cancelButtonStyle: TextButton.styleFrom(
+        foregroundColor: scheme.onSurfaceVariant,
+      ),
+      confirmButtonStyle: TextButton.styleFrom(
+        foregroundColor: scheme.primary,
+      ),
+    ),
+    popupMenuTheme: PopupMenuThemeData(
+      color: scheme.surfaceContainerHigh,
+      elevation: 3,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppModalTokens.menuRadius),
+      ),
+      textStyle: textTheme.bodyLarge?.copyWith(color: scheme.onSurface),
+    ),
   );
 }

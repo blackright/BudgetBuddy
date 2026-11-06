@@ -1,5 +1,6 @@
 import '../providers/medical_receipt_provider.dart';
 import 'package:flutter/material.dart';
+import '../../../shared/presentation/modals/app_sheet.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -263,8 +264,8 @@ class MedicalDashboard extends ConsumerWidget {
     final existing = ref.read(insuranceProfileProvider).value;
 
     if (!context.mounted) return;
-    final result = await showModalBottomSheet<InsuranceProfile>(
-      context: context,
+    final result = await showAppSheet<InsuranceProfile>(
+      context,
       isScrollControlled: true,
       builder: (ctx) => _InsuranceProfileSheet(initial: existing),
     );
@@ -276,8 +277,8 @@ class MedicalDashboard extends ConsumerWidget {
   }
 
   Future<void> _openDirectory(BuildContext context, WidgetRef ref) async {
-    await showModalBottomSheet<void>(
-      context: context,
+    await showAppSheet<void>(
+      context,
       isScrollControlled: true,
       builder: (ctx) => const _DirectorySheet(),
     );
@@ -682,8 +683,8 @@ class _DirectorySheetState extends ConsumerState<_DirectorySheet> {
     WidgetRef ref, {
     MedicalProvider? existing,
   }) async {
-    final draft = await showModalBottomSheet<_ProviderDraft>(
-      context: context,
+    final draft = await showAppSheet<_ProviderDraft>(
+      context,
       isScrollControlled: true,
       builder: (ctx) => _ProviderFormSheet(existing: existing),
     );
@@ -706,8 +707,8 @@ class _DirectorySheetState extends ConsumerState<_DirectorySheet> {
     WidgetRef ref, {
     FamilyMember? existing,
   }) async {
-    final draft = await showModalBottomSheet<_FamilyMemberDraft>(
-      context: context,
+    final draft = await showAppSheet<_FamilyMemberDraft>(
+      context,
       isScrollControlled: true,
       builder: (ctx) => _FamilyMemberFormSheet(existing: existing),
     );
@@ -728,8 +729,8 @@ class _DirectorySheetState extends ConsumerState<_DirectorySheet> {
     WidgetRef ref, {
     MedicalServiceType? existing,
   }) async {
-    final draft = await showModalBottomSheet<_ServiceTypeDraft>(
-      context: context,
+    final draft = await showAppSheet<_ServiceTypeDraft>(
+      context,
       isScrollControlled: true,
       builder: (ctx) => _ServiceTypeFormSheet(existing: existing),
     );

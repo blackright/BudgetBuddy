@@ -43,6 +43,11 @@ class Expense {
   /// §4.3). A legacy `double` value is converted by migration step 9.
   int amount;
 
+  /// Whole-number quantity for this purchase. [amount] remains the total;
+  /// write-boundary validation restricts this to 1..999. Existing rows are
+  /// normalized to 1 by migration step 43.
+  int quantity;
+
   /// Persisted currency code. Kept as the raw string (not the enum) so a legacy
   /// value the app no longer understands survives verbatim (FR-021, §4.4);
   /// resolve it through [currencyCode].
@@ -109,6 +114,7 @@ class Expense {
     this.type = ExpenseType.standard,
     required this.title,
     required this.amount,
+    this.quantity = 1,
     required this.currency,
     required this.categoryId,
     this.status = ExpenseStatus.paid,
@@ -145,6 +151,7 @@ class Expense {
       type: type,
       title: title,
       amount: amount,
+      quantity: quantity,
       currency: currency,
       categoryId: categoryId,
       status: status,

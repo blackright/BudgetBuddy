@@ -9,7 +9,7 @@ import 'package:budget_buddy/features/sync/domain/sync_guid.dart';
 
 BulkExpenseDraft readyBulkRow() => addBulkTestProof(BulkExpenseDraft()
   ..title = 'Lunch'
-  ..amount = '1,234.56'
+  ..unitAmount = '1,234.56'
   ..currency = 'USD'
   ..merchant = ' Cafe '
   ..category = 'food'
@@ -61,12 +61,17 @@ void main() {
     expect(service.validate(row, '2026-10'), isEmpty);
     row.currency = 'HUF';
     expect(service.validate(row, '2026-10'), contains('amount'));
-    row.amount = '1,000,000';
+    row.unitAmount = '1,000,000';
     expect(service.validate(row, '2026-10'), isEmpty);
-    row.amount = '9,007,199,254,740,992';
+    row.unitAmount = '9,007,199,254,740,992';
     expect(service.validate(row, '2026-10'), contains('amount'));
-    row.amount = '0';
+    row.unitAmount = '0';
     expect(service.validate(row, '2026-10'), contains('amount'));
+    row.unitAmount = '1,234.56';
+    row.quantity = 0;
+    expect(service.validate(row, '2026-10'), contains('quantity'));
+    row.quantity = 1000;
+    expect(service.validate(row, '2026-10'), contains('quantity'));
   });
   test('date boundary, profile type and method cannot be guessed', () {
     final row = readyBulkRow()
@@ -88,7 +93,8 @@ void main() {
     final original = readyBulkRow()..saved = true;
     final copy = original.copy();
     expect(copy.guid, isNot(original.guid));
-    expect(copy.amount, isEmpty);
+    expect(copy.unitAmount, isEmpty);
+    expect(copy.quantity, 1);
     expect(copy.saved, isFalse);
     expect(copy.status, ExpenseStatus.planned);
     expect(copy.evidence.documents, isEmpty);
@@ -113,5 +119,15 @@ void main() {
     expect(expense.syncGuid, row.guid);
     expect(expense.tags, ['office']);
     expect(expense.merchantName, 'Cafe');
+  });
+  test('quantity multiplies the unit amount into the stored total', () {
+    final row = readyBulkRow()
+      ..unitAmount = '617.28'
+      ..quantity = 2;
+    expect(row.lineTotalMinor, 123456);
+    final expense = service.expense(row,
+        owner: 1, space: null, month: '2026-10', budget: 2);
+    expect(expense.amount, 123456);
+    expect(expense.quantity, 2);
   });
 }

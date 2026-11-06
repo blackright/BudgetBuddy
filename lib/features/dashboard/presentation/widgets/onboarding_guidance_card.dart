@@ -1,5 +1,6 @@
 import '../../../../core/models/currency_code.dart';
 import 'package:flutter/material.dart';
+import '../../../../shared/presentation/modals/app_sheet.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/providers/active_profile_provider.dart';
@@ -149,8 +150,7 @@ class OnboardingGuidanceCard extends ConsumerWidget {
     if (suggestion.route == 'opening') {
       final budget = ref.read(activeBudgetProvider).valueOrNull;
       if (budget != null) {
-        showModalBottomSheet<void>(
-            context: context,
+        showAppSheet<void>(context,
             isScrollControlled: true,
             useSafeArea: true,
             builder: (_) => OpeningBalanceSheet(initialBudget: budget));

@@ -7,6 +7,8 @@ import '../../../core/models/fx_revision.dart';
 import '../../../core/services/balance_checkpoint_service.dart';
 import '../../../core/services/receipt_snapshot_repository.dart';
 import '../../../shared/presentation/input_formatters/thousands_separator_input_formatter.dart';
+import '../../../shared/presentation/modals/app_date_picker.dart';
+import '../../../shared/presentation/modals/app_sheet.dart';
 import '../../../shared/presentation/money_format.dart';
 import '../../../shared/presentation/time_picker_dialogs.dart';
 import '../../sync/domain/sync_guid.dart';
@@ -139,7 +141,7 @@ class _BalanceCheckpointSheetState extends State<BalanceCheckpointSheet> {
         ? DateTime(start.year, start.month + 1, 0)
         : DateTime(2100, 12, 31);
     final seed = DateTime(local.year, local.month, local.day);
-    final day = await showDatePicker(
+    final day = await showAppDatePicker(
         context: context,
         initialDate: seed.isBefore(first)
             ? first
@@ -258,26 +260,19 @@ class _BalanceCheckpointSheetState extends State<BalanceCheckpointSheet> {
     final enabled = !_busy && !_saved;
     return PopScope(
         canPop: !_busy,
-        child: SafeArea(
-            child: SingleChildScrollView(
-                padding: EdgeInsets.fromLTRB(
-                    20, 16, 20, 24 + MediaQuery.viewInsetsOf(context).bottom),
+        child: AppSheet(
+            title: 'Review opening money',
+            leading: Icon(Icons.account_balance_wallet_outlined,
+                color: colors.primary),
+            bodyScrollable: false,
+            body: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
                 child: Form(
                     key: _form,
                     child: Column(
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Row(children: [
-                            Icon(Icons.account_balance_wallet_outlined,
-                                color: colors.primary),
-                            const SizedBox(width: 12),
-                            Expanded(
-                                child: Text('Review opening money',
-                                    style:
-                                        Theme.of(context).textTheme.titleLarge))
-                          ]),
-                          const SizedBox(height: 12),
                           const Text(
                               'Tell us when you checked your balance and which payments it already includes. This review does not create income or change your old opening balance.'),
                           if (data != null) ...[

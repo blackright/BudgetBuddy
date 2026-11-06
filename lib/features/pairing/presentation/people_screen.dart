@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../shared/presentation/modals/app_dialog.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
@@ -54,9 +55,9 @@ class PeopleScreen extends ConsumerWidget {
     final names = contact.sharedSpaceNames;
     final name = peer.peerUsername.isEmpty ? 'this person' : peer.peerUsername;
 
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showAppDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
+      builder: (dialogContext) => AppDialog(
         title: const Text('Remove this person?'),
         content: Text(
           'You will stop exchanging changes with '

@@ -10,6 +10,7 @@ import '../../../../core/providers/active_profile_provider.dart';
 import '../../../spaces/providers/spaces_providers.dart';
 import '../../providers/expense_search_provider.dart';
 import '../../../../core/services/expense_evidence.dart';
+import '../../../../shared/presentation/modals/app_dialog.dart';
 import '../../repositories/expense_evidence_repository.dart';
 import 'expense_evidence_editor.dart';
 
@@ -115,7 +116,7 @@ Future<void> openEvidenceDocument(
         BuildContext context, Uint8List bytes, EvidenceDocument document) =>
     document.mediaType.startsWith('image/')
         ? showEvidenceImage(context, bytes, document.name)
-        : showDialog<void>(
+        : showAppDialog<void>(
             context: context,
             builder: (_) => _PdfPreview(bytes: bytes, name: document.name));
 

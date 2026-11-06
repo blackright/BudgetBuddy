@@ -14,6 +14,8 @@ import '../../../core/services/borrowing_service.dart';
 import '../../../core/services/profile_spending_service.dart';
 import '../../../shared/presentation/input_formatters/thousands_separator_input_formatter.dart';
 import '../../../shared/presentation/money_format.dart';
+import '../../../shared/presentation/modals/app_confirm.dart';
+import '../../../shared/presentation/modals/app_dialog.dart';
 import '../../dashboard/presentation/budget_status.dart';
 import '../../engine/currency_resolution.dart';
 import '../../engine/providers/rate_registry_provider.dart';
@@ -79,12 +81,12 @@ class ProfilesScreen extends ConsumerWidget {
     final nameController = TextEditingController();
     final amountController = TextEditingController();
     var isBudget = true;
-    await showDialog<void>(
+    await showAppDialog<void>(
       context: context,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            return AlertDialog(
+            return AppDialog(
               title: const Text('Add Profile'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -319,10 +321,10 @@ class _ProfileGroupCard extends ConsumerWidget {
       amountController.text =
           formatMinorUnitsInput(profile.allocation, currency);
     }
-    await showDialog<void>(
+    await showAppDialog<void>(
       context: context,
       builder: (context) {
-        return AlertDialog(
+        return AppDialog(
           title: const Text('Edit Profile'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -403,22 +405,12 @@ class _ProfileGroupCard extends ConsumerWidget {
         return;
       }
     }
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Profile'),
-        content: const Text('Are you sure you want to delete this profile?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+    final confirmed = await showAppConfirm(
+      context,
+      title: 'Delete Profile',
+      message: 'Are you sure you want to delete this profile?',
+      confirmLabel: 'Delete',
+      destructive: true,
     );
     if (confirmed != true) return;
     if (!context.mounted) return;

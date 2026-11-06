@@ -5,6 +5,8 @@ import 'widgets/expense_search_controls.dart';
 import '../providers/daily_cards_provider.dart';
 import 'widgets/daily_expense_card.dart';
 import '../../../shared/presentation/financial_feedback.dart';
+import '../../../shared/presentation/modals/app_confirm.dart';
+import '../../../shared/presentation/modals/app_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
@@ -417,9 +419,9 @@ class _OrphanBannerButton extends ConsumerWidget {
     final profileId = ref.read(activeProfileProvider).value?.id;
     final yearMonth = ref.read(selectedYearMonthProvider);
 
-    await showDialog<void>(
+    await showAppDialog<void>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
+      builder: (dialogContext) => AppDialog(
         title: const Text('Reimbursement without an expense'),
         // `double.maxFinite` width inside a dialog asked for more room than the
         // dialog would grant, and `Flexible` + `shrinkWrap` inside a
@@ -543,9 +545,9 @@ class _OrphanBannerButton extends ConsumerWidget {
     }
 
     if (!context.mounted) return null;
-    return showDialog<int>(
+    return showAppDialog<int>(
       context: context,
-      builder: (pickerContext) => SimpleDialog(
+      builder: (pickerContext) => AppSimpleDialog(
         title: Text('Move to which $yearMonth expense?'),
         children: [
           for (final expense in expenses)
@@ -591,20 +593,13 @@ class _ExpenseTile extends ConsumerWidget {
 
     if (!stillOwns()) return;
     if (expense.yearMonth != ref.read(selectedYearMonthProvider)) {
-      final accepted = await showDialog<bool>(
-          context: context,
-          builder: (dialog) => AlertDialog(
-                  title: Text('Expense from ${expense.yearMonth}'),
-                  content: Text(
-                      '${expense.title} belongs to ${expense.yearMonth}. Open that month before viewing or changing its financial details.'),
-                  actions: [
-                    TextButton(
-                        onPressed: () => Navigator.pop(dialog, false),
-                        child: const Text('Cancel')),
-                    FilledButton(
-                        onPressed: () => Navigator.pop(dialog, true),
-                        child: const Text('Open owning month'))
-                  ]));
+      final accepted = await showAppConfirm(
+        context,
+        title: 'Expense from ${expense.yearMonth}',
+        message:
+            '${expense.title} belongs to ${expense.yearMonth}. Open that month before viewing or changing its financial details.',
+        confirmLabel: 'Open owning month',
+      );
       if (accepted != true || !context.mounted) return;
       if (!stillOwns()) return;
       ref.read(selectedYearMonthProvider.notifier).state = expense.yearMonth;
@@ -650,20 +645,13 @@ class _ExpenseTile extends ConsumerWidget {
   }
 
   Future<void> _delete(BuildContext context, WidgetRef ref) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete expense?'),
-        content: Text('"${expense.title}" will be removed for good.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Keep it')),
-          FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Delete')),
-        ],
-      ),
+    final confirmed = await showAppConfirm(
+      context,
+      title: 'Delete expense?',
+      message: '"${expense.title}" will be removed for good.',
+      confirmLabel: 'Delete',
+      cancelLabel: 'Keep it',
+      destructive: true,
     );
     if (confirmed != true || !context.mounted) return;
     await runFinancialAction(context, action: () async {
@@ -802,7 +790,7 @@ class _ExpenseTile extends ConsumerWidget {
             ),
             title: Text(expense.title),
             subtitle: Text(
-              '${expense.type == ExpenseType.medical ? 'Medical \u2022 ' : ''}${expense.yearMonth} \u2022 ${expense.merchantName ?? 'Merchant not recorded'} \u2022 ${expense.status.name.toUpperCase()} • ${expense.guiltLevel.name}',
+              '${expense.type == ExpenseType.medical ? 'Medical \u2022 ' : ''}${expense.yearMonth} \u2022 ${expense.merchantName ?? 'Merchant not recorded'} \u2022 ${expense.status.name.toUpperCase()} • ${expense.guiltLevel.name}${expense.quantity > 1 ? ' • ×${expense.quantity}' : ''}',
             ),
             trailing: Column(
               mainAxisSize: MainAxisSize.min,

@@ -7,6 +7,7 @@ import '../../pairing/domain/pairing_protocol.dart';
 import '../../pairing/presentation/widgets/qr_panel.dart';
 import '../../pairing/presentation/widgets/scan_error_panel.dart';
 import '../../pairing/providers/pairing_providers.dart';
+import '../../../shared/presentation/modals/app_dialog.dart';
 
 String _roleLabel(SharedMemberRole role) => switch (role) {
       SharedMemberRole.owner => 'Owner',
@@ -123,9 +124,9 @@ class ScanContactIntoSpaceScreenState
   }
 
   Future<bool?> _confirmScanned(PairingIdentityPayload payload) {
-    return showDialog<bool>(
+    return showAppDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
+      builder: (dialogContext) => AppDialog(
         title: Text('Add to ${widget.spaceName}?'),
         content: Column(
           mainAxisSize: MainAxisSize.min,

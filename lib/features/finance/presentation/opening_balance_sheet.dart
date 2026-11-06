@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/models/monthly_budget.dart';
 import '../../../core/providers/selected_month_provider.dart';
+import '../../../shared/presentation/modals/app_sheet.dart';
 import '../../../shared/presentation/money_format.dart';
 import '../../../shared/presentation/widgets/money_field.dart';
 import '../repositories/month_finance_repository.dart';
@@ -41,25 +42,17 @@ class _OpeningBalanceSheetState extends ConsumerState<OpeningBalanceSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(
-        left: 16,
-        right: 16,
-        top: 16,
-        bottom: MediaQuery.viewInsetsOf(context).bottom + 16,
-      ),
-      child: Form(
+    return AppSheet(
+      title: 'Opening Balance',
+      bodyScrollable: false,
+      body: Form(
         key: _formKey,
         child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                'Opening Balance',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 8),
               const Text('Money in the bank at the start of this month.'),
               const SizedBox(height: 16),
               MoneyField(

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/models/currency_code.dart';
 import '../../../core/models/user_profile.dart';
+import '../../../shared/presentation/modals/app_sheet.dart';
 import '../../../shared/presentation/money_format.dart';
 import '../../../shared/presentation/widgets/money_field.dart';
 import '../../settings/providers/settings_provider.dart';
@@ -92,27 +93,17 @@ class _CreateSpaceSheetState extends ConsumerState<CreateSpaceSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.only(
-          left: 24,
-          right: 24,
-          top: 24,
-          bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-        ),
+    return AppSheet(
+      title: 'New shared space',
+      subtitle: 'A room for a whole month\'s money you manage together.',
+      bodyScrollable: false,
+      body: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('New shared space',
-                  style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: 4),
-              Text(
-                'A room for a whole month\'s money you manage together.',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              const SizedBox(height: 20),
               TextField(
                 key: const Key('spaceNameField'),
                 controller: _name,

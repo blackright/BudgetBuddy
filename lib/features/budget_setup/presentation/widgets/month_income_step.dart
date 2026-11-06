@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../shared/presentation/modals/app_date_picker.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/models/income_source.dart';
 import '../../../../shared/presentation/money_format.dart';
@@ -14,7 +15,7 @@ class MonthIncomeStep extends StatelessWidget {
   final FinancialSetupView view;
   final FinancialSetupController controller;
   Future<DateTime?> _pick(BuildContext context, DateTime initial) =>
-      showDatePicker(
+      showAppDatePicker(
           context: context,
           initialDate: initial.isBefore(DateTime(2000))
               ? DateTime(2000)

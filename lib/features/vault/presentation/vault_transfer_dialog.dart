@@ -5,6 +5,7 @@ import '../../../core/models/currency_code.dart';
 import '../../../core/services/refund_service.dart' show parseRefundAmount;
 import '../../../features/sync/domain/sync_guid.dart';
 import '../../../shared/presentation/input_formatters/thousands_separator_input_formatter.dart';
+import '../../../shared/presentation/modals/app_dialog.dart';
 import '../../../shared/presentation/money_format.dart';
 import '../models/vault_entry.dart';
 import '../providers/vault_providers.dart';
@@ -89,7 +90,7 @@ class VaultTransferPanel extends ConsumerWidget {
                                         : state.maxWithdrawal) <=
                                     0
                                 ? null
-                                : () => showDialog<void>(
+                                : () => showAppDialog<void>(
                                     context: context,
                                     barrierDismissible: false,
                                     builder: (_) =>
@@ -240,7 +241,7 @@ class _VaultTransferDialogState extends ConsumerState<VaultTransferDialog> {
             : 'Reverse full transfer';
     return PopScope(
         canPop: !_busy,
-        child: AlertDialog(
+        child: AppDialog(
           title: Text(title),
           content: SingleChildScrollView(
               child: Column(
@@ -396,7 +397,7 @@ class VaultTransferHistory extends StatelessWidget {
         if (reversed) const Text('Reversed - original evidence retained'),
         if (!reversed && entry.kind != 'reversal')
           TextButton(
-              onPressed: () => showDialog<void>(
+              onPressed: () => showAppDialog<void>(
                   context: context,
                   barrierDismissible: false,
                   builder: (_) => VaultTransferDialog(

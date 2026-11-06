@@ -1,5 +1,6 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import '../../../shared/presentation/modals/app_sheet.dart';
 import 'package:image_picker/image_picker.dart';
 
 /// Attach evidence to one management event using camera, gallery or a file.
@@ -16,8 +17,8 @@ class MedicalDocumentPicker extends StatelessWidget {
   final String label;
 
   Future<void> _add(BuildContext context) async {
-    final source = await showModalBottomSheet<String>(
-      context: context,
+    final source = await showAppSheet<String>(
+      context,
       showDragHandle: true,
       builder: (sheet) => SafeArea(
         child: Column(

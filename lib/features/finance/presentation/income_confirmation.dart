@@ -10,6 +10,8 @@ import '../../../core/providers/active_profile_provider.dart';
 import '../../../core/providers/budget_context_provider.dart';
 import '../../../core/services/income_activation_period.dart';
 import '../../../core/services/income_activation_service.dart';
+import '../../../shared/presentation/modals/app_confirm.dart';
+import '../../../shared/presentation/modals/app_sheet.dart';
 import '../../spaces/providers/spaces_providers.dart';
 import '../../medical/presentation/medical_access_check.dart';
 import '../../medical/presentation/medical_bill_review_dialog.dart';
@@ -45,11 +47,8 @@ Future<void> openIncomeActivation(
     }
   }
   if (!context.mounted) return;
-  final choice = await showModalBottomSheet<IncomeActivationChoice>(
-    context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
-    showDragHandle: true,
+  final choice = await showAppSheet<IncomeActivationChoice>(
+    context,
     builder: (sheet) => IncomeActivationSheet(
       source: source,
       periodKey: periodKey,
@@ -146,11 +145,8 @@ Future<bool> confirmIncomeSource(
             activationPeriodKey, selectedCycle, DateTime.now());
     final zone = (await FlutterTimezone.getLocalTimezone()).identifier;
     if (!context.mounted || !access()) return false;
-    final confirmed = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: true,
+    final confirmed = await showAppSheet<bool>(
+      context,
       builder: (sheet) => guardMedicalReview(
         sheet,
         access,
@@ -346,20 +342,12 @@ Future<void> _showError(BuildContext context, Object error) async {
   final route = receiptBlockerRoute(code);
   final action = receiptBlockerActionLabel(code);
   if (route != null && action != null) {
-    final review = await showDialog<bool>(
-      context: context,
-      builder: (dialog) => AlertDialog(
-        title: const Text('This receipt is blocked'),
-        content: Text(message),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.of(dialog).pop(false),
-              child: const Text('Later')),
-          TextButton(
-              onPressed: () => Navigator.of(dialog).pop(true),
-              child: Text(action)),
-        ],
-      ),
+    final review = await showAppConfirm(
+      context,
+      title: 'This receipt is blocked',
+      message: message,
+      cancelLabel: 'Later',
+      confirmLabel: action,
     );
     if (review == true && context.mounted) {
       context.go(route);

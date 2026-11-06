@@ -9,6 +9,7 @@ import '../../../../core/models/expense.dart';
 import '../../../../core/services/expense_evidence.dart';
 import '../../../../core/services/expense_evidence_draft.dart';
 import '../../../../core/services/evidence_staging.dart';
+import '../../../../shared/presentation/modals/app_dialog.dart';
 import 'expense_evidence_view.dart' show openEvidenceDocument;
 
 /// Both payment roles remain visible; a selected file never confirms payment.
@@ -260,7 +261,7 @@ class _ExpenseEvidenceEditorState extends State<ExpenseEvidenceEditor> {
 
 Future<void> showEvidenceImage(
         BuildContext context, Uint8List bytes, String name) =>
-    showDialog<void>(
+    showAppDialog<void>(
         context: context,
         builder: (context) => Dialog.fullscreen(
             child: Scaffold(

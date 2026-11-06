@@ -15,6 +15,8 @@ import '../../engine/providers/rate_registry_provider.dart';
 import '../../../shared/presentation/input_formatters/thousands_separator_input_formatter.dart';
 import '../../../shared/presentation/money_conversion.dart';
 import '../../../shared/presentation/money_format.dart';
+import '../../../shared/presentation/modals/app_confirm.dart';
+import '../../../shared/presentation/modals/app_dialog.dart';
 import '../../dashboard/providers/dashboard_providers.dart';
 import '../providers/profile_providers.dart';
 import '../providers/transfer_providers.dart';
@@ -135,12 +137,12 @@ class TransferScreen extends ConsumerWidget {
         .read(rateRegistryProvider)
         .tableFor(ref.read(selectedYearMonthProvider));
 
-    await showDialog<void>(
+    await showAppDialog<void>(
       context: context,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            return AlertDialog(
+            return AppDialog(
               title: const Text('New Transfer'),
               content: SingleChildScrollView(
                 child: Column(
@@ -239,32 +241,17 @@ class TransferScreen extends ConsumerWidget {
     }
 
     // Confirmation step: the user sees exactly what will move.
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Confirm Transfer'),
-        content: Text(
-          'Move ${formatMinorUnits(amount, currency)} from '
-          '${source!.name} to ${destination!.name}?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Transfer'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-
-    // Local copies so the two profiles are known to be present from here on.
     final from = source;
     final to = destination;
     if (from == null || to == null) return;
+    final confirmed = await showAppConfirm(
+      context,
+      title: 'Confirm Transfer',
+      message:
+          'Move ${formatMinorUnits(amount, currency)} from ${from.name} to ${to.name}?',
+      confirmLabel: 'Transfer',
+    );
+    if (confirmed != true) return;
 
     final transfer = Transfer()
       ..sourceProfileId = from.id

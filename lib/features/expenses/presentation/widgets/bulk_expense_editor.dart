@@ -3,8 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/models/currency_code.dart';
 import '../../../../core/models/expense.dart';
 import '../../../../core/services/bulk_entry_service.dart';
+import '../../../../core/services/filter_service.dart';
 import '../../../../core/services/merchant_service.dart';
 import '../../../../shared/presentation/input_formatters/thousands_separator_input_formatter.dart';
+import '../../../../shared/presentation/modals/app_date_picker.dart';
+import '../../../../shared/presentation/widgets/quantity_stepper.dart';
+import '../../../../shared/presentation/widgets/line_total_preview.dart';
 import '../../providers/category_provider.dart';
 import '../../providers/expense_search_provider.dart';
 import '../../../finance/providers/profile_providers.dart';
@@ -19,12 +23,17 @@ class BulkExpenseEditor extends ConsumerWidget {
       required this.onChanged,
       this.defaults = false,
       this.purchaseHeader = false,
-      this.purchaseItem = false});
+      this.purchaseItem = false,
+      this.nameFocusNode});
   final BulkExpenseDraft row;
   final String month;
   final VoidCallback onChanged;
   final bool defaults;
   final bool purchaseHeader, purchaseItem;
+
+  /// Focus target for the item name field. Bulk item cards use this when they
+  /// expand so typing can start immediately.
+  final FocusNode? nameFocusNode;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -34,6 +43,15 @@ class BulkExpenseEditor extends ConsumerWidget {
     }
 
     final categories = ref.watch(categoriesProvider);
+    int? unitMinor() {
+      try {
+        return parseSearchAmount(
+            row.unitAmount, CurrencyCode.tryParse(row.currency));
+      } on FormatException {
+        return null;
+      }
+    }
+
     final profileName = row.profileId == null
         ? 'Main'
         : row.profileType == FinancialProfileType.budget
@@ -61,10 +79,15 @@ class BulkExpenseEditor extends ConsumerWidget {
             .map((m) => m.canonicalName)
             .toList();
     Widget text(String label, String value, void Function(String) update,
-            {String? error, bool amount = false}) =>
+            {String? error,
+            bool amount = false,
+            FocusNode? focusNode,
+            Key? fieldKey}) =>
         Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: TextFormField(
+                key: fieldKey,
+                focusNode: focusNode,
                 initialValue: value,
                 decoration: InputDecoration(
                     labelText: label,
@@ -106,7 +129,9 @@ class BulkExpenseEditor extends ConsumerWidget {
                 style: TextStyle(color: Theme.of(context).colorScheme.error))),
       if (!defaults && !purchaseHeader)
         text('Expense name', row.title, (v) => row.title = v,
-            error: row.errors['name']),
+            error: row.errors['name'],
+            focusNode: nameFocusNode,
+            fieldKey: Key('bulkItemName-${row.guid}')),
       if (!defaults && !purchaseItem)
         Padding(
             padding: const EdgeInsets.only(bottom: 12),
@@ -164,8 +189,61 @@ class BulkExpenseEditor extends ConsumerWidget {
             (v) => row.currency = v,
             error: row.errors['currency']),
       if (!defaults && !purchaseHeader)
-        text('Amount', row.amount, (v) => row.amount = v,
-            amount: true, error: row.errors['amount']),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextFormField(
+                initialValue: row.unitAmount,
+                decoration: InputDecoration(
+                    labelText: row.quantity == 1 ? 'Amount' : 'Unit price',
+                    errorText: row.errors['amount'],
+                    border: const OutlineInputBorder()),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: const [ThousandsSeparatorInputFormatter()],
+                onChanged: (value) {
+                  row.unitAmount = value;
+                  row.needsQuantityCorrection = false;
+                  changed();
+                },
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 16,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  QuantityStepper(
+                    key: Key('bulkQuantity-${row.guid}'),
+                    value: row.quantity,
+                    inputKey: Key('bulkQuantityField-${row.guid}'),
+                    decrementKey: Key('bulkQuantityDecrease-${row.guid}'),
+                    incrementKey: Key('bulkQuantityIncrease-${row.guid}'),
+                    errorText: row.errors['quantity'],
+                    onChanged: (value) {
+                      row.quantity = value;
+                      if (value == 1) row.needsQuantityCorrection = false;
+                      changed();
+                    },
+                  ),
+                  LineTotalPreview(
+                    key: Key('bulkLineTotal-${row.guid}'),
+                    unitMinor: row.needsQuantityCorrection ? null : unitMinor(),
+                    quantity: row.quantity,
+                    currency: CurrencyCode.tryParse(row.currency),
+                    totalMinor:
+                        row.needsQuantityCorrection ? row.lineTotalMinor : null,
+                    note: row.needsQuantityCorrection
+                        ? 'Set quantity to 1 or enter a unit price for this saved total.'
+                        : null,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       if (!purchaseHeader)
         select(
             'Category',
@@ -230,7 +308,7 @@ class BulkExpenseEditor extends ConsumerWidget {
               final parts = month.split('-').map(int.parse).toList();
               final first = DateTime(parts[0], parts[1]);
               final last = DateTime(parts[0], parts[1] + 1, 0);
-              final date = await showDatePicker(
+              final date = await showAppDatePicker(
                   context: context,
                   initialDate: row.date ?? first,
                   firstDate: first,
