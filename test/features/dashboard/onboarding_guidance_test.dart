@@ -8,6 +8,7 @@ import 'package:budget_buddy/core/providers/active_profile_provider.dart';
 import 'package:budget_buddy/core/providers/active_budget_provider.dart';
 import 'package:budget_buddy/core/providers/selected_month_provider.dart';
 import 'package:budget_buddy/features/dashboard/presentation/widgets/onboarding_guidance_card.dart';
+import 'package:budget_buddy/features/dashboard/presentation/widgets/secondary_rows.dart';
 import 'package:budget_buddy/features/budget_setup/domain/onboarding_startup.dart';
 import 'package:budget_buddy/features/budget_setup/providers/onboarding_readiness_provider.dart';
 import 'package:budget_buddy/features/finance/providers/income_source_providers.dart';
@@ -135,4 +136,24 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+
+  test('next-step ordering follows the approved priority', () {
+    final items = [
+      const SetupSuggestion(
+          'Explore Spaces', 'Spaces', '/spaces', Icons.groups),
+      const SetupSuggestion('Record your first expense', 'Expense',
+          '/add_expense', Icons.receipt),
+      const SetupSuggestion(
+          'Plan budgets', 'Budgets', '/allocations', Icons.pie_chart),
+      const SetupSuggestion(
+          'Check income', 'Income', '/income_sources', Icons.credit_card),
+      const SetupSuggestion('Confirm opening balance', 'Opening', 'opening',
+          Icons.account_balance),
+    ];
+
+    expect(
+      orderedSetupSuggestions(items).map((item) => item.route).toList(),
+      ['opening', '/income_sources', '/allocations', '/add_expense', '/spaces'],
+    );
+  });
 }

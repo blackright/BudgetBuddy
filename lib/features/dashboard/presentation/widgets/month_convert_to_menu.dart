@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/models/currency_code.dart';
 import '../../../../core/providers/active_budget_provider.dart';
-import '../../../finance/repositories/month_finance_repository.dart';
 import '../../../settings/providers/settings_provider.dart';
+import 'month_currency_choices.dart';
 
 /// The month-global "convert this month to" control (FR-011, US4, SC-006).
 ///
@@ -27,6 +27,7 @@ class MonthConvertToMenu extends ConsumerWidget {
     final budget = ref.watch(activeBudgetProvider).value;
     final mainCurrency = ref.watch(mainCurrencyProvider);
     if (budget == null) return const SizedBox.shrink();
+    final choices = monthCurrencyChoices(mainCurrency);
 
     return PopupMenuButton<Object>(
       key: const Key('monthConvertToMenu'),
@@ -35,23 +36,21 @@ class MonthConvertToMenu extends ConsumerWidget {
       tooltip: 'Convert this month to',
       // Read lazily so the menu can render before Isar is needed (the write
       // only happens on selection).
-      onSelected: (value) =>
-          ref.read(monthFinanceRepositoryProvider).saveConvertTo(
-                budget.yearMonth,
-                value is CurrencyCode ? value : null,
-              ),
+      onSelected: (value) => saveMonthCurrency(
+        ref,
+        budget,
+        value is CurrencyCode ? value : null,
+      ),
       itemBuilder: (context) => [
         PopupMenuItem<Object>(
           value: _defaultChoice,
-          child: Text('Show in ${mainCurrency.displayName} (default)'),
+          child: Text(choices.first.label),
         ),
         const PopupMenuDivider(),
-        for (final currency in CurrencyCode.values)
+        for (final choice in choices.skip(1))
           PopupMenuItem<Object>(
-            value: currency,
-            child: Text(
-              '${currency.name.toUpperCase()} (${currency.symbol})',
-            ),
+            value: choice.value,
+            child: Text(choice.label),
           ),
       ],
     );

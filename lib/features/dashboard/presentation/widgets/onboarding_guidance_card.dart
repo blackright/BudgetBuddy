@@ -144,21 +144,33 @@ final onboardingGuidanceProvider =
   return AsyncData(suggestions);
 });
 
+void openSetupSuggestion(
+  BuildContext context,
+  WidgetRef ref,
+  SetupSuggestion suggestion,
+) {
+  if (suggestion.route == 'opening') {
+    final budget = ref.read(activeBudgetProvider).valueOrNull;
+    if (budget != null) {
+      showAppSheet<void>(context,
+          isScrollControlled: true,
+          useSafeArea: true,
+          builder: (_) => OpeningBalanceSheet(initialBudget: budget));
+    }
+  } else {
+    context.push(suggestion.route);
+  }
+}
+
+void retryOnboardingGuidance(WidgetRef ref) {
+  ref.invalidate(incomeSourcesProvider);
+  ref.invalidate(activeBudgetProvider);
+  ref.invalidate(budgetProfilesProvider);
+  ref.invalidate(monthlyExpensesProvider);
+}
+
 class OnboardingGuidanceCard extends ConsumerWidget {
   const OnboardingGuidanceCard({super.key});
-  void _open(BuildContext context, WidgetRef ref, SetupSuggestion suggestion) {
-    if (suggestion.route == 'opening') {
-      final budget = ref.read(activeBudgetProvider).valueOrNull;
-      if (budget != null) {
-        showAppSheet<void>(context,
-            isScrollControlled: true,
-            useSafeArea: true,
-            builder: (_) => OpeningBalanceSheet(initialBudget: budget));
-      }
-    } else {
-      context.push(suggestion.route);
-    }
-  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -181,12 +193,7 @@ class OnboardingGuidanceCard extends ConsumerWidget {
                     const Text(
                         'Next steps could not be loaded. Your financial records have not been changed.'),
                     TextButton(
-                        onPressed: () {
-                          ref.invalidate(incomeSourcesProvider);
-                          ref.invalidate(activeBudgetProvider);
-                          ref.invalidate(budgetProfilesProvider);
-                          ref.invalidate(monthlyExpensesProvider);
-                        },
+                        onPressed: () => retryOnboardingGuidance(ref),
                         child: const Text('Retry guidance'))
                   ]),
               data: (items) {
@@ -210,7 +217,8 @@ class OnboardingGuidanceCard extends ConsumerWidget {
                       Text(primary.detail),
                       const SizedBox(height: 12),
                       FilledButton.tonalIcon(
-                          onPressed: () => _open(context, ref, primary),
+                          onPressed: () =>
+                              openSetupSuggestion(context, ref, primary),
                           icon: Icon(primary.icon),
                           label:
                               Text(primary.title, textAlign: TextAlign.center)),
@@ -225,7 +233,8 @@ class OnboardingGuidanceCard extends ConsumerWidget {
                                     leading: Icon(item.icon),
                                     title: Text(item.title),
                                     subtitle: Text(item.detail),
-                                    onTap: () => _open(context, ref, item))
+                                    onTap: () =>
+                                        openSetupSuggestion(context, ref, item))
                             ])
                     ]);
               },

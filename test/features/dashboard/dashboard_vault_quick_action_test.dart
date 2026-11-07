@@ -5,7 +5,9 @@ import 'package:budget_buddy/core/providers/active_profile_provider.dart';
 import 'package:budget_buddy/core/providers/active_space_provider.dart';
 import 'package:budget_buddy/core/providers/budget_context_provider.dart';
 import 'package:budget_buddy/features/dashboard/presentation/dashboard_screen.dart';
+import 'package:budget_buddy/features/dashboard/presentation/widgets/onboarding_guidance_card.dart';
 import 'package:budget_buddy/features/dashboard/providers/dashboard_providers.dart';
+import 'package:budget_buddy/features/vault/providers/vault_providers.dart';
 import 'package:budget_buddy/features/engine/month_summary.dart';
 import 'package:budget_buddy/features/engine/providers/month_summary_provider.dart';
 import 'package:budget_buddy/features/engine/providers/rate_registry_provider.dart';
@@ -21,14 +23,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
-/// F1 / T070: the Vault is reachable from the personal dashboard as a quick
-/// action, is hidden inside a shared space, and opens the existing `/vault`
-/// route. The informational card is not the only entry point any more.
+/// The personal-only Savings row is the Vault entry point on the Dashboard.
 void main() {
+  const month = '2026-01';
+
   MonthlyBudget budget() {
     return MonthlyBudget()
       ..id = 1
-      ..yearMonth = '2026-01'
+      ..yearMonth = month
       ..baseAvailableAmount = 1000
       ..openingBalanceConfirmed = true
       ..currency = 'usd'
@@ -38,7 +40,7 @@ void main() {
 
   MonthSummary summary() {
     return const MonthSummary(
-      yearMonth: '2026-01',
+      yearMonth: month,
       income: 4000,
       usesOverriddenIncome: false,
       paymentsMade: 1200,
@@ -59,26 +61,39 @@ void main() {
       initialLocation: '/',
       routes: [
         GoRoute(
-            path: '/', builder: (context, state) => const DashboardScreen()),
+          path: '/',
+          builder: (context, state) => const DashboardScreen(),
+        ),
         GoRoute(
-            path: '/vault',
-            builder: (context, state) =>
-                const Scaffold(body: Text('Vault destination'))),
+          path: '/vault',
+          builder: (context, state) => const Scaffold(
+            body: Text('Vault destination'),
+          ),
+        ),
       ],
     );
     addTearDown(router.dispose);
+
     return ProviderScope(
       overrides: [
-        dashboardBorrowingTotalsProvider
-            .overrideWithValue((borrowed: 0, deficit: 0)),
-        dashboardProfilesProvider.overrideWithValue([]),
+        dashboardMonthVerdictProvider.overrideWithValue(
+          AsyncData(summary()),
+        ),
+        dashboardCurrencyProvider.overrideWithValue(CurrencyCode.usd),
+        dashboardProfilesProvider.overrideWithValue(const []),
         activeProfileProvider.overrideWith((ref) => Stream.value(null)),
         activeSpaceIdProvider.overrideWith((ref) => shared ? 2 : null),
         budgetContextProvider.overrideWithValue(shared
-            ? ContextRef.shared(spaceId: 2, yearMonth: '2026-01')
-            : ContextRef.personal(profileId: 1, yearMonth: '2026-01')),
+            ? ContextRef.shared(spaceId: 2, yearMonth: month)
+            : ContextRef.personal(profileId: 1, yearMonth: month)),
         activeBudgetProvider.overrideWith((ref) => Stream.value(budget())),
+        activeContextCanEditProvider.overrideWithValue(false),
         monthSummaryProvider.overrideWithValue(summary()),
+        vaultProvider.overrideWith((ref) => Stream.value(null)),
+        vaultReviewMessageProvider.overrideWithValue(null),
+        onboardingGuidanceProvider.overrideWithValue(
+          const AsyncData(<SetupSuggestion>[]),
+        ),
         rateRegistryProvider.overrideWithValue(RateTableRegistry()),
         mainCurrencyProvider.overrideWithValue(CurrencyCode.huf),
         monthlyExpensesProvider.overrideWith((ref) => Stream.value([])),
@@ -96,41 +111,36 @@ void main() {
     );
   }
 
-  testWidgets('a personal dashboard exposes the Vault quick action',
-      (tester) async {
-    await tester.binding.setSurfaceSize(const Size(900, 2400));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
+  testWidgets('a personal dashboard exposes the Savings row', (tester) async {
     await tester.pumpWidget(app(shared: false));
     await tester.pumpAndSettle();
 
-    await tester.scrollUntilVisible(
-        find.byKey(const Key('vaultQuickAction')), 200,
-        scrollable: find.byType(Scrollable).first);
-    expect(find.byKey(const Key('vaultQuickAction')), findsOneWidget);
+    expect(find.byKey(const Key('savingsCard')), findsOneWidget);
+    expect(find.byKey(const Key('vaultQuickAction')), findsNothing);
+    expect(find.byKey(const Key('monthStatementRow')), findsOneWidget);
   });
 
-  testWidgets('the Vault quick action opens the existing vault route',
-      (tester) async {
-    await tester.binding.setSurfaceSize(const Size(900, 2400));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
+  testWidgets('the Savings row opens the vault', (tester) async {
     await tester.pumpWidget(app(shared: false));
     await tester.pumpAndSettle();
 
     await tester.scrollUntilVisible(
-        find.byKey(const Key('vaultQuickAction')), 200,
-        scrollable: find.byType(Scrollable).first);
-    await tester.tap(find.byKey(const Key('vaultQuickAction')));
+      find.byKey(const Key('savingsCard')),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.pumpAndSettle();
-
+    await tester.tap(find.byKey(const Key('savingsCard')));
+    await tester.pumpAndSettle();
     expect(find.text('Vault destination'), findsOneWidget);
   });
 
-  testWidgets('a shared space hides the Vault quick action', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(900, 2400));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
+  testWidgets('a shared dashboard hides the Savings row', (tester) async {
     await tester.pumpWidget(app(shared: true));
     await tester.pumpAndSettle();
 
+    expect(find.byKey(const Key('savingsCard')), findsNothing);
     expect(find.byKey(const Key('vaultQuickAction')), findsNothing);
+    expect(find.byKey(const Key('monthStatementRow')), findsOneWidget);
   });
 }

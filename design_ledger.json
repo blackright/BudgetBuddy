@@ -1,0 +1,112 @@
+{
+  "version": 1,
+  "project": "BudgetBuddy",
+  "lastUpdated": "2026-11-07",
+  "designSystem": {
+    "benchmark": "Revolut",
+    "status": "Baseline defined (no screen approved yet)",
+    "principles": {
+      "typography": "High contrast. Massive bold figures for primary data; small, muted, letter-spaced labels for secondary data.",
+      "cards": "Flat, borderless or subtly elevated surfaces with 16-24dp radii. Prefer clean rows with a crisp leading icon, clear label, trailing value/chevron over grids of boxes.",
+      "color": "Deep monochromatic dark/light canvas. Vibrancy reserved strictly for accents, success states and critical actions. Status color is never the only signal.",
+      "copy": "Hyper-clear, action-oriented, jargon-free. Short direct labels: 'Sent', 'Kept', 'Left' - not accounting terms."
+    },
+    "tokens": {
+      "cardRadius": 20,
+      "rowHeightMin": 48,
+      "screenGutter": 16,
+      "sectionGap": 20,
+      "heroFigureSize": 48
+    }
+  },
+  "screens": [
+    {
+      "id": "DASHBOARD",
+      "name": "Dashboard",
+      "route": "/dashboard",
+      "code": "lib/features/dashboard/presentation/dashboard_screen.dart",
+      "status": "Approved",
+      "decisions": [
+        "2026-11-07 - Q1 A: Verdict-first hierarchy. One dominant 'Kept' hero, one muted caption, one 'This month' row; allocation detail folds under it.",
+        "2026-11-07 - Q2 A: Quick action grid removed. Bottom navigation stays; add one prominent 'Add expense' action.",
+        "2026-11-07 - Q3 A: Budgets render as a full-width row list (status dot, name, thin progress bar, 'amount left', chevron) with a 'See all' action; tapping a row opens a detail sheet.",
+        "2026-11-07 - Q4 A: Hero label is 'Kept', with the caption 'this month'. The month navigator already carries the month.",
+        "2026-11-07 - Q5 A: One full-width 'Add expense' button directly under the hero. No floating action button.",
+        "2026-11-07 - Q6 A: Secondary content is rows only - Savings, Next step, Analytics. No mini charts or Savings card on the dashboard."
+      ],
+      "openQuestions": [],
+      "approvedOn": "2026-11-07",
+      "notes": "Approved 2026-11-07. Design direction locked (1A/2A/3A/4A/5A/6A). This screen is the reference implementation for the Revolut alignment of the remaining screens."
+    },
+    {
+      "id": "EXPENSES",
+      "name": "Expenses",
+      "route": "/expenses",
+      "status": "Not Reviewed",
+      "decisions": []
+    },
+    {
+      "id": "MEDICAL",
+      "name": "Medical",
+      "route": "/medical",
+      "status": "Not Reviewed",
+      "decisions": []
+    },
+    {
+      "id": "ANALYTICS",
+      "name": "Analytics",
+      "route": "/analytics",
+      "status": "Not Reviewed",
+      "decisions": []
+    },
+    {
+      "id": "SPACES",
+      "name": "Spaces",
+      "route": "/spaces",
+      "status": "Not Reviewed",
+      "decisions": []
+    },
+    {
+      "id": "SAVINGS_VAULT",
+      "name": "Savings Vault",
+      "route": "/vault",
+      "status": "Not Reviewed",
+      "decisions": []
+    },
+    {
+      "id": "ALLOCATIONS",
+      "name": "Allocations",
+      "route": "/allocations",
+      "status": "Not Reviewed",
+      "decisions": []
+    },
+    {
+      "id": "SETTINGS",
+      "name": "Settings",
+      "route": "/settings",
+      "status": "Not Reviewed",
+      "decisions": []
+    },
+    {
+      "id": "PROFILE",
+      "name": "Profile",
+      "route": "/profile",
+      "status": "Not Reviewed",
+      "decisions": []
+    },
+    {
+      "id": "REPORTS",
+      "name": "Reports",
+      "route": "/reports",
+      "status": "Not Reviewed",
+      "decisions": []
+    },
+    {
+      "id": "PENDING_ACTIONS",
+      "name": "Pending Actions",
+      "route": "/pending_actions",
+      "status": "Not Reviewed",
+      "decisions": []
+    }
+  ]
+}
