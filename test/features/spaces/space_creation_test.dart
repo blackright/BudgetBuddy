@@ -213,7 +213,7 @@ void main() {
     expect(created.currency, PrimaryCurrency.eur,
         reason: 'the shared currency is independent of members (FR-002)');
     expect(created.defaultIncome, 1000 * 100,
-        reason: '"Our income" is stored in whole minor units (FR-009)');
+        reason: '"Space income" is stored in whole minor units (FR-009)');
     expect(created.createdByProfileId, ava.id);
     expect(repo.members.single.profileId, ava.id);
     expect(repo.members.single.role, SharedMemberRole.owner,
@@ -382,7 +382,7 @@ void main() {
     // Read-only: the space identity, its income, the members and their roles
     // are visible...
     expect(find.text('Home'), findsOneWidget);
-    expect(find.textContaining('Our income'), findsOneWidget);
+    expect(find.textContaining('Space income'), findsOneWidget);
     expect(find.text('Members'), findsOneWidget);
     expect(find.text('Ava'), findsOneWidget);
     expect(find.text('Owner'), findsOneWidget);

@@ -152,7 +152,7 @@ class _CreateSpaceSheetState extends ConsumerState<CreateSpaceSheet> {
               MoneyField(
                 key: const Key('spaceIncomeField'),
                 controller: _income,
-                label: 'Our income',
+                label: 'Space income',
                 helperText: 'What the space takes home together per month, in '
                     '${_currency.code.symbol}.',
                 prefixText: '${_currency.code.symbol} ',

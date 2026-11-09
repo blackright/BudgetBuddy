@@ -95,6 +95,35 @@ class AppThemeController {
   }
 }
 
+/// The single write path for the profile's font preference.
+///
+/// Mirrors [AppThemeController]: the choice lives on `UserProfile`, and the
+/// Appearance sheet writes it immediately so every widget test can override the
+/// controller with a real Isar instance.
+final appFontControllerProvider = Provider<AppFontController>((ref) {
+  return AppFontController(IsarHelper.instance);
+});
+
+class AppFontController {
+  AppFontController(this._isar);
+
+  final Isar _isar;
+
+  /// Persists [font] as [profileId]'s font preference (the active profile —
+  /// US1 — falling back to the lowest-id one when none is named).
+  Future<void> setFontFamily(AppFontFamily font, {int? profileId}) {
+    return _isar.writeTxn(() async {
+      final profile = profileId != null
+          ? await _isar.userProfiles.get(profileId)
+          : await _isar.userProfiles.where().findFirst();
+      if (profile == null) return;
+      profile.fontFamily = font;
+      profile.updatedAt = DateTime.now();
+      await _isar.userProfiles.put(profile);
+    });
+  }
+}
+
 /// Whether saving into a **shared** space asks for confirmation first (US6,
 /// T056). Defaults to `true` until the user opts out in Settings, so a shared
 /// save is confirmed by design; personal saves never prompt regardless.

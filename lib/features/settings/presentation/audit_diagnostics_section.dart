@@ -4,7 +4,16 @@ import '../../../shared/presentation/financial_feedback.dart';
 import '../providers/audit_diagnostics_provider.dart';
 
 class AuditDiagnosticsSection extends ConsumerWidget {
-  const AuditDiagnosticsSection({super.key});
+  const AuditDiagnosticsSection({
+    super.key,
+    this.title = 'Audit technical details',
+  });
+
+  /// The visible switch title. The Advanced surface passes the approved
+  /// `Technical details` label; the default keeps the Audit History context
+  /// explicit for existing callers.
+  final String title;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final preference = ref.watch(auditDiagnosticsControllerProvider);
@@ -13,7 +22,7 @@ class AuditDiagnosticsSection extends ConsumerWidget {
       SwitchListTile(
         key: const Key('audit-diagnostics-toggle'),
         secondary: const Icon(Icons.troubleshoot_outlined),
-        title: const Text('Audit technical details'),
+        title: Text(title),
         subtitle: Text(preference.isLoading
             ? 'Loading preference...'
             : 'For troubleshooting only. Show record references and verification data in Audit History on this device.'),

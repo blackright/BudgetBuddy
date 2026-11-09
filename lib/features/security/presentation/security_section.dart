@@ -39,7 +39,19 @@ import 'security_settings_screen.dart';
 /// a subject has a PIN — it is hidden then, and its words are about sync and
 /// pairing rather than about a second unlock.
 class SecuritySection extends ConsumerWidget {
-  const SecuritySection({super.key});
+  const SecuritySection({
+    super.key,
+    this.showMoreTile = true,
+    this.showChangePin = true,
+  });
+
+  /// Whether the self-link to the full Security surface is shown. Hidden when
+  /// this card is already rendered inside that surface.
+  final bool showMoreTile;
+
+  /// Whether the inline Change PIN row is shown. Hidden when the host surface
+  /// already owns a dedicated Change PIN entry.
+  final bool showChangePin;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -88,11 +100,14 @@ class SecuritySection extends ConsumerWidget {
             // Turn-off that the composed lock would immediately undo.
             onChanged: requiredByOwner
                 ? null
-                : (on) => on
-                    ? _startSetup(context, ref, subject)
-                    : _confirmDisable(context, subject),
+                : (on) => requestLockChange(
+                      context,
+                      ref,
+                      subject,
+                      enable: on,
+                    ),
           ),
-          if (locked)
+          if (locked && showChangePin)
             ListTile(
               key: const Key(LockKeys.changePinButton),
               leading: const Icon(Icons.password),
@@ -136,12 +151,12 @@ class SecuritySection extends ConsumerWidget {
               ),
             ),
           ],
-          if (locked) ...[
+          if (locked && showMoreTile) ...[
             const Divider(height: 1),
             ListTile(
               key: const Key('securityMoreButton'),
               leading: const Icon(Icons.shield_outlined),
-              title: const Text('Privacy & security'),
+              title: const Text('Security'),
               subtitle: const Text(
                 'Change the PIN, or recover a forgotten one.',
               ),
@@ -163,9 +178,25 @@ class SecuritySection extends ConsumerWidget {
         LockSubjectKind.space => 'shared space',
       };
 
+  /// Turns the lock on or off using the same PIN setup and disable flow as the
+  /// Settings card.
+  ///
+  /// The hub's inline switch and the full Security card both call this, so the
+  /// two surfaces cannot drift.
+  static Future<void> requestLockChange(
+    BuildContext context,
+    WidgetRef ref,
+    LockSubject subject, {
+    required bool enable,
+  }) {
+    return enable
+        ? _startSetup(context, ref, subject)
+        : _confirmDisable(context, subject);
+  }
+
   /// Turning the lock on starts with a PIN (FR-009): an enabled lock with no
   /// verifier would be a lock nobody can open, so the two are written together.
-  Future<void> _startSetup(
+  static Future<void> _startSetup(
     BuildContext context,
     WidgetRef ref,
     LockSubject subject,
@@ -198,7 +229,10 @@ class SecuritySection extends ConsumerWidget {
 
   /// Turning the lock off demands the current PIN (FR-009): a locked phone left
   /// on a table must not lose its lock to a tap.
-  Future<void> _confirmDisable(BuildContext context, LockSubject subject) {
+  static Future<void> _confirmDisable(
+    BuildContext context,
+    LockSubject subject,
+  ) {
     return showAppDialog<void>(
       context: context,
       // The dialog owns its own controller (see [_DisableLockDialog]): disposing

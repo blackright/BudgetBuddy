@@ -20,6 +20,7 @@ import '../../../shared/presentation/modals/app_dialog.dart';
 import '../../dashboard/providers/dashboard_providers.dart';
 import '../providers/profile_providers.dart';
 import '../providers/transfer_providers.dart';
+import '../../settings/presentation/settings_copy.dart';
 import '../../settings/providers/app_settings_providers.dart';
 
 class TransferScreen extends ConsumerWidget {
@@ -37,70 +38,91 @@ class TransferScreen extends ConsumerWidget {
     final yearMonth = ref.watch(selectedYearMonthProvider);
     final table = ref.watch(rateRegistryProvider).tableFor(yearMonth);
 
-    if (!toggle) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Transfers')),
-        body: const Center(
-          child: Text('Transfers are disabled in Settings.'),
-        ),
-      );
-    }
-
     final namesById = {for (final p in profiles) p.id: p.name};
 
     return Scaffold(
       appBar: AppBar(title: const Text('Transfers')),
-      body: transfers.when(
-        data: (items) {
-          if (items.isEmpty) {
-            return const Center(child: Text('No transfers yet.'));
-          }
-          return ListView.builder(
-            itemCount: items.length,
-            itemBuilder: (context, index) {
-              final t = items[index];
-              final transferCurrency =
-                  CurrencyCode.tryParse(t.currency) ?? currency;
-              final source = namesById[t.sourceProfileId] ??
-                  'Profile ${t.sourceProfileId}';
-              final destination = namesById[t.destinationProfileId] ??
-                  'Profile ${t.destinationProfileId}';
-              // T166: history is read-only, so it reads in the display
-              // currency; long-press reveals the stored transfer amount. The
-              // entry dialog and the saved amount stay in the context currency.
-              final converted = convertAndFormat(
-                t.amount,
-                transferCurrency,
-                displayCurrency,
-                table,
-              );
-              return ListTile(
-                title: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    ConvertedAmountText(
-                      text: converted.text,
-                      originalText: converted.originalText,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    Text('$source → $destination'),
-                  ],
-                ),
-                subtitle: Text([
-                  if ((t.reason ?? '').trim().isNotEmpty) t.reason!.trim(),
-                  _dateLabel(t.date),
-                ].join(' • ')),
-              );
-            },
-          );
-        },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
+      body: Column(
+        children: [
+          SwitchListTile(
+            key: const Key('transferToggle'),
+            title: const Text(SettingsCopy.allowTransfers),
+            subtitle: Text(
+              toggle
+                  ? SettingsCopy.transfersSummary
+                  : SettingsCopy.transfersOff,
+            ),
+            value: toggle,
+            onChanged: (value) => ref
+                .read(appSettingsRepositoryProvider)
+                .setTransferToggle(value),
+          ),
+          const Divider(height: 1),
+          Expanded(
+            child: toggle
+                ? transfers.when(
+                    data: (items) {
+                      if (items.isEmpty) {
+                        return const Center(child: Text('No transfers yet.'));
+                      }
+                      return ListView.builder(
+                        itemCount: items.length,
+                        itemBuilder: (context, index) {
+                          final t = items[index];
+                          final transferCurrency =
+                              CurrencyCode.tryParse(t.currency) ?? currency;
+                          final source = namesById[t.sourceProfileId] ??
+                              'Profile ${t.sourceProfileId}';
+                          final destination =
+                              namesById[t.destinationProfileId] ??
+                                  'Profile ${t.destinationProfileId}';
+                          // T166: history is read-only, so it reads in the
+                          // display currency; long-press reveals the stored
+                          // transfer amount. The entry dialog and the saved
+                          // amount stay in the context currency.
+                          final converted = convertAndFormat(
+                            t.amount,
+                            transferCurrency,
+                            displayCurrency,
+                            table,
+                          );
+                          return ListTile(
+                            title: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                ConvertedAmountText(
+                                  text: converted.text,
+                                  originalText: converted.originalText,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                Text('$source → $destination'),
+                              ],
+                            ),
+                            subtitle: Text([
+                              if ((t.reason ?? '').trim().isNotEmpty)
+                                t.reason!.trim(),
+                              _dateLabel(t.date),
+                            ].join(' • ')),
+                          );
+                        },
+                      );
+                    },
+                    loading: () =>
+                        const Center(child: CircularProgressIndicator()),
+                    error: (e, _) => Center(child: Text('Error: $e')),
+                  )
+                : const Center(child: Text(SettingsCopy.transfersOff)),
+          ),
+        ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showAddDialog(context, ref),
-        child: const Icon(Icons.add),
-      ),
+      floatingActionButton: toggle
+          ? FloatingActionButton(
+              onPressed: () => _showAddDialog(context, ref),
+              child: const Icon(Icons.add),
+            )
+          : null,
     );
   }
 

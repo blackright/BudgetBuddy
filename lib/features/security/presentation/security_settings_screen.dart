@@ -1,34 +1,29 @@
 import 'package:flutter/material.dart';
-import '../../../shared/presentation/modals/app_dialog.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../shared/presentation/modals/app_dialog.dart';
 import '../../../core/database/isar_helper.dart';
 import '../../../core/database/money_integrity.dart';
 import '../../../core/models/user_profile.dart';
 import '../../../core/providers/active_profile_provider.dart';
 import '../../identity/providers/device_key_session.dart';
+import '../../settings/presentation/settings_theme.dart';
 import '../domain/lock_subject.dart';
 import '../domain/pin_result.dart';
 import '../providers/lock_providers.dart';
 import '../repositories/monotonic_clock_impl.dart';
 import 'pin_setup_screen.dart';
+import 'security_section.dart';
 
-/// The deeper security flows, in one place (T066, FR-035, FR-045).
+/// The focused Security surface reached from Settings.
 ///
-/// The Settings card ([SecuritySection]) is the *surface*: it shows the state
-/// and flips the lock. This screen is where the flows that need their own room
-/// live — changing the PIN, recovering a forgotten one through another profile,
-/// and the last-resort erase-and-start-clean.
+/// It hosts the full [SecuritySection] card — lock switch, away time,
+/// biometrics and device-auth consent — plus the Change PIN and recovery
+/// entries. The SecuritySection's own Change PIN tile and self-link are hidden
+/// here so each action appears exactly once.
 ///
-/// The recovery and erase logic is **deliberately not a screen-only concern**:
-/// the lock screen has to be able to reach the very same path when the member
-/// has forgotten the PIN. So the work sits in [SecurityRecovery], a small
-/// object both surfaces call, and neither can drift from the other. That is the
-/// whole reason this file exists rather than the logic being copied.
-///
-/// It carries no route of its own: it is opened the way Settings opens its
-/// other sub-screens, with a `MaterialPageRoute`, so the app's routing table
-/// stays about navigation and not about one card's internals.
+/// It carries no route of its own: Settings opens it with a
+/// `MaterialPageRoute`, so the routing table stays about navigation.
 class SecuritySettingsScreen extends ConsumerWidget {
   const SecuritySettingsScreen({super.key, required this.subject});
 
@@ -37,40 +32,53 @@ class SecuritySettingsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Privacy & security')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Card(
-            child: ListTile(
-              key: const Key('securityChangePin'),
-              leading: const Icon(Icons.password),
-              title: const Text('Change PIN'),
-              subtitle: const Text('Enter the current PIN, then the new one.'),
-              onTap: () =>
-                  SecurityRecovery.openChangePin(context, ref, subject),
-            ),
-          ),
-          Card(
-            child: ListTile(
-              key: const Key('securityForgotPin'),
-              leading: const Icon(Icons.help_outline),
-              title: const Text('Forgot the PIN?'),
-              subtitle: const Text(
-                'Another profile on this phone can reset it, keeping every '
-                'record.',
+      key: const Key('settingsSecurityScreen'),
+      appBar: AppBar(title: const Text('Security')),
+      body: SettingsCardTheme(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SecuritySection(
+                showMoreTile: false,
+                showChangePin: false,
               ),
-              onTap: () => SecurityRecovery.showForgotOptions(
-                context,
-                ref,
-                subject,
-                onErased: () {
-                  if (context.mounted) Navigator.of(context).pop();
-                },
+              const SizedBox(height: 12),
+              Card(
+                child: ListTile(
+                  key: const Key('securityChangePin'),
+                  leading: const Icon(Icons.password),
+                  title: const Text('Change PIN'),
+                  subtitle:
+                      const Text('Enter the current PIN, then the new one.'),
+                  onTap: () =>
+                      SecurityRecovery.openChangePin(context, ref, subject),
+                ),
               ),
-            ),
+              const SizedBox(height: 12),
+              Card(
+                child: ListTile(
+                  key: const Key('securityForgotPin'),
+                  leading: const Icon(Icons.help_outline),
+                  title: const Text('Forgot the PIN?'),
+                  subtitle: const Text(
+                    'Another profile on this phone can reset it, keeping every '
+                    'record.',
+                  ),
+                  onTap: () => SecurityRecovery.showForgotOptions(
+                    context,
+                    ref,
+                    subject,
+                    onErased: () {
+                      if (context.mounted) Navigator.of(context).pop();
+                    },
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

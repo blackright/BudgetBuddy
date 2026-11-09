@@ -84,8 +84,15 @@
       "id": "SETTINGS",
       "name": "Settings",
       "route": "/settings",
-      "status": "Not Reviewed",
-      "decisions": []
+      "status": "Approved",
+      "decisions": [
+        "2026-11-07 - Q1 A: Goal-based hub. Replace the long card stack with a current-context header plus six goal-based rows (Budgeting, Sharing, Security, Appearance, Help & learning, Advanced). Dense editors move into focused sub-screens or sheets.",
+        "2026-11-07 - Q2 A: One current-context row. Avatar, profile name, active space and currency with a Switch chevron opening a profile/space sheet; remove the duplicate avatar grid and the separate Profiles card.",
+        "2026-11-07 - Q3 A: Summary rows with drill-downs. Appearance becomes one value row opening a sheet with theme choices and font list; Security becomes one status row opening a dedicated security screen, with the lock switch kept inline."
+      ],
+      "openQuestions": [],
+      "approvedOn": "2026-11-07",
+      "notes": "Approved 2026-11-07. The Settings hub becomes the reference for goal-based settings navigation. All existing settings, routes, keys and write paths must remain reachable; financial logic is untouched."
     },
     {
       "id": "PROFILE",

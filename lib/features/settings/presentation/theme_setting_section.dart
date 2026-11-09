@@ -4,16 +4,30 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/models/user_profile.dart';
 import '../../../core/providers/active_profile_provider.dart';
 import '../providers/settings_provider.dart';
+import 'settings_copy.dart';
 
-/// Phase 9-E (T061): the Settings card that chooses the app theme, mirroring
-/// the font section next to it.
+/// The Appearance sheet's theme choice.
 ///
 /// The choice lives on `UserProfile` (default `AppThemeMode.system`) and is
 /// persisted through the single [appThemeControllerProvider] write path, so a
 /// widget test can override the controller with a real Isar instance and prove
-/// the write lands (T058).
+/// the write lands (T058). Selecting a chip writes immediately; there is no
+/// Save button.
 class ThemeSettingSection extends ConsumerWidget {
   const ThemeSettingSection({super.key});
+
+  static String labelFor(AppThemeMode mode) {
+    switch (mode) {
+      case AppThemeMode.system:
+        return SettingsCopy.system;
+      case AppThemeMode.light:
+        return SettingsCopy.light;
+      case AppThemeMode.dark:
+        return SettingsCopy.dark;
+    }
+  }
+
+  static Key keyFor(AppThemeMode mode) => Key('theme${mode.name}');
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -30,39 +44,28 @@ class ThemeSettingSection extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'App Theme',
+                  SettingsCopy.theme,
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
-                const SizedBox(height: 16),
-                DropdownButtonFormField<AppThemeMode>(
-                  initialValue: profile.themeMode,
-                  decoration: const InputDecoration(
-                    labelText: 'Select Theme',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: AppThemeMode.values.map((mode) {
-                    String label;
-                    switch (mode) {
-                      case AppThemeMode.system:
-                        label = 'Follow system';
-                      case AppThemeMode.light:
-                        label = 'Light';
-                      case AppThemeMode.dark:
-                        label = 'Dark';
-                    }
-                    return DropdownMenuItem(
-                      value: mode,
-                      child: Text(label),
-                    );
-                  }).toList(),
-                  onChanged: (AppThemeMode? newValue) async {
-                    if (newValue != null && newValue != profile.themeMode) {
-                      await ref.read(appThemeControllerProvider).setThemeMode(
-                            newValue,
-                            profileId: profile.id,
-                          );
-                    }
-                  },
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final mode in AppThemeMode.values)
+                      ChoiceChip(
+                        key: keyFor(mode),
+                        label: Text(labelFor(mode)),
+                        selected: profile.themeMode == mode,
+                        onSelected: (selected) async {
+                          if (selected && mode != profile.themeMode) {
+                            await ref
+                                .read(appThemeControllerProvider)
+                                .setThemeMode(mode, profileId: profile.id);
+                          }
+                        },
+                      ),
+                  ],
                 ),
               ],
             ),
