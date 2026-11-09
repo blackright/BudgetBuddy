@@ -1,12 +1,33 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/database/isar_helper.dart';
 import '../../../core/models/user_profile.dart';
 import '../../../core/providers/active_profile_provider.dart';
+import '../providers/settings_provider.dart';
+import 'settings_copy.dart';
 
+/// The Appearance sheet's font choice.
+///
+/// The four options come from [AppFontFamily] and persist through the single
+/// [appFontControllerProvider] write path. The whole radio tile is tappable, so
+/// the list stays usable at 320 dp and 200% text.
 class FontSettingSection extends ConsumerWidget {
   const FontSettingSection({super.key});
+
+  static String labelFor(AppFontFamily font) {
+    switch (font) {
+      case AppFontFamily.system:
+        return SettingsCopy.systemDefault;
+      case AppFontFamily.roboto:
+        return SettingsCopy.roboto;
+      case AppFontFamily.inter:
+        return SettingsCopy.inter;
+      case AppFontFamily.openSans:
+        return SettingsCopy.openSans;
+    }
+  }
+
+  static Key keyFor(AppFontFamily font) => Key('font${font.name}');
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -23,37 +44,30 @@ class FontSettingSection extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'App Font Style',
+                  SettingsCopy.font,
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
-                const SizedBox(height: 16),
-                DropdownButtonFormField<AppFontFamily>(
-                  initialValue: profile.fontFamily,
-                  decoration: const InputDecoration(
-                    labelText: 'Select Font',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: AppFontFamily.values.map((font) {
-                    String label = 'System Default';
-                    if (font == AppFontFamily.roboto) label = 'Roboto';
-                    if (font == AppFontFamily.inter) label = 'Inter';
-                    if (font == AppFontFamily.openSans) label = 'Open Sans';
-
-                    return DropdownMenuItem(
-                      value: font,
-                      child: Text(label),
-                    );
-                  }).toList(),
-                  onChanged: (AppFontFamily? newValue) async {
+                const SizedBox(height: 8),
+                RadioGroup<AppFontFamily>(
+                  groupValue: profile.fontFamily,
+                  onChanged: (newValue) async {
                     if (newValue != null && newValue != profile.fontFamily) {
-                      final isar = IsarHelper.instance;
-                      await isar.writeTxn(() async {
-                        profile.fontFamily = newValue;
-                        profile.updatedAt = DateTime.now();
-                        await isar.userProfiles.put(profile);
-                      });
+                      await ref
+                          .read(appFontControllerProvider)
+                          .setFontFamily(newValue, profileId: profile.id);
                     }
                   },
+                  child: Column(
+                    children: [
+                      for (final font in AppFontFamily.values)
+                        RadioListTile<AppFontFamily>(
+                          key: keyFor(font),
+                          value: font,
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(labelFor(font)),
+                        ),
+                    ],
+                  ),
                 ),
               ],
             ),

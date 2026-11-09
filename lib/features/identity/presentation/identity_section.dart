@@ -72,8 +72,7 @@ class IdentitySection extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Identity & privacy',
-                      style: theme.textTheme.titleMedium),
+                  Text('Identity', style: theme.textTheme.titleMedium),
                   const SizedBox(height: 8),
                   const Text(
                     'Set up a local identity to share a space with someone on '
@@ -97,7 +96,7 @@ class IdentitySection extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Identity & privacy', style: theme.textTheme.titleMedium),
+                Text('Identity', style: theme.textTheme.titleMedium),
                 const SizedBox(height: 8),
                 ListTile(
                   contentPadding: EdgeInsets.zero,

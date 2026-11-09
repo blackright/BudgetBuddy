@@ -84,7 +84,7 @@ class _RenameSpaceDialogState extends State<_RenameSpaceDialog> {
   }
 }
 
-/// Owner-only "Our income" edit dialog (whole minor units → major field).
+/// Owner-only "Space income" edit dialog (whole minor units → major field).
 class _IncomeDialog extends StatefulWidget {
   const _IncomeDialog({required this.currency, required this.defaultIncome});
 
@@ -111,7 +111,7 @@ class _IncomeDialogState extends State<_IncomeDialog> {
   @override
   Widget build(BuildContext context) {
     return AppDialog(
-      title: const Text('Our income'),
+      title: const Text('Space income'),
       content: MoneyField(
         key: const Key('ourIncomeField'),
         controller: _income,
@@ -468,7 +468,7 @@ class SpaceSettingsSection extends ConsumerWidget {
                         key: const Key('editIncomeButton'),
                         onPressed: () => _editIncome(context, ref),
                         icon: const Icon(Icons.payments_outlined, size: 18),
-                        label: const Text('Our income'),
+                        label: const Text('Space income'),
                       ),
                       FilledButton.tonalIcon(
                         key: const Key('transferOwnershipButton'),
@@ -509,15 +509,37 @@ class SpaceSettingsSection extends ConsumerWidget {
         Text('Shared space', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
         Card(
-          child: ListTile(
-            leading: Text(space.avatar, style: const TextStyle(fontSize: 28)),
-            title: Text(space.displayName),
-            subtitle: Text(
-              '${space.currency.code.displayName} · Our income '
-              '${space.currency.code.symbol}'
-              '${NumberFormat('#,##0.00').format(space.defaultIncome / space.currency.code.minorUnitsPerMajor)}',
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(space.avatar, style: const TextStyle(fontSize: 28)),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        space.displayName,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${space.currency.code.displayName} · Space income '
+                  '${space.currency.code.symbol}'
+                  '${NumberFormat('#,##0.00').format(space.defaultIncome / space.currency.code.minorUnitsPerMajor)}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: SyncStatusChip(spaceId: space.id),
+                ),
+              ],
             ),
-            trailing: SyncStatusChip(spaceId: space.id),
           ),
         ),
         const SizedBox(height: 8),
@@ -525,7 +547,7 @@ class SpaceSettingsSection extends ConsumerWidget {
         if (isOwner) ...[
           const SizedBox(height: 8),
           ExpansionTile(
-            title: const Text('Privacy & security'),
+            title: const Text('Security'),
             initiallyExpanded: false,
             children: [
               OwnerSecurityCard(space: space),

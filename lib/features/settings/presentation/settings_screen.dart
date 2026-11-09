@@ -2,46 +2,116 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../finance/presentation/net_salary_section.dart';
-import '../../spaces/providers/spaces_providers.dart';
-import '../../finance/providers/income_source_providers.dart';
-import '../../../core/providers/budget_context_provider.dart';
-import '../../settings/providers/app_settings_providers.dart';
-import '../../identity/presentation/identity_section.dart';
-import '../../pairing/presentation/paired_devices_section.dart';
-import '../../pairing/presentation/people_section.dart';
+import '../../../core/models/user_profile.dart';
+import '../../../core/providers/active_profile_provider.dart';
+import '../../../core/providers/active_space_provider.dart';
+import '../../pairing/providers/pairing_providers.dart';
 import '../../security/presentation/security_section.dart';
+import '../../security/presentation/security_settings_screen.dart';
 import '../../security/providers/lock_providers.dart';
-import '../../spaces/presentation/space_settings_section.dart';
-import '../../spaces/presentation/spaces_list_section.dart';
-import 'font_setting_section.dart';
-import 'profile_switcher_section.dart';
-import 'shared_save_setting_section.dart';
-import 'theme_setting_section.dart';
-import 'audit_diagnostics_section.dart';
+import '../../spaces/providers/spaces_providers.dart';
+import '../providers/settings_provider.dart';
+import 'settings_advanced_screen.dart';
+import 'settings_appearance_sheet.dart';
+import 'settings_budgeting_screen.dart';
+import 'settings_copy.dart';
+import 'settings_help_screen.dart';
+import 'settings_profile_space_screen.dart';
+import 'settings_sharing_screen.dart';
+import 'widgets/settings_context_header.dart';
+import 'widgets/settings_row.dart';
 
-/// The Settings tab, grouped by **what the setting is about**.
+/// The Settings tab, reduced to a context header and six goal-based rows.
 ///
-/// The order used to be the order the features were built in, which left the app
-/// lock between the identity card and the People list and put the theme next to
-/// the salary. Nothing about the cards themselves changed here — same widgets,
-/// same keys, same behaviour — only the order and the headings above them.
-///
-/// Every group has a card that always paints, so no heading can stand alone:
-/// "Your profile" always has the identity card, "Sharing" always has the shared
-/// save preference (the app never has zero profiles — setup creates the first
-/// one and the last one cannot be deleted), and "Money" and "Appearance" always
-/// have theirs. "Privacy & security" is the exception: its only card hides when
-/// there is no active subject to lock, so the group is skipped with its card and
-/// the heading can never be orphaned.
+/// Each row opens a focused surface. Dense editors no longer live on this page;
+/// the header and rows are the only default-view composition.
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final hasSubject = ref.watch(lockSubjectProvider) != null;
-    final incomeSources = ref.watch(incomeSourcesProvider).value ?? const [];
-    final isShared = ref.watch(budgetContextProvider).isShared;
+    final subject = ref.watch(lockSubjectProvider);
+    final locked =
+        ref.watch(activeLockSettingProvider).valueOrNull?.lockEnabled ?? false;
+    final requiredByOwner =
+        ref.watch(activeSpaceProvider).valueOrNull?.requirePin ?? false;
+    final spaceCount = ref.watch(mySpacesProvider).valueOrNull?.length ?? 0;
+    final peopleCount = ref.watch(pairedPeersProvider).valueOrNull?.length ?? 0;
+    final themeMode = ref.watch(appThemeModeProvider);
+    final fontFamily =
+        ref.watch(activeProfileProvider).valueOrNull?.fontFamily ??
+            AppFontFamily.system;
+    final scheme = Theme.of(context).colorScheme;
+
+    final rows = <Widget>[
+      SettingsRow(
+        key: const Key('settingsBudgetingRow'),
+        title: SettingsCopy.budgeting,
+        summary: SettingsCopy.budgetingSummary,
+        icon: Icons.account_balance_wallet_outlined,
+        onTap: () => _pushScreen(context, const SettingsBudgetingScreen()),
+      ),
+      SettingsRow(
+        key: const Key('settingsSharingRow'),
+        title: SettingsCopy.sharing,
+        summary: SettingsCopy.sharingSummary(
+          spaces: spaceCount,
+          people: peopleCount,
+        ),
+        icon: Icons.group_outlined,
+        onTap: () => _pushScreen(context, const SettingsSharingScreen()),
+      ),
+      if (subject != null)
+        SettingsRow(
+          key: const Key('settingsSecurityRow'),
+          title: SettingsCopy.security,
+          summary: SettingsCopy.securitySummary(
+            locked: locked,
+            requiredByOwner: requiredByOwner,
+          ),
+          icon: Icons.lock_outline,
+          trailing: Switch(
+            value: locked,
+            onChanged: requiredByOwner
+                ? null
+                : (value) => SecuritySection.requestLockChange(
+                      context,
+                      ref,
+                      subject,
+                      enable: value,
+                    ),
+          ),
+          excludeSemantics: false,
+          onTap: () => _pushScreen(
+            context,
+            SecuritySettingsScreen(subject: subject),
+          ),
+        ),
+      SettingsRow(
+        key: const Key('settingsAppearanceRow'),
+        title: SettingsCopy.appearance,
+        summary: SettingsCopy.appearanceSummary(
+          themeLabel: _themeLabel(themeMode),
+          fontLabel: _fontLabel(fontFamily),
+        ),
+        icon: Icons.palette_outlined,
+        onTap: () => SettingsAppearanceSheet.show(context),
+      ),
+      SettingsRow(
+        key: const Key('settingsHelpRow'),
+        title: SettingsCopy.help,
+        summary: SettingsCopy.helpSummary,
+        icon: Icons.school_outlined,
+        onTap: () => _pushScreen(context, const SettingsHelpScreen()),
+      ),
+      SettingsRow(
+        key: const Key('settingsAdvancedRow'),
+        title: SettingsCopy.advanced,
+        summary: SettingsCopy.advancedSummary,
+        icon: Icons.tune_outlined,
+        onTap: () => _pushScreen(context, const SettingsAdvancedScreen()),
+      ),
+    ];
 
     return Scaffold(
       appBar: AppBar(
@@ -56,108 +126,41 @@ class SettingsScreen extends ConsumerWidget {
             }
           },
         ),
-        title: const Text('Settings'),
+        title: const Text(SettingsCopy.settingsTitle),
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          const _Section(
-            title: 'Spaces',
-            cards: [SpacesListSection()],
+          SettingsContextHeader(
+            key: const Key('settingsContextHeader'),
+            onTap: () =>
+                _pushScreen(context, const SettingsProfileSpaceScreen()),
           ),
-          const _Section(
-            title: 'Your profile',
-            cards: [ProfileSwitcherSection(), IdentitySection()],
-          ),
-          // US1: the app lock card — shown for the active subject (profile or
-          // shared space), so the heading arrives with it.
-          if (hasSubject)
-            const _Section(
-              title: 'Privacy & security',
-              cards: [SecuritySection()],
+          const SizedBox(height: 16),
+          Material(
+            key: const Key('settingsHubCard'),
+            color: scheme.surfaceContainerLow,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: BorderSide(color: scheme.outlineVariant),
             ),
-          // US2/US3/US6/US7: the space is only there in a shared context; the
-          // people list, the paired devices and the save preference are not.
-          const _Section(
-            title: 'Sharing',
-            cards: [
-              SpaceSettingsSection(),
-              PeopleSection(),
-              PairedDevicesSection(),
-              SharedSaveSettingSection(),
-            ],
-          ),
-          if (incomeSources.isEmpty)
-            const _Section(
-              title: 'Money',
-              cards: [NetSalarySection()],
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (var index = 0; index < rows.length; index++) ...[
+                  if (index > 0)
+                    Divider(
+                      height: 1,
+                      thickness: 1,
+                      indent: 68,
+                      endIndent: 16,
+                      color: scheme.outlineVariant,
+                    ),
+                  rows[index],
+                ],
+              ],
             ),
-          const _Section(
-            title: 'Income',
-            cards: [_IncomeSourcesCard()],
-          ),
-          Card(
-              child: ListTile(
-                  leading: const Icon(Icons.event_available),
-                  title: const Text('Month-End'),
-                  subtitle:
-                      const Text('Review Reset and Carry Forward policies'),
-                  onTap: () => context.push('/month_end'))),
-          Card(
-              child: ListTile(
-                  leading: const Icon(Icons.history),
-                  title: const Text('Audit History'),
-                  onTap: () => context.push('/audit_history'))),
-          Card(
-              child: ListTile(
-                  leading: const Icon(Icons.summarize_outlined),
-                  title: const Text('Reports'),
-                  subtitle: const Text(
-                      'Monthly statements, insights and PDF/CSV exports'),
-                  onTap: () => context.push('/reports'))),
-          if (ref.watch(activeContextCanEditProvider))
-            Card(
-                child: ListTile(
-              leading: const Icon(Icons.playlist_add),
-              title: const Text('Bulk Entry'),
-              subtitle:
-                  const Text('Enter several expenses for the selected month'),
-              onTap: () => context.push('/bulk_entry'),
-            )),
-          const _Section(
-            title: 'Profiles',
-            cards: [_ProfilesCard()],
-          ),
-          // Personal-only: a shared space has no vault, so the entry is hidden
-          // there rather than leading to a blocked screen.
-          if (!isShared)
-            const _Section(
-              title: 'Savings',
-              cards: [_VaultCard()],
-            ),
-          const _Section(
-            title: 'Transfers',
-            cards: [_TransfersCard(), _TransferToggleCard()],
-          ),
-          const _Section(
-            title: 'Appearance',
-            cards: [ThemeSettingSection(), FontSettingSection()],
-          ),
-          _Section(title: 'Help & learning', cards: [
-            Card(
-                child: ListTile(
-              key: const Key('replayIntroduction'),
-              leading: const Icon(Icons.auto_stories_outlined),
-              title: const Text('Replay introduction'),
-              subtitle: const Text(
-                  'Explore the basics without changing your records'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => context.push('/introduction'),
-            ))
-          ]),
-          const _Section(
-            title: 'Diagnostics',
-            cards: [AuditDiagnosticsSection()],
           ),
         ],
       ),
@@ -165,134 +168,32 @@ class SettingsScreen extends ConsumerWidget {
   }
 }
 
-/// A small card that opens the Income Sources screen.
-class _IncomeSourcesCard extends StatelessWidget {
-  const _IncomeSourcesCard();
+void _pushScreen(BuildContext context, Widget screen) {
+  Navigator.of(context).push(
+    MaterialPageRoute<void>(builder: (_) => screen),
+  );
+}
 
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: ListTile(
-        leading: const Icon(Icons.attach_money),
-        title: const Text('Income Sources'),
-        subtitle: const Text('Manage salary, freelance, and other income'),
-        trailing: const Icon(Icons.chevron_right),
-        onTap: () => context.push('/income_sources'),
-      ),
-    );
+String _themeLabel(AppThemeMode mode) {
+  switch (mode) {
+    case AppThemeMode.system:
+      return SettingsCopy.system;
+    case AppThemeMode.light:
+      return SettingsCopy.light;
+    case AppThemeMode.dark:
+      return SettingsCopy.dark;
   }
 }
 
-/// A small card that opens the personal Savings Vault (hidden in shared spaces).
-class _VaultCard extends StatelessWidget {
-  const _VaultCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: ListTile(
-        leading: const Icon(Icons.savings_outlined),
-        title: const Text('Savings Vault'),
-        subtitle: const Text('Money swept out of finished months'),
-        trailing: const Icon(Icons.chevron_right),
-        onTap: () => context.push('/vault'),
-      ),
-    );
-  }
-}
-
-/// A small card that opens the Profiles screen.
-class _ProfilesCard extends StatelessWidget {
-  const _ProfilesCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: ListTile(
-        leading: const Icon(Icons.account_balance_wallet),
-        title: const Text('Budget & Direct Profiles'),
-        subtitle: const Text('Manage budget and direct expense profiles'),
-        trailing: const Icon(Icons.chevron_right),
-        onTap: () => context.push('/profiles'),
-      ),
-    );
-  }
-}
-
-/// A card with a toggle for transfers.
-class _TransferToggleCard extends ConsumerWidget {
-  const _TransferToggleCard();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final toggle = ref.watch(transferToggleProvider);
-    return Card(
-      child: SwitchListTile(
-        title: const Text('Enable Budget Transfers'),
-        subtitle: const Text('Allow moving allocation between budget profiles'),
-        value: toggle,
-        onChanged: (v) =>
-            ref.read(appSettingsRepositoryProvider).setTransferToggle(v),
-      ),
-    );
-  }
-}
-
-/// A card that opens the Transfers screen.
-class _TransfersCard extends StatelessWidget {
-  const _TransfersCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: ListTile(
-        leading: const Icon(Icons.swap_horiz),
-        title: const Text('Budget Transfers'),
-        subtitle: const Text('Move allocation between budget profiles'),
-        trailing: const Icon(Icons.chevron_right),
-        onTap: () => context.push('/transfers'),
-      ),
-    );
-  }
-}
-
-/// One group of Settings cards under its own heading.
-///
-/// The heading is a small tinted label rather than a card title, so it never
-/// competes with the `titleMedium` title each card carries of its own.
-class _Section extends StatelessWidget {
-  const _Section({required this.title, required this.cards});
-
-  final String title;
-  final List<Widget> cards;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Padding(
-      // The gap *below* a group separates it from the next heading; the gaps
-      // between cards stay small, so a group reads as one block.
-      padding: const EdgeInsets.only(bottom: 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(left: 4, bottom: 8),
-            child: Text(
-              title,
-              style: theme.textTheme.labelLarge?.copyWith(
-                color: theme.colorScheme.primary,
-                letterSpacing: 0.5,
-              ),
-            ),
-          ),
-          for (var i = 0; i < cards.length; i++) ...[
-            if (i > 0) const SizedBox(height: 12),
-            cards[i],
-          ],
-        ],
-      ),
-    );
+String _fontLabel(AppFontFamily font) {
+  switch (font) {
+    case AppFontFamily.system:
+      return SettingsCopy.systemDefault;
+    case AppFontFamily.roboto:
+      return SettingsCopy.roboto;
+    case AppFontFamily.inter:
+      return SettingsCopy.inter;
+    case AppFontFamily.openSans:
+      return SettingsCopy.openSans;
   }
 }

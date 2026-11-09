@@ -32,7 +32,7 @@ class OwnerSecurityCard extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Privacy & security', style: theme.textTheme.titleMedium),
+            Text('Security', style: theme.textTheme.titleMedium),
             const SizedBox(height: 8),
             SwitchListTile(
               key: const Key(LockKeys.spaceRequirePinSwitch),

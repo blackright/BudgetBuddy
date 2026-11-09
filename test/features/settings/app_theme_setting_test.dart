@@ -1,5 +1,6 @@
 import 'package:budget_buddy/core/models/user_profile.dart';
 import 'package:budget_buddy/core/providers/active_profile_provider.dart';
+import 'package:budget_buddy/features/settings/presentation/settings_copy.dart';
 import 'package:budget_buddy/features/settings/presentation/theme_setting_section.dart';
 import 'package:budget_buddy/features/settings/providers/settings_provider.dart';
 import 'package:flutter/material.dart';
@@ -124,7 +125,13 @@ void main() {
   });
 
   group('ThemeSettingSection', () {
-    testWidgets('renders all three options and the cached selection',
+    ChoiceChip chipFor(WidgetTester tester, AppThemeMode mode) {
+      return tester.widget<ChoiceChip>(
+        find.byKey(ThemeSettingSection.keyFor(mode)),
+      );
+    }
+
+    testWidgets('renders all three chips and the cached selection',
         (tester) async {
       final profile = UserProfile()
         ..name = 'A'
@@ -137,15 +144,20 @@ void main() {
       await tester.pumpWidget(wrap(profile: profile));
       await tester.pumpAndSettle();
 
-      expect(find.text('App Theme'), findsOneWidget);
-      expect(find.text('Light'), findsOneWidget);
+      expect(find.text(SettingsCopy.theme), findsOneWidget);
+      expect(find.byType(ChoiceChip), findsNWidgets(3));
+      expect(
+        find.byType(DropdownButtonFormField<AppThemeMode>),
+        findsNothing,
+      );
+      expect(find.text(SettingsCopy.system), findsOneWidget);
+      expect(find.text(SettingsCopy.light), findsOneWidget);
+      expect(find.text(SettingsCopy.dark), findsOneWidget);
+      expect(find.text('Follow system'), findsNothing);
 
-      await tester.tap(find.byType(DropdownButtonFormField<AppThemeMode>));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Light'), findsAtLeastNWidgets(1));
-      expect(find.text('Dark'), findsOneWidget);
-      expect(find.text('Follow system'), findsOneWidget);
+      expect(chipFor(tester, AppThemeMode.light).selected, isTrue);
+      expect(chipFor(tester, AppThemeMode.system).selected, isFalse);
+      expect(chipFor(tester, AppThemeMode.dark).selected, isFalse);
     });
 
     testWidgets('a selection persists to the real database across a rebuild',
@@ -161,14 +173,13 @@ void main() {
         wrap(profile: profile, controller: controller),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Follow system'), findsOneWidget);
+      expect(chipFor(tester, AppThemeMode.system).selected, isTrue);
 
-      await tester.tap(find.byType(DropdownButtonFormField<AppThemeMode>));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Dark'));
+      await tester
+          .tap(find.byKey(ThemeSettingSection.keyFor(AppThemeMode.dark)));
       await tester.pumpAndSettle();
 
-      // The onChanged fires the write fire-and-forget inside the fake-async
+      // The onSelected fires the write fire-and-forget inside the fake-async
       // zone, so its Isar reply only drains once the real event loop turns.
       AppThemeMode? stored;
       for (var i = 0; i < 60 && stored != AppThemeMode.dark; i++) {
@@ -186,13 +197,20 @@ void main() {
       final updated = await tester.runAsync(
         () => harness.isar.userProfiles.get(profile.id),
       );
+      expect(updated?.themeMode, AppThemeMode.dark,
+          reason: 'the persisted row carries the new theme');
 
       // A fresh build of the section from the persisted row shows the choice.
+      // Dispose the old scope first so the new override is genuinely read,
+      // instead of the previous widget state surviving an in-place update.
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
       await tester.pumpWidget(
         wrap(profile: updated, controller: controller),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Dark'), findsOneWidget);
+      expect(chipFor(tester, AppThemeMode.dark).selected, isTrue);
+      expect(chipFor(tester, AppThemeMode.system).selected, isFalse);
 
       await tester.runAsync(harness.close);
     });
