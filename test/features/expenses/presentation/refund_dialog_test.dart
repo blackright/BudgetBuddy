@@ -1,5 +1,5 @@
 import 'package:budget_buddy/features/dashboard/providers/dashboard_providers.dart';
-import 'package:budget_buddy/features/dashboard/presentation/widgets/budget_profile_cards.dart';
+import 'package:budget_buddy/features/dashboard/presentation/widgets/budgets_ledger.dart';
 import 'dart:async';
 import 'package:budget_buddy/core/models/budget_profile.dart';
 import 'package:budget_buddy/core/models/direct_expense_profile.dart';
@@ -256,7 +256,7 @@ void main() {
     });
   }
 
-  testWidgets('colliding profile pills expand the correct collection',
+  testWidgets('colliding profile identities render as separate ledger rows',
       (tester) async {
     DashboardProfileState state(bool direct) => DashboardProfileState(
         id: 1,
@@ -275,14 +275,12 @@ void main() {
         ],
         child: const MaterialApp(
             home: Scaffold(
-                body: SingleChildScrollView(child: BudgetProfileCards())))));
-    await tester.tap(find.text('Direct one'));
+                body: SingleChildScrollView(child: BudgetsLedger())))));
     await tester.pumpAndSettle();
-    expect(find.text('Direct one'), findsNWidgets(2));
+
+    expect(find.byKey(const Key('budgetRow-budget:1')), findsOneWidget);
+    expect(find.byKey(const Key('budgetRow-direct:1')), findsOneWidget);
     expect(find.text('Budget one'), findsOneWidget);
-    await tester.tap(find.text('Budget one'));
-    await tester.pumpAndSettle();
-    expect(find.text('Budget one'), findsNWidgets(2));
     expect(find.text('Direct one'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

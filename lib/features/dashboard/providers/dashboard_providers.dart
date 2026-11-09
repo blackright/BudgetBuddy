@@ -8,8 +8,12 @@ import '../../../core/providers/budget_context_provider.dart';
 import '../../../core/services/borrowing_service.dart';
 import '../../../core/services/profile_spending_service.dart';
 import '../../engine/currency_resolution.dart';
+import '../../engine/month_summary.dart';
+import '../../engine/providers/month_summary_provider.dart';
 import '../../engine/providers/rate_registry_provider.dart';
 import '../../engine/providers/true_available_provider.dart';
+import '../../finance/providers/finance_providers.dart';
+import '../../finance/providers/income_source_providers.dart';
 import '../../finance/providers/profile_providers.dart';
 import '../../finance/providers/reserve_providers.dart';
 import '../../settings/providers/settings_provider.dart';
@@ -244,3 +248,64 @@ final dashboardCurrencyProvider = Provider<CurrencyCode>((ref) {
   final month = ref.watch(activeBudgetProvider).value;
   return resolveContextDisplayCurrency(month, main);
 });
+
+/// The selected month's verdict as data state.
+///
+/// [monthSummaryProvider] is synchronous, so on its own it cannot tell the
+/// hero whether a zero is real, still loading or the result of a failed stream.
+/// This wrapper watches the data the summary reads, reports loading/error, and
+/// catches the confirmed-income `FormatException` from
+/// [resolvedIncomeProvider]. The financial calculation itself is unchanged.
+final dashboardMonthVerdictProvider = Provider<AsyncValue<MonthSummary>>((ref) {
+  final dependencies = <AsyncValue<Object?>>[
+    ref.watch(activeBudgetProvider),
+    ref.watch(monthFinanceProvider),
+    ref.watch(incomeSourcesProvider),
+    ref.watch(actualIncomeLedgerProvider),
+    ref.watch(monthlyExpensesProvider),
+    ref.watch(monthlyOriginReimbursementsProvider),
+    ref.watch(monthlyCashExpensesProvider),
+    ref.watch(monthlyCashReimbursementsProvider),
+    ref.watch(budgetProfilesProvider),
+  ];
+
+  for (final dependency in dependencies) {
+    if (dependency.hasError) {
+      return AsyncError<MonthSummary>(
+        dependency.error!,
+        dependency.stackTrace ?? StackTrace.empty,
+      );
+    }
+  }
+
+  // A refresh may keep the previous value while the new stream is loading.
+  // Only an unresolved dependency should blank the hero; a refresh must not.
+  if (dependencies
+      .any((dependency) => dependency.isLoading && !dependency.hasValue)) {
+    return const AsyncLoading<MonthSummary>();
+  }
+
+  try {
+    return AsyncData<MonthSummary>(ref.watch(monthSummaryProvider));
+  } catch (error, stackTrace) {
+    return AsyncError<MonthSummary>(error, stackTrace);
+  }
+});
+
+/// Retries the month verdict after an inline failure.
+///
+/// Invalidating only the wrapper would reuse the same failed streams, so every
+/// source that can fail is invalidated as well. No financial data is changed.
+void retryDashboardVerdict(WidgetRef ref) {
+  ref.invalidate(activeBudgetProvider);
+  ref.invalidate(monthFinanceProvider);
+  ref.invalidate(incomeSourcesProvider);
+  ref.invalidate(actualIncomeLedgerProvider);
+  ref.invalidate(monthlyExpensesProvider);
+  ref.invalidate(monthlyOriginReimbursementsProvider);
+  ref.invalidate(monthlyCashExpensesProvider);
+  ref.invalidate(monthlyCashReimbursementsProvider);
+  ref.invalidate(budgetProfilesProvider);
+  ref.invalidate(monthSummaryProvider);
+  ref.invalidate(dashboardMonthVerdictProvider);
+}

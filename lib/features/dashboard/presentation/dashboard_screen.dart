@@ -1,48 +1,61 @@
-import '../../budget_setup/providers/setup_handoff_provider.dart';
-import 'widgets/onboarding_guidance_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/models/expense.dart';
 import '../../../core/providers/active_budget_provider.dart';
 import '../../../core/providers/active_profile_provider.dart';
 import '../../../core/providers/active_space_provider.dart';
-import '../../../core/providers/budget_context_provider.dart';
 import '../../../core/providers/selected_month_provider.dart';
-import '../../../shared/presentation/widgets/month_incomplete_banner.dart';
 import '../../../shared/presentation/widgets/sync_status_chip.dart';
-import '../../analytics/presentation/widgets/analytics_mini_charts.dart';
-import '../../engine/currency_resolution.dart';
-import '../../spaces/presentation/move_month_sheet.dart';
+import '../../budget_setup/providers/setup_handoff_provider.dart';
 import '../../spaces/providers/spaces_providers.dart';
+import 'dashboard_copy.dart';
 import 'month_navigator.dart';
-import 'widgets/allocation_card.dart';
-import 'widgets/savings_vault_card.dart';
-import 'widgets/budget_profile_cards.dart';
-import 'widgets/month_convert_to_menu.dart';
-import 'widgets/month_summary_card.dart';
-import 'widgets/month_summary_details.dart';
+import 'widgets/budgets_ledger.dart';
+import 'widgets/dashboard_hero.dart';
+import 'widgets/dashboard_overflow_menu.dart';
+import 'widgets/dashboard_row.dart';
+import 'widgets/secondary_rows.dart';
 
 /// The monthly financial verdict (FR-018).
 ///
-/// Rebuilt around a single dominant figure — what the user kept this month —
-/// with everything else subordinate or collapsed. Safe to Spend and True
-/// Available are gone from this view (FR-023); their providers remain for the
-/// expense screens, which still need them.
-class DashboardScreen extends ConsumerWidget {
+/// The default view now answers one question: what did the user keep this
+/// month? The hero carries the single figure, the statement row opens the full
+/// explanation, and everything else is added by later phases.
+class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends ConsumerState<DashboardScreen> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    ref.listen<String>(selectedYearMonthProvider, (previous, next) {
+      if (previous == next) return;
+      if (_scrollController.hasClients) {
+        _scrollController.jumpTo(0);
+      }
+    });
+
     final activeBudget = ref.watch(activeBudgetProvider).value;
     final profile = ref.watch(activeProfileProvider).valueOrNull;
     final handoff = ref.watch(setupHandoffProvider);
+    final yearMonth = ref.watch(selectedYearMonthProvider);
     if (setupHandoffArrived(handoff,
         profileId: profile?.id,
         isShared: ref.watch(activeSpaceIdProvider) != null,
         budgetId: activeBudget?.id,
-        yearMonth: ref.watch(selectedYearMonthProvider))) {
+        yearMonth: yearMonth)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (context.mounted && ref.read(setupHandoffProvider) == handoff) {
           ref.read(setupHandoffProvider.notifier).state = null;
@@ -51,21 +64,18 @@ class DashboardScreen extends ConsumerWidget {
     }
     final canEdit = ref.watch(activeContextCanEditProvider);
     final activeSpaceId = ref.watch(activeSpaceIdProvider);
-    final personal = !ref.watch(budgetContextProvider).isShared;
-    final display =
-        resolveDisplayCurrency(month: activeBudget, profile: profile);
-    final symbol = display.symbol;
+    final statementLabel = DashboardCopy.monthStatementLabel(yearMonth);
+    final scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(
-        automaticallyImplyLeading: false, toolbarHeight: 48,
+        automaticallyImplyLeading: false,
+        toolbarHeight: 48,
         title: const MonthNavigator(),
         // FR-008/US3 AC6: the space's sync state belongs on the month screen,
         // visible without opening settings. It cannot share the title line — the
-        // month navigator already fills it (288 logical px of the ~232 a 360 px
-        // phone leaves), so the badge sits directly **under** the month, still
-        // inside the app bar, so it never scrolls away. Only a shared space has a
-        // peer, so a personal month keeps the shorter app bar.
+        // month navigator already fills it — so the badge sits directly under
+        // the month, still inside the app bar, so it never scrolls away.
         bottom: activeSpaceId == null
             ? null
             : PreferredSize(
@@ -81,16 +91,7 @@ class DashboardScreen extends ConsumerWidget {
                   ),
                 ),
               ),
-        actions: [
-          if (activeBudget != null && canEdit) const MonthConvertToMenu(),
-          if (activeBudget != null && canEdit)
-            IconButton(
-              key: const Key('moveMonthButton'),
-              icon: const Icon(Icons.swap_horiz),
-              tooltip: 'Move this month',
-              onPressed: () => MoveMonthSheet.show(context),
-            ),
-        ],
+        actions: const [DashboardOverflowMenu()],
       ),
       body: Column(
         children: [
@@ -114,139 +115,57 @@ class DashboardScreen extends ConsumerWidget {
                   await Future.delayed(const Duration(milliseconds: 500));
                 },
                 child: ListView(
-                  padding: const EdgeInsets.all(16),
+                  controller: _scrollController,
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
                   children: [
-                    if (!ref.watch(onboardingGuidanceEligibleProvider))
-                      MonthIncompleteBanner(currencySymbol: symbol),
-                    MonthSummaryCard(
-                      currency: display,
-                      // US8: insurance returns came from medical bills; expense
-                      // returns came from ordinary expenses.
-                      onInsuranceReturnTap: () => context.go('/medical'),
-                      onExpenseReturnTap: () => context.go(
-                        '/expenses',
-                        extra: {'status': ExpenseStatus.reimbursed.name},
+                    const DashboardHero(),
+                    const SizedBox(height: 16),
+                    DashboardRow(
+                      key: const Key('monthStatementRow'),
+                      label: statementLabel,
+                      leading: Icon(
+                        Icons.receipt_long_outlined,
+                        color: scheme.onSurfaceVariant,
                       ),
+                      trailing: Icon(
+                        Icons.chevron_right,
+                        color: scheme.onSurfaceVariant,
+                      ),
+                      onTap: () => context.push('/month_summary_detail'),
+                      semanticLabel:
+                          'Month breakdown, $statementLabel, open breakdown',
                     ),
-                    const SizedBox(height: 12),
-                    if (activeSpaceId == null) const OnboardingGuidanceCard(),
-                    const AllocationCard(),
-                    if (activeSpaceId == null) ...[
+                    if (canEdit) ...[
                       const SizedBox(height: 12),
-                      const SavingsVaultCard(),
-                    ],
-                    const SizedBox(height: 12),
-                    MonthSummaryDetails(
-                      currency: display,
-                      // The selected month lives in a provider, so the Medical tab opens
-                      // on the same month with no route parameter to carry (FR-022,
-                      // FR-027).
-                      onMedicalTap: () => context.go('/medical'),
-                      onInsuranceReturnTap: () => context.go('/medical'),
-                      onExpenseReturnTap: () => context.go(
-                        '/expenses',
-                        extra: {'status': ExpenseStatus.reimbursed.name},
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    // T142: the profiles section sits between the month details
-                    // and the analytics, so the budget picture is read before
-                    // the charts.
-                    const BudgetProfileCards(),
-                    const SizedBox(height: 12),
-                    const AnalyticsMiniCharts(),
-                    const SizedBox(height: 24),
-                    Row(
-                      children: [
-                        Container(
-                          width: 34,
-                          height: 34,
-                          decoration: BoxDecoration(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .primary
-                                .withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Icon(Icons.bolt_outlined,
-                              size: 20,
-                              color: Theme.of(context).colorScheme.primary),
-                        ),
-                        const SizedBox(width: 10),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Quick actions',
-                              style: TextStyle(
-                                  fontSize: 18, fontWeight: FontWeight.w800),
-                            ),
-                            Text(
-                              'Jump straight to what you need',
-                              style: TextStyle(
-                                  fontSize: 12,
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurfaceVariant),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    LayoutBuilder(
-                      builder: (context, constraints) {
-                        final actions = <_QuickAction>[
-                          if (canEdit)
-                            _QuickAction(
-                              icon: Icons.add_card_outlined,
-                              label: 'Add Expense',
-                              hint: 'Record new spending',
-                              color: Theme.of(context).colorScheme.primary,
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _DashboardActionButton(
+                              key: const Key('addExpenseAction'),
+                              icon: Icons.add,
+                              label: DashboardCopy.addExpense,
+                              filled: true,
                               onTap: () => context.push('/add_expense'),
                             ),
-                          _QuickAction(
-                            icon: Icons.medical_services_outlined,
-                            label: 'Medical',
-                            hint: 'Claims, bills and refunds',
-                            color: Colors.teal,
-                            onTap: () => context.go('/medical'),
                           ),
-                          if (personal)
-                            _QuickAction(
-                              key: const Key('vaultQuickAction'),
-                              icon: Icons.savings_outlined,
-                              label: 'Savings Vault',
-                              hint: 'Your saved money and history',
-                              color: Colors.indigo,
-                              onTap: () => context.push('/vault'),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _DashboardActionButton(
+                              key: const Key('addMedicalBillAction'),
+                              icon: Icons.medical_services_outlined,
+                              label: DashboardCopy.addMedicalBill,
+                              filled: false,
+                              onTap: () => context.push('/medical_bill_form'),
                             ),
-                          _QuickAction(
-                            icon: Icons.history,
-                            label: 'History',
-                            hint: 'Your audit trail',
-                            color: Colors.purple,
-                            onTap: () => context.push('/audit_history'),
                           ),
-                        ];
-                        final columns = constraints.maxWidth >= 540 ? 3 : 2;
-                        final width =
-                            (constraints.maxWidth - (columns - 1) * 12) /
-                                columns;
-                        return Wrap(
-                          spacing: 12,
-                          runSpacing: 12,
-                          children: [
-                            for (final action in actions)
-                              SizedBox(
-                                width: width,
-                                child: _QuickActionCard(
-                                    key: action.key, action: action),
-                              ),
-                          ],
-                        );
-                      },
-                    ),
+                        ],
+                      ),
+                    ],
+                    const SizedBox(height: 24),
+                    const BudgetsLedger(),
+                    const SizedBox(height: 16),
+                    const SecondaryRows(),
+                    const SizedBox(height: 24),
                   ],
                 ),
               ),
@@ -258,85 +177,60 @@ class DashboardScreen extends ConsumerWidget {
   }
 }
 
-class _QuickAction {
-  const _QuickAction({
-    this.key,
+class _DashboardActionButton extends StatelessWidget {
+  const _DashboardActionButton({
+    super.key,
     required this.icon,
     required this.label,
-    required this.hint,
-    required this.color,
+    required this.filled,
     required this.onTap,
   });
 
-  final Key? key;
   final IconData icon;
   final String label;
-  final String hint;
-  final Color color;
+  final bool filled;
   final VoidCallback onTap;
-}
-
-class _QuickActionCard extends StatelessWidget {
-  const _QuickActionCard({super.key, required this.action});
-
-  final _QuickAction action;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Material(
-      color: action.color.withValues(alpha: 0.08),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: BorderSide(color: action.color.withValues(alpha: 0.22)),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: action.onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+    final background = filled ? scheme.primary : scheme.primaryContainer;
+    final foreground = filled ? scheme.onPrimary : scheme.onPrimaryContainer;
+
+    return Semantics(
+      button: true,
+      label: label,
+      child: SizedBox(
+        height: 64,
+        child: Material(
+          color: background,
+          borderRadius: BorderRadius.circular(16),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Row(
                 children: [
-                  Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      color: action.color.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(11),
+                  Icon(icon, size: 20, color: foreground),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                              color: foreground,
+                              fontWeight: FontWeight.w700,
+                            ),
+                      ),
                     ),
-                    child: Icon(action.icon, color: action.color, size: 21),
                   ),
-                  const Spacer(),
-                  Icon(Icons.arrow_outward_rounded,
-                      size: 17, color: action.color),
                 ],
               ),
-              const SizedBox(height: 10),
-              Text(
-                action.label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
-                  color: action.color,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                action.hint,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 11.5,
-                  height: 1.25,
-                  color: scheme.onSurfaceVariant,
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),

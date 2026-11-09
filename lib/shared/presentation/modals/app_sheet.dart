@@ -62,6 +62,7 @@ class AppSheet extends StatelessWidget {
     super.key,
     this.title,
     this.subtitle,
+    this.titleStyle,
     this.leading,
     required this.body,
     this.footer,
@@ -78,6 +79,10 @@ class AppSheet extends StatelessWidget {
 
   final String? title;
   final String? subtitle;
+
+  /// Overrides the default `titleLarge` header style. The title colour still
+  /// follows the active scheme so dark mode remains legible.
+  final TextStyle? titleStyle;
   final Widget? leading;
   final Widget body;
   final Widget? footer;
@@ -140,10 +145,13 @@ class AppSheet extends StatelessWidget {
                                   child: Text(
                                     title!,
                                     key: titleKey,
-                                    style: theme.textTheme.titleLarge?.copyWith(
-                                      color: scheme.onSurface,
-                                      fontWeight: FontWeight.w700,
-                                    ),
+                                    style: titleStyle?.copyWith(
+                                          color: scheme.onSurface,
+                                        ) ??
+                                        theme.textTheme.titleLarge?.copyWith(
+                                          color: scheme.onSurface,
+                                          fontWeight: FontWeight.w700,
+                                        ),
                                   ),
                                 ),
                               if (subtitle != null) ...[

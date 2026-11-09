@@ -69,49 +69,34 @@ class _MoveMonthSheetState extends ConsumerState<MoveMonthSheet> {
     final from = ref.watch(budgetContextProvider);
     final actingProfileId = ref.watch(activeProfileProvider).value?.id;
 
-    return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.only(
-          left: 24,
-          right: 24,
-          top: 24,
-          bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-        ),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Move ${from.yearMonth}',
-                  style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: 4),
-              Text(
-                from.isShared
-                    ? 'Choose a personal profile to move this month into.'
-                    : 'Choose a shared space to move this month into.',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              const SizedBox(height: 20),
-              if (actingProfileId == null)
-                const Text('No active profile.')
-              else if (_busy)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 24),
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              else if (from.isShared)
-                _PersonalTargets(
-                  yearMonth: from.yearMonth,
-                  onPick: (to) => _move(from, to, actingProfileId),
-                )
-              else
-                _SpaceTargets(
-                  yearMonth: from.yearMonth,
-                  onPick: (to) => _move(from, to, actingProfileId),
-                ),
-            ],
-          ),
-        ),
+    return AppSheet(
+      key: const Key('moveMonthSheet'),
+      title: 'Move ${from.yearMonth}',
+      subtitle: from.isShared
+          ? 'Choose a personal profile to move this month into.'
+          : 'Choose a shared space to move this month into.',
+      body: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (actingProfileId == null)
+            const Text('No active profile.')
+          else if (_busy)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (from.isShared)
+            _PersonalTargets(
+              yearMonth: from.yearMonth,
+              onPick: (to) => _move(from, to, actingProfileId),
+            )
+          else
+            _SpaceTargets(
+              yearMonth: from.yearMonth,
+              onPick: (to) => _move(from, to, actingProfileId),
+            ),
+        ],
       ),
     );
   }

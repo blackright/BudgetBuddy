@@ -14,32 +14,43 @@ class MonthNavigator extends ConsumerWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         IconButton(
+          key: const Key('previousMonth'),
           icon: const Icon(Icons.chevron_left),
           onPressed: () {
             ref.read(selectedYearMonthProvider.notifier).state =
                 previousMonth(yearMonth);
           },
-          tooltip: 'Previous Month',
+          tooltip: 'Previous month',
         ),
-        Text(
-          monthLabel(yearMonth),
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+        Flexible(
+          child: Text(
+            monthLabel(yearMonth),
+            key: const Key('monthLabel'),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
         ),
         IconButton(
+          key: const Key('nextMonth'),
           icon: const Icon(Icons.chevron_right),
           onPressed: () {
             ref.read(selectedYearMonthProvider.notifier).state =
                 nextMonth(yearMonth);
           },
-          tooltip: 'Next Month',
+          tooltip: 'Next month',
         ),
         if (!isToday)
           IconButton(
+            key: const Key('todayButton'),
             icon: const Icon(Icons.today, size: 20),
             onPressed: () {
               ref.read(selectedYearMonthProvider.notifier).state = goToToday();
             },
-            tooltip: 'Go to Today',
+            tooltip: 'Today',
           ),
       ],
     );

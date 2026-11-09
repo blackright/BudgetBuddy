@@ -3,6 +3,7 @@ import 'package:budget_buddy/core/models/money.dart';
 import 'package:budget_buddy/core/models/monthly_budget.dart';
 import 'package:budget_buddy/core/models/user_profile.dart';
 import 'package:budget_buddy/core/network/rate_types.dart';
+import 'package:budget_buddy/features/dashboard/presentation/widgets/month_currency_choices.dart';
 import 'package:budget_buddy/features/engine/currency_resolution.dart';
 import 'package:budget_buddy/features/engine/providers/rate_registry_provider.dart';
 import 'package:budget_buddy/features/finance/repositories/month_finance_repository.dart';
@@ -121,6 +122,19 @@ void main() {
           CurrencyCode.cad);
       expect(resolveDisplayCurrency(month: febReload.single, profile: profile),
           CurrencyCode.eur);
+    });
+  });
+
+  group('shared Dashboard convert menu', () {
+    test('keeps the default first and lists every currency', () {
+      final choices = monthCurrencyChoices(CurrencyCode.huf);
+
+      expect(choices.first.value, isNull);
+      expect(choices.first.label, 'Show in Forint (default)');
+      expect(
+        choices.skip(1).map((choice) => choice.value).toList(),
+        CurrencyCode.values,
+      );
     });
   });
 

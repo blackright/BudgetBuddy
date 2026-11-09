@@ -7,7 +7,8 @@ import 'package:budget_buddy/core/models/user_profile.dart';
 import 'package:budget_buddy/core/models/monthly_budget.dart';
 import 'package:budget_buddy/core/providers/active_profile_provider.dart';
 import 'package:budget_buddy/core/providers/budget_context_provider.dart';
-import 'package:budget_buddy/features/dashboard/presentation/widgets/savings_vault_card.dart';
+import 'package:budget_buddy/features/dashboard/presentation/widgets/onboarding_guidance_card.dart';
+import 'package:budget_buddy/features/dashboard/presentation/widgets/secondary_rows.dart';
 import 'package:budget_buddy/features/engine/providers/sweep_provider.dart';
 import 'package:budget_buddy/features/engine/providers/rate_registry_provider.dart';
 import 'package:budget_buddy/features/vault/models/savings_vault.dart';
@@ -458,19 +459,22 @@ void main() {
       await tester.pumpWidget(ProviderScope(overrides: [
         budgetContextProvider.overrideWithValue(
             ContextRef.shared(spaceId: 2, yearMonth: '2026-10')),
-      ], child: const MaterialApp(home: Scaffold(body: SavingsVaultCard()))));
+        onboardingGuidanceProvider.overrideWithValue(
+          const AsyncData(<SetupSuggestion>[]),
+        ),
+      ], child: const MaterialApp(home: Scaffold(body: SecondaryRows()))));
       await settle(tester);
-      expect(find.textContaining('across months'), findsNothing);
+      expect(find.byKey(const Key('savingsCard')), findsNothing);
     });
   });
 
-  testWidgets('dashboard card navigates to vault and labels lifetime balance',
+  testWidgets('dashboard row navigates to vault and labels lifetime balance',
       (tester) async {
     await tester.runAsync(() async {
       final router = GoRouter(routes: [
         GoRoute(
             path: '/',
-            builder: (_, __) => const Scaffold(body: SavingsVaultCard())),
+            builder: (_, __) => const Scaffold(body: SecondaryRows())),
         GoRoute(path: '/vault', builder: (_, __) => const VaultScreen()),
       ]);
       addTearDown(router.dispose);
@@ -478,10 +482,13 @@ void main() {
         activeProfileProvider.overrideWith((ref) => Stream.value(profile)),
         budgetContextProvider.overrideWithValue(
             ContextRef.personal(profileId: 1, yearMonth: '2026-10')),
+        onboardingGuidanceProvider.overrideWithValue(
+          const AsyncData(<SetupSuggestion>[]),
+        ),
       ], child: MaterialApp.router(routerConfig: router)));
       await settle(tester);
       expect(find.text('Ft 1,000,000'), findsOneWidget);
-      await tester.tap(find.text('Savings Vault • across months'));
+      await tester.tap(find.byKey(const Key('savingsCard')));
       await settle(tester);
       expect(find.byType(VaultScreen), findsOneWidget);
     });
@@ -495,13 +502,16 @@ void main() {
       await tester.pumpWidget(ProviderScope(overrides: [
         budgetContextProvider.overrideWithValue(
             ContextRef.personal(profileId: 1, yearMonth: '2026-10')),
+        onboardingGuidanceProvider.overrideWithValue(
+          const AsyncData(<SetupSuggestion>[]),
+        ),
         vaultProvider.overrideWith((ref) => stream.stream),
-      ], child: const MaterialApp(home: Scaffold(body: SavingsVaultCard()))));
+      ], child: const MaterialApp(home: Scaffold(body: SecondaryRows()))));
       await tester.pump();
-      expect(find.text('Loading savings…'), findsOneWidget);
+      expect(find.text('Loading'), findsOneWidget);
       stream.addError(StateError('load failed'));
       await settle(tester);
-      expect(find.textContaining('could not be loaded'), findsOneWidget);
+      expect(find.text("Couldn't load"), findsOneWidget);
       expect(find.textContaining('Ft 0'), findsNothing);
     });
   });

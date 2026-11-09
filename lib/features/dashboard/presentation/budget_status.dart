@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/models/currency_code.dart';
 import '../../../core/services/borrowing_service.dart';
 import '../../../core/services/continuous_balance_service.dart';
+import '../../../shared/presentation/money_format.dart';
 
 /// The colours a budget profile card is painted with (FR-014).
 ///
@@ -41,6 +43,28 @@ extension BudgetStatusColors on BudgetStatus {
         return 'Fully used';
       case BudgetStatus.red:
         return 'Over budget';
+    }
+  }
+}
+
+/// Dashboard wording for a budget status.
+///
+/// Other screens keep using [BudgetStatusColors.label]. The Dashboard uses the
+/// approved short vocabulary and always states an over-budget amount in words.
+extension DashboardBudgetStatusCopy on BudgetStatus {
+  String dashboardLabel({
+    required CurrencyCode currency,
+    int overspendMinor = 0,
+  }) {
+    switch (this) {
+      case BudgetStatus.green:
+        return 'On track';
+      case BudgetStatus.yellow:
+        return 'Close';
+      case BudgetStatus.orange:
+        return 'Fully used';
+      case BudgetStatus.red:
+        return 'Over by ${formatMinorUnits(overspendMinor, currency)}';
     }
   }
 }

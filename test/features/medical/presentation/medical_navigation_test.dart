@@ -36,9 +36,8 @@ void main() {
   });
 
   Future<void> pumpApp(WidgetTester tester) async {
-    // The month summary makes the dashboard taller than the default 800x600
-    // surface, which leaves the quick-action row underneath the bottom nav bar.
-    // A taller surface keeps the tap on the widget it names.
+    // The dashboard is taller than the default 800x600 surface. A taller
+    // surface keeps the asserted widgets in view without scrolling.
     tester.view.physicalSize = const Size(1000, 2400);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -94,21 +93,18 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('dashboard Medical quick action opens the Medical dashboard',
+  testWidgets('dashboard no longer exposes a Medical quick action',
       (tester) async {
     await pumpApp(tester);
 
-    // Scoped to the dashboard, not .first/.last: the nav bar also has a Medical
-    // tab, and the summary card makes this column taller than the viewport.
+    // The Revolut-style dashboard retired the quick-action grid, so Medical is
+    // reached from the navigation bar instead (covered by the next test).
     final quickAction = find.descendant(
       of: find.byType(DashboardScreen),
       matching: find.text('Medical'),
     );
-    await tester.tap(quickAction);
-    await tester.pumpAndSettle();
-
-    expect(find.text('Health & Insurance'), findsOneWidget);
-    expect(find.text('Medical Bills Placeholder'), findsNothing);
+    expect(quickAction, findsNothing);
+    expect(find.text('Health & Insurance'), findsNothing);
   });
 
   testWidgets('Medical navigation tab opens the Medical dashboard',

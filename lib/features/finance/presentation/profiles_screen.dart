@@ -17,6 +17,7 @@ import '../../../shared/presentation/money_format.dart';
 import '../../../shared/presentation/modals/app_confirm.dart';
 import '../../../shared/presentation/modals/app_dialog.dart';
 import '../../dashboard/presentation/budget_status.dart';
+import '../../medical/presentation/medical_theme.dart';
 import '../../engine/currency_resolution.dart';
 import '../../engine/providers/rate_registry_provider.dart';
 import '../../engine/providers/true_available_provider.dart';
@@ -44,43 +45,60 @@ class ProfilesScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Profiles')),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
         children: [
           _ProfileGroupCard(
-            title: 'Budget Profiles',
+            title: 'Budget profiles',
             description:
-                'Profiles that receive allocations from your reserve. Spending beyond allocation borrows from reserve.',
+                'Money set aside for each budget. Overspending borrows from your reserve.',
             profiles: budgetProfiles,
             isBudget: true,
             currency: currency,
             expenses: expenses,
             yearMonth: yearMonth,
+            onAdd: () => _showAddDialog(
+              context,
+              ref,
+              currency,
+              initialIsBudget: true,
+            ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
           _ProfileGroupCard(
-            title: 'Direct Expense Profiles',
+            title: 'Direct profiles',
             description:
-                'Profiles that spend directly from your reserve without allocations or borrowing.',
+                'Spend straight from your reserve without an allocation.',
             profiles: directProfiles,
             isBudget: false,
             currency: currency,
             expenses: expenses,
             yearMonth: yearMonth,
+            onAdd: () => _showAddDialog(
+              context,
+              ref,
+              currency,
+              initialIsBudget: false,
+            ),
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showAddDialog(context, ref, currency),
-        child: const Icon(Icons.add),
+        icon: const Icon(Icons.add),
+        label: const Text('Add profile'),
       ),
     );
   }
 
   Future<void> _showAddDialog(
-      BuildContext context, WidgetRef ref, CurrencyCode currency) async {
+    BuildContext context,
+    WidgetRef ref,
+    CurrencyCode currency, {
+    bool initialIsBudget = true,
+  }) async {
     final nameController = TextEditingController();
     final amountController = TextEditingController();
-    var isBudget = true;
+    var isBudget = initialIsBudget;
     await showAppDialog<void>(
       context: context,
       builder: (context) {
@@ -180,6 +198,7 @@ class _ProfileGroupCard extends ConsumerWidget {
     required this.currency,
     required this.expenses,
     required this.yearMonth,
+    required this.onAdd,
   });
 
   final String title;
@@ -189,126 +208,104 @@ class _ProfileGroupCard extends ConsumerWidget {
   final CurrencyCode currency;
   final List<Expense> expenses;
   final String yearMonth;
+  final VoidCallback onAdd;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final availableReserve = ref.watch(availableReserveProvider);
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
           children: [
-            Text(title,
-                style: theme.textTheme.titleMedium
-                    ?.copyWith(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 4),
-            Text(description, style: theme.textTheme.bodySmall),
-            const SizedBox(height: 12),
+            Expanded(
+              child: Text(
+                title,
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
             _SortMenu(
               onChanged: (order) =>
                   ref.read(profileSortOrderProvider.notifier).state = order,
             ),
-            const SizedBox(height: 4),
-            profiles.when(
-              data: (items) {
-                if (items.isEmpty) {
-                  return const Text('No profiles yet.');
-                }
-                final order = ref.watch(profileSortOrderProvider);
-                final table =
-                    ref.watch(rateRegistryProvider).tableFor(yearMonth);
-                final sorted = _sorted(
-                  items,
-                  order,
-                  isBudget,
-                  expenses,
-                  yearMonth,
-                  (expense) =>
-                      expenseToDisplay(expense, currency, table).minorUnits,
-                  ref.watch(monthlyReimbursementsProvider).value ?? const [],
-                  (r) => reimbursementToDisplay(r, currency, table).minorUnits,
-                );
-                return Column(
-                  children: sorted.map((entry) {
-                    final p = entry.profile;
-                    final name = (p as dynamic).name as String;
-                    final allocation = entry.allocation;
-                    final spent = entry.spent;
-                    final remaining = allocation - spent;
-                    final state = ProfileBorrowingState(
-                      allocation: allocation,
-                      spent: spent,
-                      availableReserve: availableReserve,
-                    );
-                    final subtitle = isBudget
-                        ? 'Allocated: ${formatMinorUnits(allocation, currency)} • '
-                            'Spent: ${formatMinorUnits(spent, currency)} • '
-                            'Left: ${formatMinorUnits(remaining, currency)}'
-                        : 'Spent from reserve: '
-                            '${formatMinorUnits(spent, currency)}';
-                    return ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(name),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(subtitle),
-                          if (isBudget && state.borrowed > 0)
-                            Text(
-                              'Borrowed from reserve: '
-                              '${formatMinorUnits(state.borrowed, currency)}',
-                              style: TextStyle(
-                                color: state.status.color,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          if (isBudget && state.deficit > 0)
-                            Text(
-                              'Deficit: '
-                              '${formatMinorUnits(state.deficit, currency)}',
-                              style: TextStyle(
-                                color: BudgetStatus.red.color,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                        ],
-                      ),
-                      // T132: tapping a profile opens that profile's own view.
-                      onTap: () => openProfileExpenses(
-                          context, entry.profile.id,
-                          isDirect: !isBudget),
-                      leading: Icon(
-                        isBudget
-                            ? Icons.account_balance_wallet
-                            : Icons.receipt_long,
-                        color: isBudget ? state.status.color : null,
-                      ),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.edit),
-                            onPressed: () =>
-                                _editProfile(context, ref, p, currency),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.delete),
-                            onPressed: () => _deleteProfile(context, ref, p),
-                          ),
-                        ],
-                      ),
-                    );
-                  }).toList(),
-                );
-              },
-              loading: () => const CircularProgressIndicator(),
-              error: (e, _) => Text('Error: $e'),
-            ),
           ],
         ),
-      ),
+        const SizedBox(height: 2),
+        Padding(
+          padding: const EdgeInsets.only(right: 8),
+          child: Text(
+            description,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        profiles.when(
+          data: (items) {
+            if (items.isEmpty) {
+              return _EmptyProfilesCard(
+                key: Key(
+                  isBudget ? 'budgetProfilesEmpty' : 'directProfilesEmpty',
+                ),
+                label: isBudget
+                    ? 'Create your first budget'
+                    : 'Create your first direct profile',
+                onTap: onAdd,
+              );
+            }
+            final order = ref.watch(profileSortOrderProvider);
+            final table = ref.watch(rateRegistryProvider).tableFor(yearMonth);
+            final sorted = _sorted(
+              items,
+              order,
+              isBudget,
+              expenses,
+              yearMonth,
+              (expense) =>
+                  expenseToDisplay(expense, currency, table).minorUnits,
+              ref.watch(monthlyReimbursementsProvider).value ?? const [],
+              (r) => reimbursementToDisplay(r, currency, table).minorUnits,
+            );
+            return Column(
+              children: [
+                for (final entry in sorted)
+                  _ProfileCard(
+                    key: Key('profileCard-${entry.profile.id}'),
+                    entry: entry,
+                    isBudget: isBudget,
+                    currency: currency,
+                    state: ProfileBorrowingState(
+                      allocation: entry.allocation,
+                      spent: entry.spent,
+                      availableReserve: availableReserve,
+                    ),
+                    onTap: () => openProfileExpenses(
+                      context,
+                      entry.profile.id,
+                      isDirect: !isBudget,
+                    ),
+                    onEdit: () =>
+                        _editProfile(context, ref, entry.profile, currency),
+                    onDelete: () => _deleteProfile(context, ref, entry.profile),
+                  ),
+              ],
+            );
+          },
+          loading: () => const Padding(
+            padding: EdgeInsets.symmetric(vertical: 24),
+            child: Center(child: CircularProgressIndicator()),
+          ),
+          error: (e, _) => const _EmptyProfilesCard(
+            label: 'Could not load profiles.',
+            icon: Icons.error_outline,
+          ),
+        ),
+      ],
     );
   }
 
@@ -474,6 +471,366 @@ class _ProfileGroupCard extends ConsumerWidget {
   }
 }
 
+/// One profile as a standalone, bordered card.
+class _ProfileCard extends StatelessWidget {
+  const _ProfileCard({
+    super.key,
+    required this.entry,
+    required this.isBudget,
+    required this.currency,
+    required this.state,
+    required this.onTap,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  final _ProfileEntry entry;
+  final bool isBudget;
+  final CurrencyCode currency;
+  final ProfileBorrowingState state;
+  final VoidCallback onTap;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final name = entry.profile.name as String;
+    final remaining = state.remaining;
+    final over = isBudget && remaining < 0;
+    final statusColor = isBudget
+        ? MedicalTheme.semantic(context, state.status.color)
+        : scheme.primary;
+    final headlineAmount = isBudget
+        ? formatMinorUnits(remaining.abs(), currency)
+        : formatMinorUnits(entry.spent, currency);
+    final headlineLabel = isBudget ? (over ? 'Over by' : 'Left') : 'spent';
+    final statusLabel = isBudget
+        ? state.status.dashboardLabel(
+            currency: currency,
+            overspendMinor: state.overspend,
+          )
+        : 'No budget';
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: scheme.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: BorderSide(color: scheme.outlineVariant),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 4, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: isBudget
+                            ? statusColor.withValues(alpha: 0.14)
+                            : scheme.primaryContainer,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        isBudget
+                            ? Icons.account_balance_wallet_outlined
+                            : Icons.bolt_outlined,
+                        size: 20,
+                        color:
+                            isBudget ? statusColor : scheme.onPrimaryContainer,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  name,
+                                  style: theme.textTheme.bodyLarge?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Flexible(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      alignment: Alignment.centerRight,
+                                      child: Text(
+                                        headlineAmount,
+                                        maxLines: 1,
+                                        style: theme.textTheme.titleMedium
+                                            ?.copyWith(
+                                          fontWeight: FontWeight.w700,
+                                          color: over
+                                              ? MedicalTheme.semantic(
+                                                  context,
+                                                  MedicalTheme.moneyOut,
+                                                )
+                                              : scheme.onSurface,
+                                        ),
+                                      ),
+                                    ),
+                                    Text(
+                                      headlineLabel,
+                                      style:
+                                          theme.textTheme.labelSmall?.copyWith(
+                                        color: scheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            statusLabel,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: statusColor,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    PopupMenuButton<_ProfileAction>(
+                      iconSize: 20,
+                      tooltip: 'Profile actions',
+                      onSelected: (action) {
+                        switch (action) {
+                          case _ProfileAction.edit:
+                            onEdit();
+                          case _ProfileAction.delete:
+                            onDelete();
+                        }
+                      },
+                      itemBuilder: (context) => const [
+                        PopupMenuItem(
+                          value: _ProfileAction.edit,
+                          child: Text('Edit'),
+                        ),
+                        PopupMenuItem(
+                          value: _ProfileAction.delete,
+                          child: Text('Delete'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                if (isBudget) ...[
+                  const SizedBox(height: 8),
+                  Padding(
+                    padding: const EdgeInsets.only(right: 10),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(2),
+                      child: LinearProgressIndicator(
+                        value: (state.usagePercent / 100).clamp(0.0, 1.0),
+                        minHeight: 4,
+                        color: statusColor,
+                        backgroundColor: scheme.surfaceContainerHighest,
+                      ),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 10),
+                Padding(
+                  padding: const EdgeInsets.only(right: 10),
+                  child: Wrap(
+                    spacing: 18,
+                    runSpacing: 8,
+                    children: [
+                      if (isBudget) ...[
+                        _ProfileMetric(
+                          label: 'Budget',
+                          amount: entry.allocation,
+                          currency: currency,
+                        ),
+                        _ProfileMetric(
+                          label: 'Spent',
+                          amount: entry.spent,
+                          currency: currency,
+                        ),
+                        _ProfileMetric(
+                          label: 'Left',
+                          amount: remaining,
+                          currency: currency,
+                          color: over
+                              ? MedicalTheme.semantic(
+                                  context,
+                                  MedicalTheme.moneyOut,
+                                )
+                              : null,
+                        ),
+                      ] else
+                        _ProfileMetric(
+                          label: 'Spent from reserve',
+                          amount: entry.spent,
+                          currency: currency,
+                        ),
+                    ],
+                  ),
+                ),
+                if (isBudget && state.borrowed > 0) ...[
+                  const SizedBox(height: 8),
+                  _ProfileNote(
+                    label: 'Borrowed',
+                    amountMinor: state.borrowed,
+                    currency: currency,
+                    color: MedicalTheme.semantic(context, MedicalTheme.planned),
+                  ),
+                ],
+                if (isBudget && state.deficit > 0) ...[
+                  const SizedBox(height: 4),
+                  _ProfileNote(
+                    label: 'Deficit',
+                    amountMinor: state.deficit,
+                    currency: currency,
+                    color: MedicalTheme.semantic(
+                      context,
+                      MedicalTheme.moneyOut,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileMetric extends StatelessWidget {
+  const _ProfileMetric({
+    required this.label,
+    required this.amount,
+    required this.currency,
+    this.color,
+  });
+
+  final String label;
+  final int amount;
+  final CurrencyCode currency;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          label,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: scheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          formatMinorUnits(amount.abs(), currency),
+          style: theme.textTheme.bodyMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+            color: color ?? scheme.onSurface,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ProfileNote extends StatelessWidget {
+  const _ProfileNote({
+    required this.label,
+    required this.amountMinor,
+    required this.currency,
+    required this.color,
+  });
+
+  final String label;
+  final int amountMinor;
+  final CurrencyCode currency;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Text.rich(
+      TextSpan(
+        children: [
+          TextSpan(text: '$label: '),
+          TextSpan(
+            text: formatMinorUnits(amountMinor, currency),
+            style: TextStyle(fontWeight: FontWeight.w600, color: color),
+          ),
+        ],
+      ),
+      style: theme.textTheme.bodySmall?.copyWith(color: color),
+    );
+  }
+}
+
+class _EmptyProfilesCard extends StatelessWidget {
+  const _EmptyProfilesCard({
+    super.key,
+    required this.label,
+    this.icon = Icons.add_circle_outline,
+    this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final content = Padding(
+      padding: const EdgeInsets.fromLTRB(14, 14, 12, 14),
+      child: Row(
+        children: [
+          Icon(icon, color: scheme.primary),
+          const SizedBox(width: 12),
+          Expanded(child: Text(label)),
+          if (onTap != null)
+            Icon(Icons.chevron_right, color: scheme.onSurfaceVariant),
+        ],
+      ),
+    );
+    return Material(
+      color: scheme.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(color: scheme.outlineVariant),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: onTap == null ? content : InkWell(onTap: onTap, child: content),
+    );
+  }
+}
+
+enum _ProfileAction { edit, delete }
+
 /// How the profiles in a card are ordered.
 enum ProfileSortOrder {
   name,
@@ -506,27 +863,24 @@ class _SortMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerRight,
-      child: PopupMenuButton<ProfileSortOrder>(
-        icon: const Icon(Icons.sort),
-        tooltip: 'Sort profiles',
-        onSelected: onChanged,
-        itemBuilder: (context) => const [
-          PopupMenuItem(
-            value: ProfileSortOrder.name,
-            child: Text('Sort by name'),
-          ),
-          PopupMenuItem(
-            value: ProfileSortOrder.allocation,
-            child: Text('Sort by allocation'),
-          ),
-          PopupMenuItem(
-            value: ProfileSortOrder.spent,
-            child: Text('Sort by spending'),
-          ),
-        ],
-      ),
+    return PopupMenuButton<ProfileSortOrder>(
+      icon: const Icon(Icons.sort),
+      tooltip: 'Sort profiles',
+      onSelected: onChanged,
+      itemBuilder: (context) => const [
+        PopupMenuItem(
+          value: ProfileSortOrder.name,
+          child: Text('Sort by name'),
+        ),
+        PopupMenuItem(
+          value: ProfileSortOrder.allocation,
+          child: Text('Sort by allocation'),
+        ),
+        PopupMenuItem(
+          value: ProfileSortOrder.spent,
+          child: Text('Sort by spending'),
+        ),
+      ],
     );
   }
 }

@@ -438,6 +438,20 @@ void main() {
     /// The dashboard's own provider set (mirrors `dashboard_summary_test.dart`),
     /// plus the shared-space marker so the space strip is on screen.
     Widget dashboard({int? spaceId, SyncStatusFacts? facts}) {
+      const summary = MonthSummary(
+        yearMonth: '2026-01',
+        income: 4000,
+        usesOverriddenIncome: false,
+        paymentsMade: 1200,
+        moneyReturned: 300,
+        planned: 800,
+        cancelled: 150,
+        medicalPaid: 200,
+        excessReturned: 0,
+        insuranceReturned: 0,
+        expenseReturned: 0,
+        openingBalance: 1000,
+      );
       return ProviderScope(
         overrides: [
           activeProfileProvider.overrideWith((ref) => Stream.value(null)),
@@ -445,21 +459,9 @@ void main() {
             ContextRef.personal(profileId: 1, yearMonth: '2026-01'),
           ),
           activeBudgetProvider.overrideWith((ref) => Stream.value(budget())),
-          monthSummaryProvider.overrideWithValue(
-            const MonthSummary(
-              yearMonth: '2026-01',
-              income: 4000,
-              usesOverriddenIncome: false,
-              paymentsMade: 1200,
-              moneyReturned: 300,
-              planned: 800,
-              cancelled: 150,
-              medicalPaid: 200,
-              excessReturned: 0,
-              insuranceReturned: 0,
-              expenseReturned: 0,
-              openingBalance: 1000,
-            ),
+          monthSummaryProvider.overrideWithValue(summary),
+          dashboardMonthVerdictProvider.overrideWithValue(
+            const AsyncData(summary),
           ),
           rateRegistryProvider.overrideWithValue(RateTableRegistry()),
           mainCurrencyProvider.overrideWithValue(CurrencyCode.huf),

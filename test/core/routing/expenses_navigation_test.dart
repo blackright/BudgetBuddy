@@ -47,6 +47,20 @@ void main() {
           ..yearMonth = '2026-01'
           ..baseAvailableAmount = 1000
           ..currency = displayCurrency.code);
+    const defaultSummary = MonthSummary(
+      yearMonth: '2026-01',
+      income: 4000,
+      usesOverriddenIncome: false,
+      paymentsMade: 1200,
+      moneyReturned: 300,
+      expenseReturned: 300,
+      planned: 800,
+      cancelled: 0,
+      medicalPaid: 200,
+      excessReturned: 0,
+      openingBalance: 1000,
+    );
+    final effectiveSummary = summary ?? defaultSummary;
     tester.view.physicalSize = const Size(1000, 2400);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -83,21 +97,9 @@ void main() {
           directExpenseProfilesProvider.overrideWith((ref) => Stream.value([])),
           contextExpensesProvider.overrideWithValue([]),
           availableReserveProvider.overrideWithValue(0),
-          monthSummaryProvider.overrideWithValue(
-            summary ??
-                const MonthSummary(
-                  yearMonth: '2026-01',
-                  income: 4000,
-                  usesOverriddenIncome: false,
-                  paymentsMade: 1200,
-                  moneyReturned: 300,
-                  expenseReturned: 300,
-                  planned: 800,
-                  cancelled: 0,
-                  medicalPaid: 200,
-                  excessReturned: 0,
-                  openingBalance: 1000,
-                ),
+          monthSummaryProvider.overrideWithValue(effectiveSummary),
+          dashboardMonthVerdictProvider.overrideWithValue(
+            AsyncData(effectiveSummary),
           ),
           monthlyExpensesProvider.overrideWith((ref) => Stream.value([])),
           monthlyOriginReimbursementsProvider
@@ -127,7 +129,7 @@ void main() {
   }
 
   Future<void> openSummary(WidgetTester tester) async {
-    await tester.tap(find.byKey(const Key('keptHero')));
+    await tester.tap(find.byKey(const Key('monthStatementRow')));
     await tester.pumpAndSettle();
     expect(find.byType(MonthSummaryDetailScreen), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -203,19 +205,16 @@ void main() {
     expect(find.text(r'$ 2,200.00'), findsNWidgets(2));
     expect(find.text(r'$ 4,100.00'), findsOneWidget);
     expectRow(tester, 'Income', r'$ 4,000.00');
-    expectRow(tester, 'Paid out', r'- $ 1,200.00');
-    expectRow(tester, 'Returned', r'+ $ 300.00');
-    expectRow(tester, 'Set aside for budgets', r'- $ 800.00');
-    expectRow(tester, 'Borrowed so far', r'$ 12.34');
-    expectRow(tester, 'Carry over', r'- $ 100.00');
+    expectRow(tester, 'Money paid out', r'- $ 1,200.00');
+    expectRow(tester, 'Money back', r'+ $ 300.00');
+    expectRow(tester, 'Budget set-aside', r'- $ 800.00');
+    expectRow(tester, 'Borrowed from reserve', r'$ 12.34');
+    expectRow(tester, 'Held for next month', r'- $ 100.00');
     expect(
         find.text(
-            'Kept = Income − Paid out + Returned − Set aside for budgets − Carry over'),
+            'Formula: Income − money paid out + money back − budget set-aside − held for next month + carried over from last month + released at month end'),
         findsOneWidget);
-    expect(
-        find.text(
-            'Borrowing is already included in paid out; it is not subtracted again.'),
-        findsOneWidget);
+    expect(find.text('Already included in money paid out'), findsOneWidget);
   });
 
   testWidgets(
@@ -223,7 +222,7 @@ void main() {
       (tester) async {
     await pumpApp(tester, summary: detailedSummary(carryOver: -50));
     await openSummary(tester);
-    expectRow(tester, 'Carry over', '+ Ft 50');
+    expectRow(tester, 'Held for next month', '+ Ft 50');
     expect(find.text('Ft 2,350'), findsNWidgets(2));
   });
 
@@ -234,32 +233,20 @@ void main() {
     await openSummary(tester);
     expect(
         find.text(
-            'Opening balance not confirmed yet. Confirm it in this month to see money in bank.'),
+            'Opening balance not confirmed yet. Confirm it in this month to see money in the bank.'),
         findsOneWidget);
     expect(find.text('Ft 4,100'), findsNothing);
   });
 
-  testWidgets(
-      'info button opens only its dialog, card body opens detail, and Back returns',
+  testWidgets('statement row opens the statement and Back returns',
       (tester) async {
     final router = await pumpApp(tester);
-    final card = find.byKey(const Key('monthSummaryCard'));
-    await tester.tap(find.descendant(
-      of: card,
-      matching: find.byIcon(Icons.info_outline),
-    ));
-    await tester.pumpAndSettle();
-    expect(find.byType(AlertDialog), findsOneWidget);
-    expect(find.byType(MonthSummaryDetailScreen), findsNothing);
-    await tester.tap(find.text('OK'));
-    await tester.pumpAndSettle();
-    expect(router.canPop(), isFalse);
 
-    // The supporting line is part of the whole card, outside its hero amount.
-    await tester.tap(find.descendant(of: card, matching: find.text('Income')));
+    await tester.tap(find.byKey(const Key('monthStatementRow')));
     await tester.pumpAndSettle();
     expect(find.byType(MonthSummaryDetailScreen), findsOneWidget);
     expect(router.canPop(), isTrue);
+
     await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
     expect(find.byType(MonthSummaryDetailScreen), findsNothing);
@@ -270,11 +257,9 @@ void main() {
 
   for (final entry in {
     'Income': '/income_sources',
-    'Set aside for budgets': '/allocations',
-    'Borrowed so far': '/allocations',
-    'Allocated total': '/allocations',
-    '  Insurance return': '/medical',
-    'Medical': '/medical',
+    'Budget set-aside': '/allocations',
+    'Borrowed from reserve': '/allocations',
+    'Medical refunds': '/medical',
   }.entries) {
     testWidgets('detail ${entry.key.trim()} opens ${entry.value}',
         (tester) async {
@@ -341,20 +326,18 @@ void main() {
   }
 
   for (final entry in <String, ExpenseStatus?>{
-    'Paid out': null,
-    '  Expense returns': ExpenseStatus.reimbursed,
-    'Planned': ExpenseStatus.planned,
+    'statementPaidOut': null,
+    'statementExpenseBack': ExpenseStatus.reimbursed,
+    'statementPlanned': ExpenseStatus.planned,
   }.entries) {
-    testWidgets(
-        'summary ${entry.key.trim()} opens Expenses without duplicate shell',
+    testWidgets('summary ${entry.key} opens Expenses without duplicate shell',
         (tester) async {
       final router = await pumpApp(tester);
-      await tester.tap(find.byKey(const Key('keptHero')));
-      await tester.pumpAndSettle();
+      await openSummary(tester);
       expect(find.byType(MonthSummaryDetailScreen), findsOneWidget);
       expect(tester.takeException(), isNull);
 
-      final link = find.text(entry.key);
+      final link = find.byKey(Key(entry.key));
       await tester.ensureVisible(link);
       await tester.tap(link);
       await tester.pumpAndSettle();
@@ -362,29 +345,16 @@ void main() {
     });
   }
 
-  for (final expanded in [false, true]) {
-    testWidgets(
-        'dashboard expense returns (expanded: $expanded) keeps status filter',
-        (tester) async {
-      final router = await pumpApp(tester);
-      if (expanded) {
-        final details = find.byKey(const Key('summaryDetails'));
-        await tester.ensureVisible(details);
-        await tester.tap(details);
-        await tester.pumpAndSettle();
-      }
-      final link = find.descendant(
-        of: expanded
-            ? find.byKey(const Key('summaryDetails'))
-            : find.byKey(const Key('monthSummaryCard')),
-        matching: find.byKey(const Key('expenseReturnsLine')),
-      );
-      await tester.ensureVisible(link);
-      await tester.tap(link);
-      await tester.pumpAndSettle();
-      await expectExpenses(tester, router, status: ExpenseStatus.reimbursed);
-    });
-  }
+  testWidgets('dashboard expense returns keeps status filter', (tester) async {
+    final router = await pumpApp(tester);
+    await openSummary(tester);
+
+    final link = find.byKey(const Key('statementExpenseBack'));
+    await tester.ensureVisible(link);
+    await tester.tap(link);
+    await tester.pumpAndSettle();
+    await expectExpenses(tester, router, status: ExpenseStatus.reimbursed);
+  });
 
   for (final byCategory in [true, false]) {
     testWidgets(
